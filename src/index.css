@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brain-bg: #0f0f1a;
+  --color-brain-surface: #1a1a2e;
+  --color-brain-border: #2a2a4a;
+  --color-brain-text: #e0e0f0;
+  --color-brain-accent: #ff6b6b;
+  --color-brain-highlight: #ffd93d;
+  --color-brain-node-root: #ff6b6b;
+  --color-brain-node-anchor: #4ecdc4;
+  --color-brain-node-bridge: #a78bfa;
+  --color-brain-node-branch: #60a5fa;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--color-brain-bg);
+  color: var(--color-brain-text);
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+}
