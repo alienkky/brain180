@@ -1,66 +1,96 @@
 import { create } from "zustand"
-import type { CognitiveNode, CognitiveEdge, NodeType, Dimensionality, EdgeRelation } from "../types/cognitive"
+import type { CognitiveNode, NodeType, Dimensionality } from "../types/cognitive"
 
 export type CanvasTool = "select" | "connect" | "delete"
 
 export interface UserNode extends CognitiveNode {
-  x: number
-  y: number
   sourceWord: string
 }
 
+export interface UserEdge {
+  id: string
+  from: string
+  to: string
+  label: string
+}
+
+export interface CircledPhrase {
+  id: string
+  wordKeys: string[]
+  text: string
+}
+
 interface PracticeState {
-  circledWords: Set<string>
+  circledPhrases: CircledPhrase[]
   userNodes: UserNode[]
-  userEdges: CognitiveEdge[]
+  userEdges: UserEdge[]
   activeTool: CanvasTool
   selectedUserNodeId: string | null
+  selectedEdgeId: string | null
   connectSourceId: string | null
   nextNodeType: NodeType
   nextDimensionality: Dimensionality
-  nextEdgeRelation: EdgeRelation
+  nextEdgeLabel: string
+  showEvaluation: boolean
 
-  toggleCircle: (wordKey: string) => void
-  addNode: (word: string, x: number, y: number) => void
+  addPhrase: (wordKeys: string[], text: string) => void
+  removePhrase: (phraseId: string) => void
+  addNode: (word: string) => void
   removeNode: (nodeId: string) => void
-  moveNode: (nodeId: string, x: number, y: number) => void
   updateNodeType: (nodeId: string, type: NodeType) => void
   updateNodeDimensionality: (nodeId: string, dim: Dimensionality) => void
   addEdge: (from: string, to: string) => void
-  removeEdge: (from: string, to: string) => void
+  removeEdge: (edgeId: string) => void
+  updateEdgeLabel: (edgeId: string, label: string) => void
+  selectEdge: (edgeId: string | null) => void
   setTool: (tool: CanvasTool) => void
   selectUserNode: (nodeId: string | null) => void
   startConnect: (nodeId: string) => void
   finishConnect: (nodeId: string) => void
   setNextNodeType: (type: NodeType) => void
   setNextDimensionality: (dim: Dimensionality) => void
-  setNextEdgeRelation: (rel: EdgeRelation) => void
+  setNextEdgeLabel: (label: string) => void
+  setShowEvaluation: (show: boolean) => void
   clearCanvas: () => void
 }
 
 let nodeCounter = 0
+let phraseCounter = 0
+let edgeCounter = 0
 
 export const usePracticeStore = create<PracticeState>((set, get) => ({
-  circledWords: new Set<string>(),
+  circledPhrases: [],
   userNodes: [],
   userEdges: [],
   activeTool: "select",
   selectedUserNodeId: null,
+  selectedEdgeId: null,
   connectSourceId: null,
   nextNodeType: "anchor",
   nextDimensionality: 2,
-  nextEdgeRelation: "causes",
+  nextEdgeLabel: "",
+  showEvaluation: false,
 
-  toggleCircle: (wordKey) => {
-    set((state) => {
-      const next = new Set(state.circledWords)
-      if (next.has(wordKey)) next.delete(wordKey)
-      else next.add(wordKey)
-      return { circledWords: next }
-    })
+  addPhrase: (wordKeys, text) => {
+    const keySet = new Set(wordKeys)
+    const id = `phrase-${++phraseCounter}`
+    set((state) => ({
+      circledPhrases: [
+        ...state.circledPhrases.filter(
+          (p) => !p.wordKeys.some((k) => keySet.has(k))
+        ),
+        { id, wordKeys, text },
+      ],
+    }))
   },
 
-  addNode: (word, x, y) => {
+  removePhrase: (phraseId) => {
+    set((state) => ({
+      circledPhrases: state.circledPhrases.filter((p) => p.id !== phraseId),
+    }))
+  },
+
+  addNode: (word) => {
     const { nextNodeType, nextDimensionality } = get()
     const id = `user-n-${++nodeCounter}`
     const node: UserNode = {
@@ -69,8 +99,6 @@ export const usePracticeStore = create<PracticeState>((set, get) => ({
       type: nextNodeType,
       dimensionality: nextDimensionality,
       sourceWord: word,
-      x,
-      y,
     }
     set((state) => ({ userNodes: [...state.userNodes, node] }))
   },
@@ -83,14 +111,6 @@ export const usePracticeStore = create<PracticeState>((set, get) => ({
       ),
       selectedUserNodeId:
         state.selectedUserNodeId === nodeId ? null : state.selectedUserNodeId,
-    }))
-  },
-
-  moveNode: (nodeId, x, y) => {
-    set((state) => ({
-      userNodes: state.userNodes.map((n) =>
-        n.id === nodeId ? { ...n, x, y } : n
-      ),
     }))
   },
 
@@ -111,30 +131,35 @@ export const usePracticeStore = create<PracticeState>((set, get) => ({
   },
 
   addEdge: (from, to) => {
-    const { nextEdgeRelation, userEdges } = get()
+    const { nextEdgeLabel, userEdges } = get()
     const exists = userEdges.some((e) => e.from === from && e.to === to)
     if (exists || from === to) return
-    const edge: CognitiveEdge = {
-      from,
-      to,
-      relation: nextEdgeRelation,
-      temporalOrder: userEdges.length + 1,
-    }
-    set((state) => ({ userEdges: [...state.userEdges, edge] }))
+    const id = `ue-${++edgeCounter}`
+    set((state) => ({
+      userEdges: [...state.userEdges, { id, from, to, label: nextEdgeLabel }],
+      selectedEdgeId: id,
+    }))
   },
 
-  removeEdge: (from, to) => {
+  removeEdge: (edgeId) => {
     set((state) => ({
-      userEdges: state.userEdges.filter(
-        (e) => !(e.from === from && e.to === to)
+      userEdges: state.userEdges.filter((e) => e.id !== edgeId),
+      selectedEdgeId: state.selectedEdgeId === edgeId ? null : state.selectedEdgeId,
+    }))
+  },
+
+  updateEdgeLabel: (edgeId, label) => {
+    set((state) => ({
+      userEdges: state.userEdges.map((e) =>
+        e.id === edgeId ? { ...e, label } : e
       ),
     }))
   },
 
+  selectEdge: (edgeId) => set({ selectedEdgeId: edgeId, selectedUserNodeId: null }),
+
   setTool: (tool) => set({ activeTool: tool, connectSourceId: null }),
-
-  selectUserNode: (nodeId) => set({ selectedUserNodeId: nodeId }),
-
+  selectUserNode: (nodeId) => set({ selectedUserNodeId: nodeId, selectedEdgeId: null }),
   startConnect: (nodeId) => set({ connectSourceId: nodeId }),
 
   finishConnect: (nodeId) => {
@@ -147,14 +172,17 @@ export const usePracticeStore = create<PracticeState>((set, get) => ({
 
   setNextNodeType: (type) => set({ nextNodeType: type }),
   setNextDimensionality: (dim) => set({ nextDimensionality: dim }),
-  setNextEdgeRelation: (rel) => set({ nextEdgeRelation: rel }),
+  setNextEdgeLabel: (label) => set({ nextEdgeLabel: label }),
+  setShowEvaluation: (show) => set({ showEvaluation: show }),
 
   clearCanvas: () =>
     set({
       userNodes: [],
       userEdges: [],
-      circledWords: new Set(),
+      circledPhrases: [],
       selectedUserNodeId: null,
+      selectedEdgeId: null,
       connectSourceId: null,
+      showEvaluation: false,
     }),
 }))

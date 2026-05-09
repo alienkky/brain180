@@ -5,7 +5,9 @@ import PatternPanel from "./components/PatternPanel/PatternPanel"
 import PracticeTextLayer from "./components/Practice/PracticeTextLayer"
 import PracticeCanvas from "./components/Practice/PracticeCanvas"
 import PracticeToolbar from "./components/Practice/PracticeToolbar"
+import EvaluationPanel from "./components/Practice/EvaluationPanel"
 import { useStore } from "./store/useStore"
+import { usePracticeStore } from "./store/usePracticeStore"
 import type { Perspective } from "./types/cognitive"
 
 type AppMode = "practice" | "analysis"
@@ -18,6 +20,7 @@ const PERSPECTIVES: { key: Perspective; label: string; icon: string }[] = [
 
 export default function App() {
   const { currentMap, perspective, setPerspective } = useStore()
+  const showEvaluation = usePracticeStore((s) => s.showEvaluation)
   const [mode, setMode] = useState<AppMode>("practice")
 
   return (
@@ -94,8 +97,11 @@ export default function App() {
           >
             <PracticeTextLayer />
           </section>
-          <section className="flex-1" style={{ backgroundColor: "#0f0f1a" }}>
-            <PracticeCanvas />
+          <section className="flex-1 flex flex-col" style={{ backgroundColor: "#0f0f1a" }}>
+            <div className="flex-1 min-h-0">
+              <PracticeCanvas />
+            </div>
+            {showEvaluation && <EvaluationPanel />}
           </section>
           <section
             className="w-[22%] border-l border-brain-border"

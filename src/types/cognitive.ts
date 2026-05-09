@@ -32,12 +32,18 @@ export interface TextSegment {
   temporalPhase?: number
 }
 
+export interface Connective {
+  word: string
+  role: string
+}
+
 export interface TextExcerpt {
   title: string
   author: string
   field: Field
   fullText: string
   segments: TextSegment[]
+  connectives: Connective[]
 }
 
 export interface Pattern {

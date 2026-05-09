@@ -1,4 +1,6 @@
-import { useCallback, useRef, useState, useEffect } from "react"
+import { useEffect, useRef, useCallback, useState } from "react"
+import cytoscape from "cytoscape"
+import type { Core } from "cytoscape"
 import { usePracticeStore } from "../../store/usePracticeStore"
 import type { NodeType } from "../../types/cognitive"
 
@@ -9,114 +11,224 @@ const NODE_COLORS: Record<NodeType, string> = {
   branch: "#60a5fa",
 }
 
-const DIM_SIZES: Record<number, number> = { 1: 36, 2: 48, 3: 60, 4: 76 }
-
-const EDGE_COLORS: Record<string, string> = {
-  causes: "#ffd93d",
-  supports: "#4ecdc4",
-  contrasts: "#ff6b6b",
-  transforms: "#a78bfa",
-  contains: "#60a5fa",
-}
-
 export default function PracticeCanvas() {
   const {
     userNodes,
     userEdges,
     activeTool,
-    selectedUserNodeId,
     connectSourceId,
+    selectedUserNodeId,
+    selectedEdgeId,
     addNode,
     removeNode,
-    moveNode,
+    removeEdge,
     selectUserNode,
+    selectEdge,
     startConnect,
     finishConnect,
   } = usePracticeStore()
 
-  const svgRef = useRef<SVGSVGElement>(null)
-  const [dragId, setDragId] = useState<string | null>(null)
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+  const containerRef = useRef<HTMLDivElement>(null)
+  const cyRef = useRef<Core | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
 
-  const getSvgPoint = useCallback(
-    (clientX: number, clientY: number) => {
-      const svg = svgRef.current
-      if (!svg) return { x: 0, y: 0 }
-      const rect = svg.getBoundingClientRect()
-      return { x: clientX - rect.left, y: clientY - rect.top }
-    },
-    []
-  )
+  const rebuildGraph = useCallback(() => {
+    const cy = cyRef.current
+    if (!cy) return
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault()
-      setIsDragOver(false)
-      const word = e.dataTransfer.getData("text/plain")
-      if (!word) return
-      const { x, y } = getSvgPoint(e.clientX, e.clientY)
-      addNode(word, x, y)
-    },
-    [addNode, getSvgPoint]
-  )
+    cy.elements().remove()
 
-  const handleNodeMouseDown = useCallback(
-    (nodeId: string, e: React.MouseEvent) => {
-      e.stopPropagation()
-      if (activeTool === "connect") {
-        if (!connectSourceId) startConnect(nodeId)
-        else finishConnect(nodeId)
-        return
-      }
-      if (activeTool === "delete") {
+    userNodes.forEach((node) => {
+      cy.add({
+        data: {
+          id: node.id,
+          label: node.concept,
+          nodeType: node.type,
+          dim: node.dimensionality,
+        },
+      })
+    })
+
+    userEdges.forEach((edge) => {
+      cy.add({
+        data: {
+          id: edge.id,
+          source: edge.from,
+          target: edge.to,
+          label: edge.label,
+        },
+      })
+    })
+
+    if (userNodes.length > 0) {
+      cy.layout({
+        name: "cose",
+        animate: true,
+        animationDuration: 500,
+        nodeRepulsion: () => 6000,
+        idealEdgeLength: () => 140,
+        gravity: 0.4,
+        padding: 40,
+        fit: true,
+      } as cytoscape.CoseLayoutOptions).run()
+    }
+  }, [userNodes, userEdges])
+
+  useEffect(() => {
+    if (!containerRef.current) return
+
+    const cy = cytoscape({
+      container: containerRef.current,
+      style: [
+        {
+          selector: "node",
+          style: {
+            label: "data(label)",
+            "text-wrap": "wrap",
+            "text-max-width": "100px",
+            "font-size": "13px",
+            color: "#e0e0f0",
+            "text-valign": "bottom",
+            "text-margin-y": 8,
+            "background-color": (ele: cytoscape.NodeSingular) =>
+              NODE_COLORS[ele.data("nodeType") as NodeType] ?? "#60a5fa",
+            width: (ele: cytoscape.NodeSingular) => 20 + ele.data("dim") * 12,
+            height: (ele: cytoscape.NodeSingular) => 20 + ele.data("dim") * 12,
+            "border-width": 2,
+            "border-color": "#2a2a4a",
+            "transition-property": "background-color, border-color, width, height",
+            "transition-duration": 200,
+          } as cytoscape.Css.Node,
+        },
+        {
+          selector: "node.highlighted",
+          style: {
+            "border-width": 4,
+            "border-color": "#ffd93d",
+          },
+        },
+        {
+          selector: "node.connect-source",
+          style: {
+            "border-width": 4,
+            "border-color": "#ffd93d",
+            "border-style": "dashed",
+          },
+        },
+        {
+          selector: "node.dimmed",
+          style: { opacity: 0.2 },
+        },
+        {
+          selector: "edge",
+          style: {
+            width: 2,
+            "line-color": "#ffd93d",
+            "target-arrow-shape": "triangle",
+            "target-arrow-color": "#ffd93d",
+            "curve-style": "bezier",
+            label: "data(label)",
+            "font-size": "11px",
+            color: "#ffd93d",
+            "text-rotation": "autorotate",
+            "text-margin-y": -12,
+            "font-weight": "bold",
+            "text-background-color": "#0f0f1a",
+            "text-background-opacity": 0.8,
+            "text-background-padding": 3,
+          } as cytoscape.Css.Edge,
+        },
+        {
+          selector: "edge.selected-edge",
+          style: {
+            width: 4,
+            "line-color": "#ff6b6b",
+            "target-arrow-color": "#ff6b6b",
+            color: "#ff6b6b",
+          },
+        },
+      ],
+      layout: { name: "preset" },
+      minZoom: 0.3,
+      maxZoom: 3,
+      userPanningEnabled: true,
+      userZoomingEnabled: true,
+      boxSelectionEnabled: false,
+      autoungrabify: false,
+    })
+
+    cy.on("tap", "node", (evt) => {
+      const nodeId = evt.target.id()
+      const tool = usePracticeStore.getState().activeTool
+      const srcId = usePracticeStore.getState().connectSourceId
+
+      if (tool === "delete") {
         removeNode(nodeId)
         return
       }
+      if (tool === "connect") {
+        if (!srcId) startConnect(nodeId)
+        else finishConnect(nodeId)
+        return
+      }
       selectUserNode(nodeId)
-      const node = usePracticeStore.getState().userNodes.find((n) => n.id === nodeId)
-      if (!node) return
-      const { x, y } = getSvgPoint(e.clientX, e.clientY)
-      setDragOffset({ x: x - node.x, y: y - node.y })
-      setDragId(nodeId)
-    },
-    [activeTool, connectSourceId, startConnect, finishConnect, removeNode, selectUserNode, getSvgPoint]
-  )
+    })
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      if (!dragId) return
-      const { x, y } = getSvgPoint(e.clientX, e.clientY)
-      moveNode(dragId, x - dragOffset.x, y - dragOffset.y)
-    },
-    [dragId, dragOffset, moveNode, getSvgPoint]
-  )
+    cy.on("tap", "edge", (evt) => {
+      const edgeId = evt.target.id()
+      const tool = usePracticeStore.getState().activeTool
+      if (tool === "delete") {
+        removeEdge(edgeId)
+        return
+      }
+      selectEdge(edgeId)
+    })
 
-  const handleMouseUp = useCallback(() => {
-    setDragId(null)
-  }, [])
-
-  const handleSvgClick = useCallback(
-    (e: React.MouseEvent) => {
-      if (e.target === svgRef.current) {
+    cy.on("tap", (evt) => {
+      if (evt.target === cy) {
         selectUserNode(null)
+        selectEdge(null)
         usePracticeStore.setState({ connectSourceId: null })
       }
-    },
-    [selectUserNode]
-  )
-
-  const [size, setSize] = useState({ w: 800, h: 600 })
-  const containerRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
-    const obs = new ResizeObserver(([entry]) => {
-      setSize({ w: entry.contentRect.width, h: entry.contentRect.height })
     })
-    obs.observe(el)
-    return () => obs.disconnect()
+
+    cyRef.current = cy
+    return () => { cy.destroy() }
   }, [])
+
+  useEffect(() => { rebuildGraph() }, [rebuildGraph])
+
+  useEffect(() => {
+    const cy = cyRef.current
+    if (!cy) return
+    cy.nodes().removeClass("highlighted connect-source dimmed")
+    cy.edges().removeClass("selected-edge")
+
+    if (connectSourceId) {
+      const src = cy.getElementById(connectSourceId)
+      if (src.length) src.addClass("connect-source")
+    }
+    if (selectedUserNodeId) {
+      const sel = cy.getElementById(selectedUserNodeId)
+      if (sel.length) {
+        sel.addClass("highlighted")
+        const connected = sel.neighborhood()
+        cy.nodes().not(sel).not(connected.nodes()).addClass("dimmed")
+      }
+    }
+    if (selectedEdgeId) {
+      const edge = cy.getElementById(selectedEdgeId)
+      if (edge.length) edge.addClass("selected-edge")
+    }
+  }, [selectedUserNodeId, selectedEdgeId, connectSourceId, userNodes, userEdges])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+    const word = e.dataTransfer.getData("text/plain")
+    if (!word) return
+    addNode(word)
+  }, [addNode])
 
   return (
     <div className="flex flex-col h-full">
@@ -125,13 +237,12 @@ export default function PracticeCanvas() {
           나의 인지 구조
         </h2>
         <p className="text-xs" style={{ color: "rgba(224,224,240,0.5)" }}>
-          {activeTool === "select" && "노드를 드래그하여 배치하세요"}
-          {activeTool === "connect" && (connectSourceId ? "연결할 대상 노드를 클릭하세요" : "시작 노드를 클릭하세요")}
-          {activeTool === "delete" && "삭제할 노드를 클릭하세요"}
+          {activeTool === "select" && "노드 드래그 = 배치 | 핀치 = 확대/축소 | 빈 곳 드래그 = 이동"}
+          {activeTool === "connect" && (connectSourceId ? "연결할 대상 노드를 클릭" : "시작 노드를 클릭")}
+          {activeTool === "delete" && "삭제할 노드를 클릭"}
         </p>
       </div>
       <div
-        ref={containerRef}
         className="flex-1 min-h-0 relative"
         onDragOver={(e) => { e.preventDefault(); setIsDragOver(true) }}
         onDragLeave={() => setIsDragOver(false)}
@@ -139,138 +250,21 @@ export default function PracticeCanvas() {
         style={{
           backgroundColor: isDragOver ? "rgba(255,107,107,0.05)" : "transparent",
           transition: "background-color 0.2s",
+          cursor: activeTool === "connect" ? "crosshair" : activeTool === "delete" ? "not-allowed" : "default",
         }}
       >
         {userNodes.length === 0 && !isDragOver && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
             <div className="text-center" style={{ color: "rgba(224,224,240,0.2)" }}>
               <p className="text-4xl mb-3">↓</p>
               <p className="text-sm">왼쪽 텍스트에서 단어를 동그라미 친 후</p>
-              <p className="text-sm">이 캔버스로 드래그하세요</p>
+              <p className="text-sm">↗ 버튼 또는 드래그로 캔버스에 추가</p>
             </div>
           </div>
         )}
-
-        <svg
-          ref={svgRef}
-          width={size.w}
-          height={size.h}
-          className="absolute inset-0"
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          onClick={handleSvgClick}
-          style={{ cursor: activeTool === "connect" ? "crosshair" : activeTool === "delete" ? "not-allowed" : "default" }}
-        >
-          <defs>
-            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
-              <polygon points="0 0, 10 3.5, 0 7" fill="#9090b0" />
-            </marker>
-          </defs>
-
-          {userEdges.map((edge, i) => {
-            const from = userNodes.find((n) => n.id === edge.from)
-            const to = userNodes.find((n) => n.id === edge.to)
-            if (!from || !to) return null
-            const color = EDGE_COLORS[edge.relation] ?? "#9090b0"
-            const midX = (from.x + to.x) / 2
-            const midY = (from.y + to.y) / 2
-            return (
-              <g key={`edge-${i}`}>
-                <line
-                  x1={from.x}
-                  y1={from.y}
-                  x2={to.x}
-                  y2={to.y}
-                  stroke={color}
-                  strokeWidth={2}
-                  markerEnd="url(#arrowhead)"
-                  opacity={0.7}
-                />
-                <text
-                  x={midX}
-                  y={midY - 8}
-                  textAnchor="middle"
-                  fontSize={10}
-                  fill="#9090b0"
-                >
-                  {edge.relation}
-                </text>
-              </g>
-            )
-          })}
-
-          {connectSourceId && (() => {
-            const src = userNodes.find((n) => n.id === connectSourceId)
-            if (!src) return null
-            return (
-              <circle
-                cx={src.x}
-                cy={src.y}
-                r={DIM_SIZES[src.dimensionality] / 2 + 8}
-                fill="none"
-                stroke="#ffd93d"
-                strokeWidth={2}
-                strokeDasharray="4 4"
-                className="animate-pulse"
-              >
-                <animate attributeName="stroke-dashoffset" values="0;8" dur="0.6s" repeatCount="indefinite" />
-              </circle>
-            )
-          })()}
-
-          {userNodes.map((node) => {
-            const r = DIM_SIZES[node.dimensionality] / 2
-            const isSelected = selectedUserNodeId === node.id
-            const color = NODE_COLORS[node.type]
-            return (
-              <g
-                key={node.id}
-                onMouseDown={(e) => handleNodeMouseDown(node.id, e)}
-                style={{ cursor: activeTool === "select" ? "grab" : "pointer" }}
-              >
-                {isSelected && (
-                  <circle
-                    cx={node.x}
-                    cy={node.y}
-                    r={r + 6}
-                    fill="none"
-                    stroke="#ffd93d"
-                    strokeWidth={2}
-                  />
-                )}
-                <circle
-                  cx={node.x}
-                  cy={node.y}
-                  r={r}
-                  fill={color}
-                  stroke="#2a2a4a"
-                  strokeWidth={2}
-                  opacity={0.9}
-                />
-                <text
-                  x={node.x}
-                  y={node.y + r + 16}
-                  textAnchor="middle"
-                  fontSize={12}
-                  fill="#e0e0f0"
-                >
-                  {node.concept}
-                </text>
-                <text
-                  x={node.x}
-                  y={node.y + 4}
-                  textAnchor="middle"
-                  fontSize={10}
-                  fill="rgba(255,255,255,0.7)"
-                  fontWeight="bold"
-                >
-                  {node.dimensionality}D
-                </text>
-              </g>
-            )
-          })}
-        </svg>
+        <div className="absolute inset-0">
+          <div ref={containerRef} style={{ width: "100%", height: "100%", touchAction: "none" }} />
+        </div>
       </div>
     </div>
   )
