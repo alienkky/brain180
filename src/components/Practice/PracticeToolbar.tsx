@@ -167,32 +167,6 @@ export default function PracticeToolbar() {
           </div>
         </div>
 
-        {/* ─── 편집 도구 ─── */}
-        <div className="flex gap-1">
-          <button
-            onClick={() => setTool("select")}
-            className="flex-1 px-2 py-1.5 rounded text-xs cursor-pointer transition-all"
-            style={{
-              backgroundColor: activeTool === "select" ? "#2a2a4a" : "#0f0f1a",
-              color: activeTool === "select" ? "#e0e0f0" : "rgba(224,224,240,0.4)",
-              border: `1px solid ${activeTool === "select" ? "rgba(224,224,240,0.3)" : "#2a2a4a"}`,
-            }}
-          >
-            ↖ 선택
-          </button>
-          <button
-            onClick={() => setTool("delete")}
-            className="flex-1 px-2 py-1.5 rounded text-xs cursor-pointer transition-all"
-            style={{
-              backgroundColor: activeTool === "delete" ? "#2a2a4a" : "#0f0f1a",
-              color: activeTool === "delete" ? "#ff6b6b" : "rgba(224,224,240,0.4)",
-              border: `1px solid ${activeTool === "delete" ? "#ff6b6b" : "#2a2a4a"}`,
-            }}
-          >
-            ✕ 삭제
-          </button>
-        </div>
-
         {/* ─── 선택된 선 편집기 ─── */}
         {selectedEdge && (
           <div className="rounded-lg border p-2.5" style={{ borderColor: "#ffd93d", backgroundColor: "rgba(255,217,61,0.05)" }}>

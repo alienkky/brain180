@@ -38,6 +38,7 @@ export default function PracticeCanvas() {
     selectEdge,
     startConnect,
     finishConnect,
+    setTool,
   } = usePracticeStore()
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -257,7 +258,7 @@ export default function PracticeCanvas() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-3 border-b border-brain-border flex items-center justify-between">
+      <div className="px-4 py-2.5 border-b border-brain-border flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold" style={{ color: "#e0e0f0" }}>
             나의 인지 구조
@@ -268,20 +269,46 @@ export default function PracticeCanvas() {
             {activeTool === "delete" && "삭제할 노드 또는 선을 클릭"}
           </p>
         </div>
-        {userNodes.length > 0 && (
+        <div className="flex items-center gap-1">
           <button
-            onClick={handleFit}
-            className="px-2.5 py-1.5 rounded text-xs font-medium cursor-pointer"
+            onClick={() => setTool("select")}
+            className="px-2 py-1.5 rounded text-xs cursor-pointer transition-all"
             style={{
-              backgroundColor: "rgba(224,224,240,0.08)",
-              color: "rgba(224,224,240,0.6)",
-              border: "1px solid rgba(224,224,240,0.15)",
+              backgroundColor: activeTool === "select" ? "#2a2a4a" : "rgba(224,224,240,0.05)",
+              color: activeTool === "select" ? "#e0e0f0" : "rgba(224,224,240,0.35)",
+              border: `1px solid ${activeTool === "select" ? "rgba(224,224,240,0.3)" : "rgba(224,224,240,0.1)"}`,
             }}
-            title="다이어그램을 화면에 맞춤"
+            title="선택 도구"
           >
-            ⊞ 맞춤
+            ↖
           </button>
-        )}
+          <button
+            onClick={() => setTool("delete")}
+            className="px-2 py-1.5 rounded text-xs cursor-pointer transition-all"
+            style={{
+              backgroundColor: activeTool === "delete" ? "#2a2a4a" : "rgba(224,224,240,0.05)",
+              color: activeTool === "delete" ? "#ff6b6b" : "rgba(224,224,240,0.35)",
+              border: `1px solid ${activeTool === "delete" ? "#ff6b6b" : "rgba(224,224,240,0.1)"}`,
+            }}
+            title="삭제 도구"
+          >
+            ✕
+          </button>
+          {userNodes.length > 0 && (
+            <button
+              onClick={handleFit}
+              className="px-2 py-1.5 rounded text-xs cursor-pointer"
+              style={{
+                backgroundColor: "rgba(224,224,240,0.05)",
+                color: "rgba(224,224,240,0.5)",
+                border: "1px solid rgba(224,224,240,0.1)",
+              }}
+              title="다이어그램을 화면에 맞춤"
+            >
+              ⊞
+            </button>
+          )}
+        </div>
       </div>
       <div
         className="flex-1 min-h-0 relative"
