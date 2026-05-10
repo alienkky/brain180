@@ -272,20 +272,6 @@ export default function PracticeTextLayer() {
         </p>
       </div>
 
-      {rangeMode && (
-        <div
-          className="px-6 py-2.5 border-b"
-          style={{
-            backgroundColor: "rgba(198, 138, 61, 0.08)",
-            borderColor: "rgba(198, 138, 61, 0.2)",
-          }}
-        >
-          <span className="text-[12px] font-medium" style={{ color: "var(--color-brain-highlight)" }}>
-            {rangeAnchor ? "끝 단어를 탭하세요" : "시작 단어를 탭하세요"}
-          </span>
-        </div>
-      )}
-
       <div
         className="flex-1 overflow-y-auto px-6 py-6"
         onPointerMove={handlePointerMove}
@@ -401,19 +387,28 @@ export default function PracticeTextLayer() {
       </div>
 
       <div className="px-6 py-3 border-t border-brain-border flex items-center justify-between">
-        <div
-          className="flex items-center gap-2 text-[11.5px]"
-          style={{ color: "var(--color-brain-text-muted)" }}
-        >
+        {rangeMode ? (
           <span
-            className="inline-block w-3 h-3 rounded-full border-[1.5px]"
-            style={{
-              borderColor: "var(--color-brain-accent)",
-              backgroundColor: "rgba(184, 92, 63, 0.10)",
-            }}
-          />
-          <span>구 {circledPhrases.length}  ·  단어 {totalCircled}</span>
-        </div>
+            className="text-[12px]"
+            style={{ color: "var(--color-brain-highlight)", fontWeight: 500 }}
+          >
+            {rangeAnchor ? "끝 단어를 탭하세요" : "시작 단어를 탭하세요"}
+          </span>
+        ) : (
+          <div
+            className="flex items-center gap-2 text-[11.5px]"
+            style={{ color: "var(--color-brain-text-muted)" }}
+          >
+            <span
+              className="inline-block w-3 h-3 rounded-full border-[1.5px]"
+              style={{
+                borderColor: "var(--color-brain-accent)",
+                backgroundColor: "rgba(184, 92, 63, 0.10)",
+              }}
+            />
+            <span>구 {circledPhrases.length}  ·  단어 {totalCircled}</span>
+          </div>
+        )}
         <button
           onClick={() => {
             setRangeMode(!rangeMode)
