@@ -55,9 +55,8 @@ function evaluate(
       }
     }
     if (bestMatch && bestScore >= 0.3) {
-      let nodeScore = bestScore * 40
-      if (uNode.type === bestMatch.type) nodeScore += 30
-      if (uNode.dimensionality === bestMatch.dimensionality) nodeScore += 30
+      let nodeScore = bestScore * 60
+      if (uNode.type === bestMatch.type) nodeScore += 40
       matchedNodes.push({ user: uNode, system: bestMatch, score: nodeScore })
       usedSystemIds.add(bestMatch.id)
       usedUserIds.add(uNode.id)
@@ -127,21 +126,11 @@ function evaluate(
     const typeLabels: Record<string, string> = {
       root: "핵심(root)",
       anchor: "기둥(anchor)",
-      bridge: "연결(bridge)",
+      bridge: "다리(bridge)",
       branch: "가지(branch)",
     }
     structureAdvice.push(
       `"${example.user.concept}"의 역할을 다시 생각해 보세요. 이 개념은 텍스트에서 ${typeLabels[example.system.type]}의 역할에 가깝습니다.`
-    )
-  }
-
-  const wrongDims = matchedNodes.filter(
-    (m) => Math.abs(m.user.dimensionality - m.system.dimensionality) >= 2
-  )
-  if (wrongDims.length > 0) {
-    const example = wrongDims[0]
-    structureAdvice.push(
-      `"${example.user.concept}"의 차원을 ${example.user.dimensionality}D에서 ${example.system.dimensionality}D로 조정해 보세요. 이 개념의 인지적 깊이를 재평가해 보세요.`
     )
   }
 
@@ -156,7 +145,7 @@ function evaluate(
     )
 
   if (structureAdvice.length === 0)
-    structureAdvice.push("훌륭합니다! 분석 모드에서 시스템의 해석과 비교해 보세요.")
+    structureAdvice.push("훌륭합니다! 분석 모드에서 가치 구조와 시간축을 확인해 보세요.")
 
   return {
     score,
@@ -279,6 +268,13 @@ export default function EvaluationPanel() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Next step guide */}
+        <div className="rounded p-2.5" style={{ backgroundColor: "rgba(96,165,250,0.08)", border: "1px solid rgba(96,165,250,0.2)" }}>
+          <p className="text-xs leading-relaxed" style={{ color: "rgba(96,165,250,0.8)" }}>
+            평가를 확인한 후, 상단의 분석 모드로 전환하여 가치 구조와 시간축 관점도 비교해 보세요.
+          </p>
         </div>
       </div>
     </div>

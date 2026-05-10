@@ -1,5 +1,5 @@
 import { create } from "zustand"
-import type { CognitiveNode, NodeType, Dimensionality } from "../types/cognitive"
+import type { CognitiveNode, NodeType } from "../types/cognitive"
 
 export type CanvasTool = "select" | "connect" | "delete"
 
@@ -29,7 +29,6 @@ interface PracticeState {
   selectedEdgeId: string | null
   connectSourceId: string | null
   nextNodeType: NodeType
-  nextDimensionality: Dimensionality
   nextEdgeLabel: string
   showEvaluation: boolean
 
@@ -39,7 +38,6 @@ interface PracticeState {
   ensureNode: (word: string) => string
   removeNode: (nodeId: string) => void
   updateNodeType: (nodeId: string, type: NodeType) => void
-  updateNodeDimensionality: (nodeId: string, dim: Dimensionality) => void
   addEdge: (from: string, to: string, label?: string) => void
   removeEdge: (edgeId: string) => void
   updateEdgeLabel: (edgeId: string, label: string) => void
@@ -49,7 +47,6 @@ interface PracticeState {
   startConnect: (nodeId: string) => void
   finishConnect: (nodeId: string) => void
   setNextNodeType: (type: NodeType) => void
-  setNextDimensionality: (dim: Dimensionality) => void
   setNextEdgeLabel: (label: string) => void
   setShowEvaluation: (show: boolean) => void
   clearCanvas: () => void
@@ -68,7 +65,6 @@ export const usePracticeStore = create<PracticeState>((set, get) => ({
   selectedEdgeId: null,
   connectSourceId: null,
   nextNodeType: "anchor",
-  nextDimensionality: 2,
   nextEdgeLabel: "",
   showEvaluation: false,
 
@@ -92,13 +88,13 @@ export const usePracticeStore = create<PracticeState>((set, get) => ({
   },
 
   addNode: (word) => {
-    const { nextNodeType, nextDimensionality } = get()
+    const { nextNodeType } = get()
     const id = `user-n-${++nodeCounter}`
     const node: UserNode = {
       id,
       concept: word,
       type: nextNodeType,
-      dimensionality: nextDimensionality,
+      dimensionality: 2,
       sourceWord: word,
     }
     set((state) => ({ userNodes: [...state.userNodes, node] }))
@@ -107,12 +103,12 @@ export const usePracticeStore = create<PracticeState>((set, get) => ({
   ensureNode: (word) => {
     const existing = get().userNodes.find((n) => n.concept === word)
     if (existing) return existing.id
-    const { nextNodeType, nextDimensionality } = get()
+    const { nextNodeType } = get()
     const id = `user-n-${++nodeCounter}`
     set((state) => ({
       userNodes: [...state.userNodes, {
         id, concept: word, type: nextNodeType,
-        dimensionality: nextDimensionality, sourceWord: word,
+        dimensionality: 2, sourceWord: word,
       }],
     }))
     return id
@@ -137,13 +133,6 @@ export const usePracticeStore = create<PracticeState>((set, get) => ({
     }))
   },
 
-  updateNodeDimensionality: (nodeId, dim) => {
-    set((state) => ({
-      userNodes: state.userNodes.map((n) =>
-        n.id === nodeId ? { ...n, dimensionality: dim } : n
-      ),
-    }))
-  },
 
   addEdge: (from, to, label?) => {
     const { nextEdgeLabel, userEdges } = get()
@@ -186,7 +175,6 @@ export const usePracticeStore = create<PracticeState>((set, get) => ({
   },
 
   setNextNodeType: (type) => set({ nextNodeType: type }),
-  setNextDimensionality: (dim) => set({ nextDimensionality: dim }),
   setNextEdgeLabel: (label) => set({ nextEdgeLabel: label }),
   setShowEvaluation: (show) => set({ showEvaluation: show }),
 

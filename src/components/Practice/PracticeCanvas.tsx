@@ -18,10 +18,9 @@ const NODE_TEXT_COLORS: Record<NodeType, string> = {
   branch: "#0f0f1a",
 }
 
-function nodeSize(label: string, dim: number): number {
+function nodeSize(label: string): number {
   const len = (label || "").length
-  const base = Math.max(55, Math.min(100, len * 14))
-  return base + dim * 6
+  return Math.max(55, Math.min(100, len * 14))
 }
 
 export default function PracticeCanvas() {
@@ -63,7 +62,6 @@ export default function PracticeCanvas() {
           id: node.id,
           label: node.concept,
           nodeType: node.type,
-          dim: node.dimensionality,
         },
       })
     })
@@ -105,7 +103,7 @@ export default function PracticeCanvas() {
             label: "data(label)",
             "text-wrap": "wrap",
             "text-max-width": (ele: cytoscape.NodeSingular) =>
-              `${nodeSize(ele.data("label"), ele.data("dim")) * 0.8}px`,
+              `${nodeSize(ele.data("label")) * 0.8}px`,
             "font-size": (ele: cytoscape.NodeSingular) => {
               const len = (ele.data("label") || "").length
               return len > 5 ? "10px" : "12px"
@@ -118,9 +116,9 @@ export default function PracticeCanvas() {
             "background-color": (ele: cytoscape.NodeSingular) =>
               NODE_COLORS[ele.data("nodeType") as NodeType] ?? "#60a5fa",
             width: (ele: cytoscape.NodeSingular) =>
-              nodeSize(ele.data("label"), ele.data("dim")),
+              nodeSize(ele.data("label")),
             height: (ele: cytoscape.NodeSingular) =>
-              nodeSize(ele.data("label"), ele.data("dim")),
+              nodeSize(ele.data("label")),
             "border-width": 2,
             "border-color": "#2a2a4a",
             "transition-property": "background-color, border-color, width, height",
