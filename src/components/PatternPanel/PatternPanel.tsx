@@ -1,5 +1,5 @@
 import { useStore } from "../../store/useStore"
-import type { Perspective, ValueType } from "../../types/cognitive"
+import type { ValueType } from "../../types/cognitive"
 
 const VALUE_COLORS: Record<ValueType, string> = {
   truth: "#60a5fa",

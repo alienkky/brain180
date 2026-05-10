@@ -161,7 +161,7 @@ export default function PracticeCanvas() {
             "font-weight": "bold",
             "text-background-color": "#0f0f1a",
             "text-background-opacity": 0.8,
-            "text-background-padding": 3,
+            "text-background-padding": "3px",
           } as cytoscape.Css.Edge,
         },
         {

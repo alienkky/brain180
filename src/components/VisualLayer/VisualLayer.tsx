@@ -72,7 +72,7 @@ function getNodeTextColor(ele: cytoscape.NodeSingular, perspective: Perspective)
   return dark.includes(bg) ? "#0f0f1a" : "#fff"
 }
 
-function getNodeLabel(ele: cytoscape.NodeSingular, perspective: Perspective): string {
+function getNodeLabel(ele: cytoscape.NodeSingular, _perspective: Perspective): string {
   const concept = ele.data("label") as string
   return concept
 }

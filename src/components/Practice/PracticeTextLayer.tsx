@@ -24,7 +24,7 @@ type GroupType =
 
 export default function PracticeTextLayer() {
   const { currentMap } = useStore()
-  const { circledPhrases, addPhrase, removePhrase, addNode, ensureNode, addEdge } =
+  const { circledPhrases, addPhrase, removePhrase, addNode } =
     usePracticeStore()
 
   const anchorKeyRef = useRef<string | null>(null)
@@ -115,7 +115,7 @@ export default function PracticeTextLayer() {
 
     for (const w of words) {
       const phrase = tokenToPhraseMap.get(w.key) ?? null
-      const conn = (!phrase && tokenConnectiveMap.get(w.key)) ?? null
+      const conn = (!phrase ? tokenConnectiveMap.get(w.key) : null) ?? null
 
       if (phrase === currentPhrase && conn === currentConn) {
         currentItems.push(w)
@@ -215,34 +215,6 @@ export default function PracticeTextLayer() {
       anchorKeyRef.current = wordKey
     },
     [rangeMode, rangeAnchor, circledPhrases, makePhrase, addPhrase, removePhrase]
-  )
-
-  const handleConnectiveTap = useCallback(
-    (region: ConnectiveRegion) => {
-      const connStartIdx = words.findIndex((w) => !w.isSpace && w.charStart >= region.charStart)
-      const connEndTokenIdx = words.findIndex((w) => !w.isSpace && w.charStart >= region.charEnd)
-
-      let beforePhrase: CircledPhrase | null = null
-      let afterPhrase: CircledPhrase | null = null
-
-      for (let i = connStartIdx - 1; i >= 0; i--) {
-        const phrase = tokenToPhraseMap.get(words[i].key)
-        if (phrase) { beforePhrase = phrase; break }
-      }
-
-      const searchStart = connEndTokenIdx >= 0 ? connEndTokenIdx : connStartIdx + 1
-      for (let i = searchStart; i < words.length; i++) {
-        const phrase = tokenToPhraseMap.get(words[i].key)
-        if (phrase) { afterPhrase = phrase; break }
-      }
-
-      if (!beforePhrase || !afterPhrase || beforePhrase.id === afterPhrase.id) return
-
-      const fromId = ensureNode(beforePhrase.text)
-      const toId = ensureNode(afterPhrase.text)
-      addEdge(fromId, toId, region.connective.word)
-    },
-    [words, tokenToPhraseMap, ensureNode, addEdge]
   )
 
   const handleSendToCanvas = useCallback(
