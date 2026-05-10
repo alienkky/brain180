@@ -171,7 +171,7 @@ export default function EvaluationPanel() {
   const pct = result.maxScore > 0 ? Math.round((result.score / result.maxScore) * 100) : 0
 
   const gradeColor =
-    pct >= 80 ? "#34d399" : pct >= 50 ? "#fbbf24" : "#ff6b6b"
+    pct >= 80 ? "#6B8B6E" : pct >= 50 ? "#C68A3D" : "#B85C3F"
   const gradeLabel =
     pct >= 80
       ? "뛰어남"
@@ -184,40 +184,77 @@ export default function EvaluationPanel() {
   return (
     <div
       className="border-t border-brain-border overflow-y-auto"
-      style={{ backgroundColor: "rgba(26,26,46,0.95)", maxHeight: "50%" }}
+      style={{
+        backgroundColor: "var(--color-brain-surface)",
+        maxHeight: "50%",
+        boxShadow: "0 -4px 12px rgba(42,36,29,0.04)",
+      }}
     >
-      <div className="p-4 space-y-4">
+      <div className="px-8 py-5 space-y-5">
         {/* Score */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-5">
           <div
-            className="w-16 h-16 rounded-full flex items-center justify-center text-lg font-bold"
+            className="w-20 h-20 rounded-full flex items-center justify-center"
             style={{
-              border: `3px solid ${gradeColor}`,
+              border: `1.5px solid ${gradeColor}`,
               color: gradeColor,
-              backgroundColor: `${gradeColor}11`,
+              backgroundColor: `${gradeColor}0D`,
+              fontFamily: "var(--font-display)",
+              fontWeight: 400,
+              fontSize: "26px",
+              letterSpacing: "-0.02em",
             }}
           >
-            {pct}%
+            {pct}<span style={{ fontSize: "14px", marginLeft: "1px" }}>%</span>
           </div>
           <div>
-            <p className="text-sm font-bold" style={{ color: gradeColor }}>
+            <p
+              className="text-[10px] uppercase tracking-[0.18em] mb-1"
+              style={{ color: "var(--color-brain-text-soft)", fontWeight: 500 }}
+            >
+              평가 결과
+            </p>
+            <p
+              className="text-[18px] tracking-[-0.01em]"
+              style={{
+                color: gradeColor,
+                fontFamily: "var(--font-serif)",
+                fontWeight: 500,
+              }}
+            >
               {gradeLabel}
             </p>
-            <p className="text-xs" style={{ color: "rgba(224,224,240,0.5)" }}>
-              개념 매칭: {result.matchedNodes.length}/{currentMap.nodes.length} | 연결 정확도: {result.edgeAccuracy}%
+            <p
+              className="text-[12px] mt-1"
+              style={{
+                color: "var(--color-brain-text-muted)",
+              }}
+            >
+              개념 {result.matchedNodes.length}/{currentMap.nodes.length}  ·  연결 {result.edgeAccuracy}%
             </p>
           </div>
         </div>
 
         {/* Strengths */}
         <div>
-          <h3 className="text-xs font-bold mb-1.5" style={{ color: "#34d399" }}>
+          <p
+            className="text-[10px] uppercase tracking-[0.18em] mb-2"
+            style={{ color: "var(--color-brain-success)", fontWeight: 500 }}
+          >
             잘한 점
-          </h3>
-          <div className="space-y-1">
+          </p>
+          <div className="space-y-1.5">
             {result.strengthPoints.map((point, i) => (
-              <p key={i} className="text-xs leading-relaxed" style={{ color: "rgba(224,224,240,0.7)" }}>
-                + {point}
+              <p
+                key={i}
+                className="text-[13px] leading-relaxed"
+                style={{
+                  color: "var(--color-brain-text)",
+                  fontFamily: "var(--font-serif)",
+                }}
+              >
+                <span style={{ color: "var(--color-brain-success)", marginRight: "8px" }}>+</span>
+                {point}
               </p>
             ))}
           </div>
@@ -225,13 +262,24 @@ export default function EvaluationPanel() {
 
         {/* Advice */}
         <div>
-          <h3 className="text-xs font-bold mb-1.5" style={{ color: "#fbbf24" }}>
+          <p
+            className="text-[10px] uppercase tracking-[0.18em] mb-2"
+            style={{ color: "var(--color-brain-warn)", fontWeight: 500 }}
+          >
             조언
-          </h3>
-          <div className="space-y-1.5">
+          </p>
+          <div className="space-y-2">
             {result.structureAdvice.map((advice, i) => (
-              <p key={i} className="text-xs leading-relaxed" style={{ color: "rgba(224,224,240,0.7)" }}>
-                → {advice}
+              <p
+                key={i}
+                className="text-[13px] leading-relaxed"
+                style={{
+                  color: "var(--color-brain-text)",
+                  fontFamily: "var(--font-serif)",
+                }}
+              >
+                <span style={{ color: "var(--color-brain-warn)", marginRight: "8px" }}>→</span>
+                {advice}
               </p>
             ))}
           </div>
@@ -239,28 +287,38 @@ export default function EvaluationPanel() {
 
         {/* Matched nodes detail */}
         <div>
-          <h3 className="text-xs font-bold mb-1.5" style={{ color: "rgba(224,224,240,0.5)" }}>
+          <p
+            className="text-[10px] uppercase tracking-[0.18em] mb-2"
+            style={{ color: "var(--color-brain-text-soft)", fontWeight: 500 }}
+          >
             개념 매칭 상세
-          </h3>
+          </p>
           <div className="space-y-1">
             {result.matchedNodes.map((m) => (
               <div
                 key={m.user.id}
-                className="flex items-center justify-between text-xs px-2 py-1 rounded"
-                style={{ backgroundColor: "#0f0f1a" }}
+                className="flex items-center justify-between text-[13px] px-3 py-1.5 rounded-lg"
+                style={{ backgroundColor: "var(--color-brain-surface-soft)" }}
               >
-                <span style={{ color: "#e0e0f0" }}>
+                <span
+                  style={{
+                    color: "var(--color-brain-text)",
+                    fontFamily: "var(--font-serif)",
+                  }}
+                >
                   {m.user.concept}
                   {m.user.concept !== m.system.concept && (
-                    <span style={{ color: "rgba(224,224,240,0.3)" }}>
+                    <span style={{ color: "var(--color-brain-text-soft)" }}>
                       {" "}→ {m.system.concept}
                     </span>
                   )}
                 </span>
                 <span
-                  className="font-mono"
                   style={{
-                    color: m.score >= 80 ? "#34d399" : m.score >= 50 ? "#fbbf24" : "#ff6b6b",
+                    color: m.score >= 80 ? "#6B8B6E" : m.score >= 50 ? "#C68A3D" : "#B85C3F",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    fontVariantNumeric: "tabular-nums",
                   }}
                 >
                   {Math.round(m.score)}
@@ -271,8 +329,21 @@ export default function EvaluationPanel() {
         </div>
 
         {/* Next step guide */}
-        <div className="rounded p-2.5" style={{ backgroundColor: "rgba(96,165,250,0.08)", border: "1px solid rgba(96,165,250,0.2)" }}>
-          <p className="text-xs leading-relaxed" style={{ color: "rgba(96,165,250,0.8)" }}>
+        <div
+          className="rounded-lg p-3.5"
+          style={{
+            backgroundColor: "rgba(111, 138, 168, 0.06)",
+            border: "1px solid rgba(111, 138, 168, 0.18)",
+          }}
+        >
+          <p
+            className="text-[12.5px] leading-relaxed"
+            style={{
+              color: "var(--color-brain-text-muted)",
+              fontFamily: "var(--font-serif)",
+              fontStyle: "italic",
+            }}
+          >
             평가를 확인한 후, 상단의 분석 모드로 전환하여 가치 구조와 시간축 관점도 비교해 보세요.
           </p>
         </div>

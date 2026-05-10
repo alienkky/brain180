@@ -2,14 +2,14 @@ import { useStore } from "../../store/useStore"
 import type { ValueType } from "../../types/cognitive"
 
 const VALUE_COLORS: Record<ValueType, string> = {
-  truth: "#60a5fa",
-  beauty: "#f472b6",
-  goodness: "#34d399",
-  freedom: "#fbbf24",
-  love: "#ff6b6b",
-  power: "#94a3b8",
-  wisdom: "#c084fc",
-  connection: "#2dd4bf",
+  truth: "#6F8AA8",
+  beauty: "#C49AA1",
+  goodness: "#7E9F7B",
+  freedom: "#C68A3D",
+  love: "#B85C3F",
+  power: "#8F857A",
+  wisdom: "#8F7FA8",
+  connection: "#7BA6A0",
 }
 
 const VALUE_LABELS: Record<ValueType, string> = {
@@ -30,10 +30,31 @@ const TEMPORAL_PHASE_NAMES: Record<number, string> = {
 }
 
 const TEMPORAL_COLORS: Record<number, string> = {
-  1: "#94a3b8",
-  2: "#fbbf24",
-  3: "#34d399",
+  1: "#8F857A",
+  2: "#C68A3D",
+  3: "#7E9F7B",
 }
+
+const SectionHeader = ({ eyebrow, title }: { eyebrow: string; title: string }) => (
+  <div className="mb-3">
+    <p
+      className="text-[10px] uppercase tracking-[0.18em] mb-1"
+      style={{ color: "var(--color-brain-text-soft)", fontWeight: 500 }}
+    >
+      {eyebrow}
+    </p>
+    <h2
+      className="text-[17px] tracking-[-0.01em]"
+      style={{
+        color: "var(--color-brain-text)",
+        fontFamily: "var(--font-serif)",
+        fontWeight: 500,
+      }}
+    >
+      {title}
+    </h2>
+  </div>
+)
 
 export default function PatternPanel() {
   const {
@@ -52,40 +73,54 @@ export default function PatternPanel() {
 
   const isNodeActive = (nId: string) => selectedNodeIds.includes(nId)
 
+  const sectionTitle =
+    perspective === "cognitive" ? "사고 패턴"
+    : perspective === "value" ? "가치 패턴"
+    : "시간 패턴"
+
   return (
     <div className="flex flex-col h-full overflow-y-auto">
-      <div className="px-4 py-3 border-b border-brain-border">
-        <h2 className="text-lg font-semibold text-brain-text">
-          {perspective === "cognitive" && "사고 패턴"}
-          {perspective === "value" && "가치 패턴"}
-          {perspective === "temporal" && "시간 패턴"}
-        </h2>
+      <div className="px-6 py-5 border-b border-brain-border">
+        <SectionHeader eyebrow="패턴" title={sectionTitle} />
       </div>
 
-      <div className="p-4 space-y-4">
+      <div className="px-6 py-5 space-y-3">
         {filteredPatterns.map((pattern) => {
           const isActive = pattern.involvedNodes.some(isNodeActive)
           return (
             <div
               key={pattern.id}
               style={{
-                borderColor: isActive ? "#ff6b6b" : "#2a2a4a",
+                borderColor: isActive ? "var(--color-brain-accent)" : "var(--color-brain-border)",
                 backgroundColor: isActive
-                  ? "rgba(255, 107, 107, 0.1)"
-                  : "#1a1a2e",
+                  ? "rgba(184, 92, 63, 0.04)"
+                  : "var(--color-brain-surface)",
+                boxShadow: isActive
+                  ? "0 2px 8px rgba(184,92,63,0.08)"
+                  : "0 1px 2px rgba(42,36,29,0.04)",
               }}
-              className="rounded-lg border p-3 transition-colors duration-200"
+              className="rounded-lg border p-4 transition-all duration-200"
             >
               <h3
-                className="text-sm font-bold mb-1"
-                style={{ color: "#ffd93d" }}
+                className="text-[14px] mb-1"
+                style={{
+                  color: "var(--color-brain-text)",
+                  fontFamily: "var(--font-serif)",
+                  fontWeight: 600,
+                }}
               >
                 {pattern.name}
               </h3>
-              <p className="text-xs leading-relaxed" style={{ color: "rgba(224,224,240,0.7)" }}>
+              <p
+                className="text-[12.5px] leading-relaxed"
+                style={{
+                  color: "var(--color-brain-text-muted)",
+                  fontFamily: "var(--font-serif)",
+                }}
+              >
                 {pattern.description}
               </p>
-              <div className="mt-2 flex flex-wrap gap-1">
+              <div className="mt-3 flex flex-wrap gap-1.5">
                 {pattern.involvedNodes.map((nId) => {
                   const node = nodes.find((n) => n.id === nId)
                   if (!node) return null
@@ -95,15 +130,18 @@ export default function PatternPanel() {
                       key={nId}
                       onClick={() => selectNode(nId)}
                       style={{
-                        borderColor: active ? "#ff6b6b" : "#2a2a4a",
+                        minHeight: 24,
+                        borderColor: active
+                          ? "var(--color-brain-accent)"
+                          : "var(--color-brain-border)",
                         backgroundColor: active
-                          ? "rgba(255,107,107,0.3)"
-                          : "transparent",
+                          ? "rgba(184,92,63,0.10)"
+                          : "var(--color-brain-surface-soft)",
                         color: active
-                          ? "#e0e0f0"
-                          : "rgba(224,224,240,0.5)",
+                          ? "var(--color-brain-accent)"
+                          : "var(--color-brain-text-muted)",
                       }}
-                      className="text-xs px-2 py-0.5 rounded-full border cursor-pointer transition-colors duration-150"
+                      className="text-[11px] px-2.5 py-1 rounded-full border cursor-pointer transition-colors duration-150"
                     >
                       {node.concept}
                     </button>
@@ -115,7 +153,14 @@ export default function PatternPanel() {
         })}
 
         {filteredPatterns.length === 0 && (
-          <p className="text-sm" style={{ color: "rgba(224,224,240,0.4)" }}>
+          <p
+            className="text-[13px]"
+            style={{
+              color: "var(--color-brain-text-soft)",
+              fontFamily: "var(--font-serif)",
+              fontStyle: "italic",
+            }}
+          >
             이 관점에 정의된 패턴이 없습니다.
           </p>
         )}
@@ -135,26 +180,40 @@ export default function PatternPanel() {
       )}
 
       {perspective === "cognitive" && (
-        <div className="px-4 py-3 border-t border-brain-border">
-          <h2 className="text-base font-semibold mb-3" style={{ color: "#e0e0f0" }}>
-            인지 레이어
-          </h2>
+        <div className="px-6 py-5 border-t border-brain-border">
+          <SectionHeader eyebrow="구조" title="인지 레이어" />
           <div className="space-y-2">
             {layers.map((layer) => (
               <div
                 key={layer.id}
-                className="rounded border p-2"
-                style={{ borderColor: "#2a2a4a", backgroundColor: "#1a1a2e" }}
+                className="rounded-lg border p-3"
+                style={{
+                  borderColor: "var(--color-brain-border)",
+                  backgroundColor: "var(--color-brain-surface)",
+                }}
               >
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-mono" style={{ color: "rgba(224,224,240,0.4)" }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span
+                    className="text-[10px] tracking-[0.08em]"
+                    style={{
+                      color: "var(--color-brain-text-soft)",
+                      fontWeight: 600,
+                    }}
+                  >
                     L{layer.depth}
                   </span>
-                  <span className="text-sm font-medium" style={{ color: "rgba(224,224,240,0.8)" }}>
+                  <span
+                    className="text-[13px]"
+                    style={{
+                      color: "var(--color-brain-text)",
+                      fontFamily: "var(--font-serif)",
+                      fontWeight: 500,
+                    }}
+                  >
                     {layer.name}
                   </span>
                 </div>
-                <div className="flex flex-wrap gap-1">
+                <div className="flex flex-wrap gap-1.5">
                   {layer.nodeIds.map((nId) => {
                     const node = nodes.find((n) => n.id === nId)
                     if (!node) return null
@@ -162,10 +221,10 @@ export default function PatternPanel() {
                       <span
                         key={nId}
                         onClick={() => selectNode(nId)}
-                        className="text-xs px-1.5 py-0.5 rounded cursor-pointer"
+                        className="text-[11px] px-2 py-0.5 rounded-full cursor-pointer"
                         style={{
-                          backgroundColor: "#0f0f1a",
-                          color: "rgba(224,224,240,0.6)",
+                          backgroundColor: "var(--color-brain-surface-soft)",
+                          color: "var(--color-brain-text-muted)",
                         }}
                       >
                         {node.concept}
@@ -198,35 +257,43 @@ function ValueLegend({
   }
 
   return (
-    <div className="px-4 py-3 border-t border-brain-border">
-      <h2 className="text-base font-semibold mb-3" style={{ color: "#e0e0f0" }}>
-        가치 유형
-      </h2>
+    <div className="px-6 py-5 border-t border-brain-border">
+      <SectionHeader eyebrow="범례" title="가치 유형" />
       <div className="space-y-2">
         {Array.from(valueGroups.entries()).map(([vt, groupNodes]) => (
           <div
             key={vt}
-            className="rounded border p-2"
-            style={{ borderColor: "#2a2a4a", backgroundColor: "#1a1a2e" }}
+            className="rounded-lg border p-3"
+            style={{
+              borderColor: "var(--color-brain-border)",
+              backgroundColor: "var(--color-brain-surface)",
+            }}
           >
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-2">
               <span
-                className="w-3 h-3 rounded-full"
+                className="w-2.5 h-2.5 rounded-full"
                 style={{ backgroundColor: VALUE_COLORS[vt] }}
               />
-              <span className="text-sm font-medium" style={{ color: VALUE_COLORS[vt] }}>
+              <span
+                className="text-[13px]"
+                style={{
+                  color: VALUE_COLORS[vt],
+                  fontFamily: "var(--font-serif)",
+                  fontWeight: 500,
+                }}
+              >
                 {VALUE_LABELS[vt]}
               </span>
             </div>
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-1.5">
               {groupNodes.map((node) => (
                 <span
                   key={node.id}
                   onClick={() => selectNode(node.id)}
-                  className="text-xs px-1.5 py-0.5 rounded cursor-pointer"
+                  className="text-[11px] px-2 py-0.5 rounded-full cursor-pointer"
                   style={{
-                    backgroundColor: "#0f0f1a",
-                    color: "rgba(224,224,240,0.6)",
+                    backgroundColor: "var(--color-brain-surface-soft)",
+                    color: "var(--color-brain-text-muted)",
                   }}
                   title={node.valueDescription}
                 >
@@ -255,11 +322,9 @@ function TemporalTimeline({
   const phases = [1, 2, 3]
 
   return (
-    <div className="px-4 py-3 border-t border-brain-border">
-      <h2 className="text-base font-semibold mb-3" style={{ color: "#e0e0f0" }}>
-        시간 흐름
-      </h2>
-      <div className="space-y-3">
+    <div className="px-6 py-5 border-t border-brain-border">
+      <SectionHeader eyebrow="흐름" title="시간 흐름" />
+      <div className="space-y-4">
         {phases.map((phase) => {
           const phaseNodes = nodes.filter((n) => n.temporalPhase === phase)
           const isActive = activePhase === phase
@@ -268,44 +333,48 @@ function TemporalTimeline({
               <div className="flex flex-col items-center pt-1">
                 <button
                   onClick={() => setPhase(isActive ? null : phase)}
-                  className="w-6 h-6 rounded-full border-2 cursor-pointer flex items-center justify-center text-xs font-bold transition-all"
+                  className="w-7 h-7 rounded-full border cursor-pointer flex items-center justify-center text-[12px] transition-all"
                   style={{
                     borderColor: TEMPORAL_COLORS[phase],
-                    backgroundColor: isActive ? TEMPORAL_COLORS[phase] : "transparent",
-                    color: isActive ? "#0f0f1a" : TEMPORAL_COLORS[phase],
+                    backgroundColor: isActive ? TEMPORAL_COLORS[phase] : "var(--color-brain-surface)",
+                    color: isActive ? "#FFFFFF" : TEMPORAL_COLORS[phase],
+                    fontWeight: 600,
                   }}
                 >
                   {phase}
                 </button>
                 {phase < 3 && (
                   <div
-                    className="w-0.5 h-6 mt-1"
-                    style={{ backgroundColor: "#2a2a4a" }}
+                    className="w-px h-7 mt-1"
+                    style={{ backgroundColor: "var(--color-brain-border)" }}
                   />
                 )}
               </div>
               <div className="flex-1">
                 <p
-                  className="text-xs font-semibold mb-1"
-                  style={{ color: TEMPORAL_COLORS[phase] }}
+                  className="text-[12px] mb-1.5"
+                  style={{
+                    color: TEMPORAL_COLORS[phase],
+                    fontFamily: "var(--font-serif)",
+                    fontWeight: 500,
+                  }}
                 >
                   {TEMPORAL_PHASE_NAMES[phase]}
                 </p>
-                <div className="flex flex-wrap gap-1">
+                <div className="flex flex-wrap gap-1.5">
                   {phaseNodes.map((node) => (
                     <span
                       key={node.id}
                       onClick={() => selectNode(node.id)}
-                      className="text-xs px-1.5 py-0.5 rounded cursor-pointer"
+                      className="text-[11px] px-2 py-0.5 rounded-full cursor-pointer"
                       style={{
                         backgroundColor: isActive
-                          ? `${TEMPORAL_COLORS[phase]}22`
-                          : "#0f0f1a",
+                          ? `${TEMPORAL_COLORS[phase]}1A`
+                          : "var(--color-brain-surface-soft)",
                         color: isActive
                           ? TEMPORAL_COLORS[phase]
-                          : "rgba(224,224,240,0.6)",
-                        borderWidth: isActive ? 1 : 0,
-                        borderColor: TEMPORAL_COLORS[phase],
+                          : "var(--color-brain-text-muted)",
+                        border: `1px solid ${isActive ? TEMPORAL_COLORS[phase] : "transparent"}`,
                       }}
                     >
                       {node.concept}

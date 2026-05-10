@@ -33,6 +33,8 @@ export default function PracticeTextLayer() {
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const didLongPressRef = useRef(false)
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null)
+  // Defer phrase-pill single-click action so a follow-up dblclick can override
+  const phraseClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const { textSource } = currentMap
 
@@ -217,9 +219,26 @@ export default function PracticeTextLayer() {
     [rangeMode, rangeAnchor, circledPhrases, makePhrase, addPhrase, removePhrase]
   )
 
-  const handleSendToCanvas = useCallback(
-    (phrase: CircledPhrase, e: React.MouseEvent | React.PointerEvent) => {
-      e.stopPropagation()
+  const handlePhraseClick = useCallback(
+    (phraseId: string) => {
+      // Wait briefly to see if a dblclick is coming. If yes, dblclick clears this.
+      if (phraseClickTimerRef.current) {
+        clearTimeout(phraseClickTimerRef.current)
+      }
+      phraseClickTimerRef.current = setTimeout(() => {
+        removePhrase(phraseId)
+        phraseClickTimerRef.current = null
+      }, 220)
+    },
+    [removePhrase]
+  )
+
+  const handlePhraseDoubleClick = useCallback(
+    (phrase: CircledPhrase) => {
+      if (phraseClickTimerRef.current) {
+        clearTimeout(phraseClickTimerRef.current)
+        phraseClickTimerRef.current = null
+      }
       addNode(phrase.text)
     },
     [addNode]
@@ -232,36 +251,51 @@ export default function PracticeTextLayer() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-3 border-b border-brain-border">
-        <h2 className="text-lg font-semibold" style={{ color: "#e0e0f0" }}>
+      <div className="px-6 py-5 border-b border-brain-border">
+        <p
+          className="text-[10px] uppercase tracking-[0.18em] mb-2"
+          style={{ color: "var(--color-brain-text-soft)", fontWeight: 500 }}
+        >
+          텍스트
+        </p>
+        <h2
+          className="text-[22px] leading-tight tracking-[-0.01em]"
+          style={{ color: "var(--color-brain-text)", fontFamily: "var(--font-serif)", fontWeight: 500 }}
+        >
           {textSource.title}
         </h2>
-        <p className="text-xs mt-1" style={{ color: "rgba(224,224,240,0.5)" }}>
-          탭 = 동그라미 | 꾹 누르기 = 묶기 | Shift = 묶기
+        <p
+          className="text-[12px] mt-2"
+          style={{ color: "var(--color-brain-text-soft)" }}
+        >
+          탭 = 동그라미  ·  더블탭 = 캔버스 추가  ·  꾹 누르기 = 묶기
         </p>
       </div>
 
       {rangeMode && (
         <div
-          className="px-4 py-2"
+          className="px-6 py-2.5 border-b"
           style={{
-            backgroundColor: "rgba(255,217,61,0.1)",
-            borderBottom: "1px solid rgba(255,217,61,0.2)",
+            backgroundColor: "rgba(198, 138, 61, 0.08)",
+            borderColor: "rgba(198, 138, 61, 0.2)",
           }}
         >
-          <span className="text-xs font-medium" style={{ color: "#ffd93d" }}>
+          <span className="text-[12px] font-medium" style={{ color: "var(--color-brain-highlight)" }}>
             {rangeAnchor ? "끝 단어를 탭하세요" : "시작 단어를 탭하세요"}
           </span>
         </div>
       )}
 
       <div
-        className="flex-1 overflow-y-auto p-4"
+        className="flex-1 overflow-y-auto px-6 py-6"
         onPointerMove={handlePointerMove}
         onContextMenu={(e) => e.preventDefault()}
         style={{ touchAction: "pan-y" }}
       >
-        <div className="text-base leading-10 select-none">
+        <div
+          className="text-[15px] leading-[2.2] select-none"
+          style={{ color: "var(--color-brain-text)", fontFamily: "var(--font-serif)" }}
+        >
           {renderGroups.map((group, gi) => {
             if (group.kind === "phrase") {
               return (
@@ -272,35 +306,23 @@ export default function PracticeTextLayer() {
                     e.dataTransfer.setData("text/plain", group.phrase.text)
                     e.dataTransfer.effectAllowed = "copy"
                   }}
-                  onClick={() => removePhrase(group.phrase.id)}
-                  className="inline-flex items-center gap-1"
+                  onClick={() => handlePhraseClick(group.phrase.id)}
+                  onDoubleClick={() => handlePhraseDoubleClick(group.phrase)}
+                  className="inline-flex items-center"
                   style={{
-                    border: "2px solid #ff6b6b",
+                    border: "1.5px solid var(--color-brain-accent)",
                     borderRadius: "9999px",
-                    backgroundColor: "rgba(255,107,107,0.15)",
-                    padding: "1px 4px 1px 8px",
-                    color: "#ffd93d",
+                    backgroundColor: "rgba(184, 92, 63, 0.08)",
+                    padding: "2px 10px",
+                    color: "var(--color-brain-accent)",
                     cursor: "grab",
                     transition: "all 0.15s ease",
+                    fontWeight: 500,
+                    userSelect: "none",
                   }}
+                  title="더블클릭 = 캔버스 추가, 클릭 = 동그라미 해제"
                 >
-                  <span>{group.items.map((w) => w.text).join("")}</span>
-                  <button
-                    onClick={(e) => handleSendToCanvas(group.phrase, e)}
-                    className="rounded-full flex items-center justify-center cursor-pointer"
-                    style={{
-                      width: 20,
-                      height: 20,
-                      backgroundColor: "rgba(255,107,107,0.4)",
-                      color: "#fff",
-                      border: "none",
-                      fontSize: 11,
-                      flexShrink: 0,
-                    }}
-                    title="캔버스에 추가"
-                  >
-                    ↗
-                  </button>
+                  {group.items.map((w) => w.text).join("")}
                 </span>
               )
             }
@@ -324,11 +346,11 @@ export default function PracticeTextLayer() {
                         className="cursor-pointer px-0.5 inline-block"
                         style={{
                           transition: "all 0.15s ease",
-                          border: isAnchor ? "2px dashed #ffd93d" : "2px solid transparent",
+                          border: isAnchor ? "1.5px dashed var(--color-brain-highlight)" : "1.5px solid transparent",
                           borderRadius: isAnchor ? "9999px" : "2px",
-                          backgroundColor: isAnchor ? "rgba(255,217,61,0.2)" : "transparent",
-                          padding: isAnchor ? "1px 6px" : "1px 2px",
-                          color: isAnchor ? "#ffd93d" : "#e0e0f0",
+                          backgroundColor: isAnchor ? "rgba(198, 138, 61, 0.10)" : "transparent",
+                          padding: isAnchor ? "1px 7px" : "1px 2px",
+                          color: isAnchor ? "var(--color-brain-highlight)" : "var(--color-brain-text)",
                         }}
                       >
                         {w.text}
@@ -358,14 +380,14 @@ export default function PracticeTextLayer() {
                       style={{
                         transition: "all 0.15s ease",
                         border: isAnchor
-                          ? "2px dashed #ffd93d"
-                          : "2px solid transparent",
+                          ? "1.5px dashed var(--color-brain-highlight)"
+                          : "1.5px solid transparent",
                         borderRadius: isAnchor ? "9999px" : "2px",
                         backgroundColor: isAnchor
-                          ? "rgba(255,217,61,0.2)"
+                          ? "rgba(198, 138, 61, 0.10)"
                           : "transparent",
-                        padding: isAnchor ? "1px 6px" : "1px 2px",
-                        color: isAnchor ? "#ffd93d" : "#e0e0f0",
+                        padding: isAnchor ? "1px 7px" : "1px 2px",
+                        color: isAnchor ? "var(--color-brain-highlight)" : "var(--color-brain-text)",
                       }}
                     >
                       {w.text}
@@ -378,30 +400,31 @@ export default function PracticeTextLayer() {
         </div>
       </div>
 
-      <div className="px-4 py-2 border-t border-brain-border flex items-center justify-between">
+      <div className="px-6 py-3 border-t border-brain-border flex items-center justify-between">
         <div
-          className="flex items-center gap-2 text-xs"
-          style={{ color: "rgba(224,224,240,0.5)" }}
+          className="flex items-center gap-2 text-[11.5px]"
+          style={{ color: "var(--color-brain-text-muted)" }}
         >
           <span
-            className="inline-block w-3.5 h-3.5 rounded-full border-2"
+            className="inline-block w-3 h-3 rounded-full border-[1.5px]"
             style={{
-              borderColor: "#ff6b6b",
-              backgroundColor: "rgba(255,107,107,0.15)",
+              borderColor: "var(--color-brain-accent)",
+              backgroundColor: "rgba(184, 92, 63, 0.10)",
             }}
           />
-          <span>구: {circledPhrases.length} | 단어: {totalCircled}</span>
+          <span>구 {circledPhrases.length}  ·  단어 {totalCircled}</span>
         </div>
         <button
           onClick={() => {
             setRangeMode(!rangeMode)
             setRangeAnchor(null)
           }}
-          className="px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all"
+          className="px-3.5 py-1.5 rounded-full text-[12px] cursor-pointer transition-all"
           style={{
-            backgroundColor: rangeMode ? "#ffd93d" : "rgba(255,217,61,0.1)",
-            color: rangeMode ? "#0f0f1a" : "#ffd93d",
-            border: rangeMode ? "none" : "1px solid rgba(255,217,61,0.3)",
+            backgroundColor: rangeMode ? "var(--color-brain-highlight)" : "transparent",
+            color: rangeMode ? "#FFFFFF" : "var(--color-brain-highlight)",
+            border: rangeMode ? "1px solid var(--color-brain-highlight)" : "1px solid rgba(198,138,61,0.4)",
+            fontWeight: 500,
           }}
         >
           {rangeMode ? "묶기 완료" : "묶기"}

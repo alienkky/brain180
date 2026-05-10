@@ -12,10 +12,10 @@ import type { Perspective } from "./types/cognitive"
 
 type AppMode = "practice" | "analysis"
 
-const PERSPECTIVES: { key: Perspective; label: string; icon: string }[] = [
-  { key: "cognitive", label: "인지 구조", icon: "🧠" },
-  { key: "value", label: "가치 구조", icon: "💎" },
-  { key: "temporal", label: "시간축", icon: "⏳" },
+const PERSPECTIVES: { key: Perspective; label: string }[] = [
+  { key: "cognitive", label: "인지" },
+  { key: "value", label: "가치" },
+  { key: "temporal", label: "시간" },
 ]
 
 export default function App() {
@@ -26,64 +26,89 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen">
       <header
-        className="flex items-center justify-between px-6 py-3 border-b border-brain-border"
-        style={{ backgroundColor: "#1a1a2e" }}
+        className="flex items-center justify-between px-8 py-4 border-b border-brain-border"
+        style={{ backgroundColor: "var(--color-brain-surface)" }}
       >
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold tracking-tight">
-            <span style={{ color: "#ff6b6b" }}>Brain</span>
-            <span style={{ color: "#e0e0f0" }}>180</span>
+        <div className="flex items-center gap-8">
+          {/* Wordmark */}
+          <h1
+            className="text-[22px] tracking-[-0.02em] leading-none"
+            style={{ fontFamily: "var(--font-sans)", fontWeight: 700 }}
+          >
+            <span style={{ color: "var(--color-brain-accent)" }}>
+              Brain
+            </span>
+            <span style={{ color: "var(--color-brain-text)", fontWeight: 500 }}>
+              180
+            </span>
           </h1>
 
-          {/* Mode toggle */}
-          <div className="flex gap-0.5 p-0.5 rounded-lg" style={{ backgroundColor: "#0f0f1a" }}>
-            <button
-              onClick={() => setMode("practice")}
-              className="px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-all"
-              style={{
-                backgroundColor: mode === "practice" ? "#ff6b6b" : "transparent",
-                color: mode === "practice" ? "#0f0f1a" : "rgba(224,224,240,0.4)",
-                fontWeight: mode === "practice" ? "bold" : "normal",
-              }}
-            >
-              ✏️ 연습
-            </button>
-            <button
-              onClick={() => setMode("analysis")}
-              className="px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-all"
-              style={{
-                backgroundColor: mode === "analysis" ? "#2a2a4a" : "transparent",
-                color: mode === "analysis" ? "#e0e0f0" : "rgba(224,224,240,0.4)",
-              }}
-            >
-              📊 분석
-            </button>
-          </div>
-
-          {/* Perspective toggle (analysis mode only) */}
-          {mode === "analysis" && (
-            <div className="flex gap-0.5 p-0.5 rounded-lg" style={{ backgroundColor: "#0f0f1a" }}>
-              {PERSPECTIVES.map(({ key, label, icon }) => (
+          {/* Mode toggle — segmented */}
+          <div
+            className="flex p-0.5 rounded-full border"
+            style={{
+              backgroundColor: "var(--color-brain-surface-soft)",
+              borderColor: "var(--color-brain-border)",
+            }}
+          >
+            {(["practice", "analysis"] as AppMode[]).map((m) => {
+              const active = mode === m
+              return (
                 <button
-                  key={key}
-                  onClick={() => setPerspective(key)}
-                  className="px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-all duration-200"
+                  key={m}
+                  onClick={() => setMode(m)}
+                  className="px-4 py-1.5 rounded-full text-[13px] cursor-pointer transition-all"
                   style={{
-                    backgroundColor: perspective === key ? "#2a2a4a" : "transparent",
-                    color: perspective === key ? "#e0e0f0" : "rgba(224,224,240,0.4)",
-                    boxShadow: perspective === key ? "0 0 8px rgba(255,107,107,0.2)" : "none",
+                    backgroundColor: active ? "var(--color-brain-surface)" : "transparent",
+                    color: active ? "var(--color-brain-text)" : "var(--color-brain-text-soft)",
+                    fontWeight: active ? 500 : 400,
+                    boxShadow: active ? "0 1px 3px rgba(42,36,29,0.08)" : "none",
                   }}
                 >
-                  {icon} {label}
+                  {m === "practice" ? "연습" : "분석"}
                 </button>
-              ))}
+              )
+            })}
+          </div>
+
+          {/* Perspective toggle (analysis only) */}
+          {mode === "analysis" && (
+            <div className="flex items-center gap-1">
+              <span
+                className="text-[11px] uppercase tracking-[0.18em] mr-2"
+                style={{ color: "var(--color-brain-text-soft)", fontWeight: 500 }}
+              >
+                관점
+              </span>
+              {PERSPECTIVES.map(({ key, label }) => {
+                const active = perspective === key
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setPerspective(key)}
+                    className="px-3 py-1 text-[13px] cursor-pointer transition-all border-b-2"
+                    style={{
+                      borderBottomColor: active ? "var(--color-brain-accent)" : "transparent",
+                      color: active ? "var(--color-brain-text)" : "var(--color-brain-text-soft)",
+                      fontWeight: active ? 500 : 400,
+                      fontFamily: "var(--font-serif)",
+                    }}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
             </div>
           )}
         </div>
 
-        <div className="text-sm" style={{ color: "rgba(224,224,240,0.5)" }}>
-          {currentMap.textSource.author} —{" "}
-          <span style={{ color: "rgba(224,224,240,0.7)" }}>
+        <div
+          className="text-[13px]"
+          style={{ color: "var(--color-brain-text-soft)", fontFamily: "var(--font-serif)" }}
+        >
+          <span style={{ fontStyle: "italic" }}>{currentMap.textSource.author}</span>
+          <span className="mx-2" style={{ color: "var(--color-brain-border-strong)" }}>·</span>
+          <span style={{ color: "var(--color-brain-text-muted)" }}>
             {currentMap.textSource.title}
           </span>
         </div>
@@ -93,11 +118,14 @@ export default function App() {
         <main className="flex flex-1 min-h-0">
           <section
             className="w-[32%] border-r border-brain-border"
-            style={{ backgroundColor: "rgba(26,26,46,0.5)" }}
+            style={{ backgroundColor: "var(--color-brain-surface)" }}
           >
             <PracticeTextLayer />
           </section>
-          <section className="flex-1 flex flex-col" style={{ backgroundColor: "#0f0f1a" }}>
+          <section
+            className="flex-1 flex flex-col"
+            style={{ backgroundColor: "var(--color-brain-bg)" }}
+          >
             <div className="flex-1 min-h-0">
               <PracticeCanvas />
             </div>
@@ -105,7 +133,7 @@ export default function App() {
           </section>
           <section
             className="w-[22%] border-l border-brain-border"
-            style={{ backgroundColor: "rgba(26,26,46,0.5)" }}
+            style={{ backgroundColor: "var(--color-brain-surface)" }}
           >
             <PracticeToolbar />
           </section>
@@ -114,16 +142,19 @@ export default function App() {
         <main className="flex flex-1 min-h-0">
           <section
             className="w-[32%] border-r border-brain-border"
-            style={{ backgroundColor: "rgba(26,26,46,0.5)" }}
+            style={{ backgroundColor: "var(--color-brain-surface)" }}
           >
             <TextLayer />
           </section>
-          <section className="flex-1" style={{ backgroundColor: "#0f0f1a" }}>
+          <section
+            className="flex-1"
+            style={{ backgroundColor: "var(--color-brain-bg)" }}
+          >
             <VisualLayer />
           </section>
           <section
             className="w-[26%] border-l border-brain-border"
-            style={{ backgroundColor: "rgba(26,26,46,0.5)" }}
+            style={{ backgroundColor: "var(--color-brain-surface)" }}
           >
             <PatternPanel />
           </section>

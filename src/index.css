@@ -1,16 +1,40 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..500&family=Noto+Serif+KR:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 @import "tailwindcss";
 
 @theme {
-  --color-brain-bg: #0f0f1a;
-  --color-brain-surface: #1a1a2e;
-  --color-brain-border: #2a2a4a;
-  --color-brain-text: #e0e0f0;
-  --color-brain-accent: #ff6b6b;
-  --color-brain-highlight: #ffd93d;
-  --color-brain-node-root: #ff6b6b;
-  --color-brain-node-anchor: #4ecdc4;
-  --color-brain-node-bridge: #a78bfa;
-  --color-brain-node-branch: #60a5fa;
+  /* ── Surfaces (warm off-white paper) ── */
+  --color-brain-bg: #FAF7F2;
+  --color-brain-surface: #FFFFFF;
+  --color-brain-surface-soft: #F3EEE4;
+  --color-brain-border: #E8E2D6;
+  --color-brain-border-strong: #D6CDBC;
+
+  /* ── Text (warm near-black) ── */
+  --color-brain-text: #2A241D;
+  --color-brain-text-muted: #6E6557;
+  --color-brain-text-soft: #A09684;
+
+  /* ── Accents (muted, earthy) ── */
+  --color-brain-accent: #B85C3F;        /* terracotta */
+  --color-brain-accent-soft: #E8C8BC;
+  --color-brain-highlight: #C68A3D;     /* warm amber */
+  --color-brain-highlight-soft: #EDD9B6;
+  --color-brain-sage: #6E8F82;
+  --color-brain-success: #6B8B6E;
+  --color-brain-warn: #B58947;
+  --color-brain-danger: #A0533F;
+
+  /* ── Node types ── */
+  --color-brain-node-root: #B85C3F;
+  --color-brain-node-anchor: #6E8F82;
+  --color-brain-node-bridge: #8F7FA8;
+  --color-brain-node-branch: #6F8AA8;
+
+  /* ── Typography ── */
+  --font-display: "Fraunces", "Noto Serif KR", Georgia, serif;
+  --font-serif: "Noto Serif KR", "Fraunces", Georgia, serif;
+  --font-sans: "Pretendard", -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
 
 html, body, #root {
@@ -21,5 +45,49 @@ html, body, #root {
 body {
   background: var(--color-brain-bg);
   color: var(--color-brain-text);
-  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv02", "cv03";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Subtle paper texture on root background */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background-image:
+    radial-gradient(at 20% 0%, rgba(184, 92, 63, 0.04) 0px, transparent 50%),
+    radial-gradient(at 80% 100%, rgba(110, 143, 130, 0.04) 0px, transparent 50%);
+}
+
+/* Refined scrollbars */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--color-brain-border-strong);
+  border-radius: 999px;
+  border: 2px solid var(--color-brain-bg);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-brain-text-soft);
+}
+
+/* Soft elevation utilities */
+.shadow-soft-1 {
+  box-shadow: 0 1px 2px rgba(42, 36, 29, 0.04);
+}
+.shadow-soft-2 {
+  box-shadow: 0 2px 8px rgba(42, 36, 29, 0.05), 0 1px 2px rgba(42, 36, 29, 0.03);
+}
+.shadow-soft-3 {
+  box-shadow: 0 12px 32px rgba(42, 36, 29, 0.07), 0 2px 4px rgba(42, 36, 29, 0.03);
 }

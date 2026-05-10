@@ -5,35 +5,60 @@ import { useStore } from "../../store/useStore"
 import type { NodeType, EdgeRelation, ValueType, Perspective } from "../../types/cognitive"
 
 const NODE_COLORS: Record<NodeType, string> = {
-  root: "#ff6b6b",
-  anchor: "#4ecdc4",
-  bridge: "#a78bfa",
-  branch: "#60a5fa",
+  root: "#B85C3F",
+  anchor: "#6E8F82",
+  bridge: "#8F7FA8",
+  branch: "#6F8AA8",
+}
+
+// One-step-darker variants used for the selected/highlighted ring
+const NODE_COLORS_DARK: Record<NodeType, string> = {
+  root: "#8A4530",
+  anchor: "#4F6B61",
+  bridge: "#6A5E80",
+  branch: "#4F6680",
 }
 
 const VALUE_COLORS: Record<ValueType, string> = {
-  truth: "#60a5fa",
-  beauty: "#f472b6",
-  goodness: "#34d399",
-  freedom: "#fbbf24",
-  love: "#ff6b6b",
-  power: "#94a3b8",
-  wisdom: "#c084fc",
-  connection: "#2dd4bf",
+  truth: "#6F8AA8",
+  beauty: "#C49AA1",
+  goodness: "#7E9F7B",
+  freedom: "#C68A3D",
+  love: "#B85C3F",
+  power: "#8F857A",
+  wisdom: "#8F7FA8",
+  connection: "#7BA6A0",
+}
+
+const VALUE_COLORS_DARK: Record<ValueType, string> = {
+  truth: "#4F6680",
+  beauty: "#94707A",
+  goodness: "#5C7959",
+  freedom: "#94642A",
+  love: "#8A4530",
+  power: "#6A6258",
+  wisdom: "#6A5E80",
+  connection: "#577D78",
 }
 
 const TEMPORAL_COLORS: Record<number, string> = {
-  1: "#94a3b8",
-  2: "#fbbf24",
-  3: "#34d399",
+  1: "#8F857A",
+  2: "#C68A3D",
+  3: "#7E9F7B",
+}
+
+const TEMPORAL_COLORS_DARK: Record<number, string> = {
+  1: "#6A6258",
+  2: "#94642A",
+  3: "#5C7959",
 }
 
 const EDGE_COLORS: Record<EdgeRelation, string> = {
-  causes: "#ffd93d",
-  supports: "#4ecdc4",
-  contrasts: "#ff6b6b",
-  transforms: "#a78bfa",
-  contains: "#60a5fa",
+  causes: "#C68A3D",
+  supports: "#6E8F82",
+  contrasts: "#B85C3F",
+  transforms: "#8F7FA8",
+  contains: "#6F8AA8",
 }
 
 const EDGE_STYLES: Record<EdgeRelation, string> = {
@@ -47,29 +72,30 @@ const EDGE_STYLES: Record<EdgeRelation, string> = {
 function getNodeColor(ele: cytoscape.NodeSingular, perspective: Perspective): string {
   if (perspective === "value") {
     const vt = ele.data("valueType") as ValueType | undefined
-    return vt ? VALUE_COLORS[vt] ?? "#94a3b8" : "#94a3b8"
+    return vt ? VALUE_COLORS[vt] ?? "#8F857A" : "#8F857A"
   }
   if (perspective === "temporal") {
     const tp = ele.data("temporalPhase") as number | undefined
-    return tp ? TEMPORAL_COLORS[tp] ?? "#94a3b8" : "#94a3b8"
+    return tp ? TEMPORAL_COLORS[tp] ?? "#8F857A" : "#8F857A"
   }
-  return NODE_COLORS[ele.data("nodeType") as NodeType] ?? "#60a5fa"
+  return NODE_COLORS[ele.data("nodeType") as NodeType] ?? "#6F8AA8"
 }
 
-const NODE_TEXT_COLORS: Record<NodeType, string> = {
-  root: "#fff",
-  anchor: "#0f0f1a",
-  bridge: "#fff",
-  branch: "#0f0f1a",
+function getNodeRingColor(ele: cytoscape.NodeSingular, perspective: Perspective): string {
+  if (perspective === "value") {
+    const vt = ele.data("valueType") as ValueType | undefined
+    return vt ? VALUE_COLORS_DARK[vt] ?? "#6A6258" : "#6A6258"
+  }
+  if (perspective === "temporal") {
+    const tp = ele.data("temporalPhase") as number | undefined
+    return tp ? TEMPORAL_COLORS_DARK[tp] ?? "#6A6258" : "#6A6258"
+  }
+  return NODE_COLORS_DARK[ele.data("nodeType") as NodeType] ?? "#4F6680"
 }
 
-function getNodeTextColor(ele: cytoscape.NodeSingular, perspective: Perspective): string {
-  if (perspective === "cognitive") {
-    return NODE_TEXT_COLORS[ele.data("nodeType") as NodeType] ?? "#0f0f1a"
-  }
-  const bg = getNodeColor(ele, perspective)
-  const dark = ["#94a3b8", "#fbbf24", "#34d399", "#2dd4bf", "#f472b6"]
-  return dark.includes(bg) ? "#0f0f1a" : "#fff"
+function getNodeTextColor(_ele: cytoscape.NodeSingular, _perspective: Perspective): string {
+  // All node bg colors are mid-tone earth — white text reads cleanly
+  return "#FFFFFF"
 }
 
 function getNodeLabel(ele: cytoscape.NodeSingular, _perspective: Perspective): string {
@@ -79,14 +105,14 @@ function getNodeLabel(ele: cytoscape.NodeSingular, _perspective: Perspective): s
 
 function nodeSize(label: string, dim: number): number {
   const len = (label || "").length
-  const base = Math.max(55, Math.min(100, len * 14))
+  const base = Math.max(58, Math.min(105, len * 14))
   return base + dim * 6
 }
 
 const PERSPECTIVE_LABELS: Record<Perspective, string> = {
-  cognitive: "인지 구조 관점",
-  value: "가치 구조 관점",
-  temporal: "시간축 관점",
+  cognitive: "인지 구조",
+  value: "가치 구조",
+  temporal: "시간축",
 }
 
 export default function VisualLayer() {
@@ -134,7 +160,7 @@ export default function VisualLayer() {
           }
         : {
             name: "cose" as const,
-            animate: true,
+            animate: "end" as const,
             animationDuration: 800,
             nodeRepulsion: () => 8000,
             idealEdgeLength: () => 150,
@@ -178,60 +204,101 @@ export default function VisualLayer() {
               `${nodeSize(ele.data("label"), ele.data("dim")) * 0.8}px`,
             "font-size": (ele: cytoscape.NodeSingular) => {
               const len = (ele.data("label") || "").length
-              return len > 5 ? "10px" : "12px"
+              return len > 5 ? "11px" : "13px"
             },
-            "font-weight": "bold",
+            "font-family": "Noto Serif KR, Fraunces, Georgia, serif",
+            "font-weight": 500,
             color: (ele: cytoscape.NodeSingular) =>
               getNodeTextColor(ele, perspective),
             "text-valign": "center",
             "text-halign": "center",
             "background-color": (ele: cytoscape.NodeSingular) =>
               getNodeColor(ele, perspective),
+            "background-opacity": 0.95,
             width: (ele: cytoscape.NodeSingular) =>
               nodeSize(ele.data("label"), ele.data("dim")),
             height: (ele: cytoscape.NodeSingular) =>
               nodeSize(ele.data("label"), ele.data("dim")),
-            "border-width": 2,
-            "border-color": "#2a2a4a",
+            "border-width": 1,
+            "border-color": "#FFFFFF",
+            "border-opacity": 0.5,
+            "overlay-opacity": 0,
+            "overlay-color": "transparent",
+            "overlay-padding": 0,
             "transition-property":
-              "background-color, border-color, width, height, opacity",
+              "background-color, border-color, border-width, width, height, opacity",
             "transition-duration": 200,
           } as cytoscape.Css.Node,
         },
         {
+          selector: "node:active",
+          style: {
+            "overlay-opacity": 0,
+          },
+        },
+        {
           selector: "node:selected, node.highlighted",
           style: {
-            "border-width": 4,
-            "border-color": "#ffd93d",
+            "border-width": 2.5,
+            "border-color": (ele: cytoscape.NodeSingular) =>
+              getNodeRingColor(ele, perspective),
+            "border-opacity": 1,
             "background-opacity": 1,
           },
         },
         {
           selector: "node.dimmed",
-          style: { opacity: 0.2 },
+          style: { opacity: 0.25 },
         },
         {
           selector: "edge",
           style: {
-            width: 2,
+            width: 1.5,
             "line-color": (ele: cytoscape.EdgeSingular) =>
-              EDGE_COLORS[ele.data("relation") as EdgeRelation] ?? "#4a4a6a",
+              EDGE_COLORS[ele.data("relation") as EdgeRelation] ?? "#A09684",
             "line-style": (ele: cytoscape.EdgeSingular) =>
               EDGE_STYLES[ele.data("relation") as EdgeRelation] ?? "solid",
+            "line-opacity": 0.6,
             "target-arrow-shape": "triangle",
             "target-arrow-color": (ele: cytoscape.EdgeSingular) =>
-              EDGE_COLORS[ele.data("relation") as EdgeRelation] ?? "#4a4a6a",
+              EDGE_COLORS[ele.data("relation") as EdgeRelation] ?? "#A09684",
+            "arrow-scale": 0.9,
             "curve-style": "bezier",
+            "control-point-step-size": 55,
             label: "data(label)",
-            "font-size": "10px",
-            color: "#9090b0",
+            "font-family": "Noto Serif KR, Fraunces, Georgia, serif",
+            "font-style": "italic",
+            "font-size": (ele: cytoscape.EdgeSingular) => {
+              const src = ele.source().renderedPosition()
+              const tgt = ele.target().renderedPosition()
+              const dist = Math.hypot(tgt.x - src.x, tgt.y - src.y)
+              const len = ((ele.data("label") || "") as string).length
+              if (len === 0) return "9px"
+              const srcW = ele.source().renderedWidth()
+              const tgtW = ele.target().renderedWidth()
+              const usable = Math.max(15, dist - (srcW + tgtW) / 2)
+              const maxFont = Math.floor((usable / len) * 0.9)
+              return `${Math.max(7, Math.min(10, maxFont))}px`
+            },
+            "text-wrap": "wrap",
+            "text-max-width": (ele: cytoscape.EdgeSingular) => {
+              const src = ele.source().renderedPosition()
+              const tgt = ele.target().renderedPosition()
+              const dist = Math.hypot(tgt.x - src.x, tgt.y - src.y)
+              const srcW = ele.source().renderedWidth()
+              const tgtW = ele.target().renderedWidth()
+              const usable = Math.max(28, dist - (srcW + tgtW) / 2)
+              return `${usable}px`
+            },
+            color: "#6E6557",
             "text-rotation": "autorotate",
-            "text-margin-y": -10,
+            "text-margin-y": -9,
+            "text-background-opacity": 0,
           } as cytoscape.Css.Edge,
         },
         {
           selector: "edge.dimmed",
-          style: { opacity: 0.1 },
+          style: { opacity: 0.12 },
         },
       ],
       layout: layoutOptions as cytoscape.LayoutOptions,
@@ -244,8 +311,22 @@ export default function VisualLayer() {
       if (evt.target === cy) useStore.getState().clearSelection()
     })
 
+    // Edge label font-size and text-max-width depend on rendered distance.
+    // Cytoscape doesn't auto re-evaluate style functions on position changes,
+    // so retrigger manually when nodes move or viewport changes.
+    const recomputeEdgeStyles = () => {
+      try { cy.style().update() } catch {}
+    }
+    cy.on("position", "node", recomputeEdgeStyles)
+    cy.on("zoom pan", recomputeEdgeStyles)
+
     cyRef.current = cy
-    return () => { cy.destroy() }
+    return () => {
+      try { cy.stop() } catch {}
+      setTimeout(() => {
+        try { cy.destroy() } catch {}
+      }, 0)
+    }
   }, [currentMap, perspective])
 
   useEffect(() => {
@@ -286,26 +367,46 @@ export default function VisualLayer() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-3 border-b border-brain-border flex items-center justify-between">
+      <div className="px-8 py-5 border-b border-brain-border flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-brain-text">
+          <p
+            className="text-[10px] uppercase tracking-[0.18em] mb-1.5"
+            style={{ color: "var(--color-brain-text-soft)", fontWeight: 500 }}
+          >
+            관점
+          </p>
+          <h2
+            className="text-[20px] tracking-[-0.01em]"
+            style={{
+              color: "var(--color-brain-text)",
+              fontFamily: "var(--font-serif)",
+              fontWeight: 500,
+            }}
+          >
             {PERSPECTIVE_LABELS[perspective]}
           </h2>
-          <p className="text-xs" style={{ color: "rgba(224,224,240,0.4)" }}>
+          <p
+            className="text-[12px] mt-1"
+            style={{
+              color: "var(--color-brain-text-muted)",
+            }}
+          >
             {PERSPECTIVE_DESCRIPTIONS[perspective]}
           </p>
         </div>
         <button
           onClick={handleFit}
-          className="px-2.5 py-1.5 rounded text-xs font-medium cursor-pointer"
+          className="px-3 h-8 rounded-full text-[12px] cursor-pointer flex items-center gap-1.5 transition-all"
           style={{
-            backgroundColor: "rgba(224,224,240,0.08)",
-            color: "rgba(224,224,240,0.6)",
-            border: "1px solid rgba(224,224,240,0.15)",
+            backgroundColor: "transparent",
+            color: "var(--color-brain-text-muted)",
+            border: "1px solid var(--color-brain-border-strong)",
+            fontWeight: 500,
           }}
           title="다이어그램을 화면에 맞춤"
         >
-          ⊞ 맞춤
+          <span aria-hidden="true" style={{ fontSize: 13, lineHeight: 1 }}>⤢</span>
+          <span>맞춤</span>
         </button>
       </div>
       <div ref={containerRef} className="flex-1 min-h-0" />

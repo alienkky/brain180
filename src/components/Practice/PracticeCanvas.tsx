@@ -5,23 +5,40 @@ import { usePracticeStore } from "../../store/usePracticeStore"
 import type { NodeType } from "../../types/cognitive"
 
 const NODE_COLORS: Record<NodeType, string> = {
-  root: "#ff6b6b",
-  anchor: "#4ecdc4",
-  bridge: "#a78bfa",
-  branch: "#60a5fa",
+  root: "#B85C3F",
+  anchor: "#6E8F82",
+  bridge: "#8F7FA8",
+  branch: "#6F8AA8",
 }
 
-const NODE_TEXT_COLORS: Record<NodeType, string> = {
-  root: "#fff",
-  anchor: "#0f0f1a",
-  bridge: "#fff",
-  branch: "#0f0f1a",
+// One-step-darker variants for the selected/highlighted ring
+const NODE_COLORS_DARK: Record<NodeType, string> = {
+  root: "#8A4530",
+  anchor: "#4F6B61",
+  bridge: "#6A5E80",
+  branch: "#4F6680",
 }
 
 function nodeSize(label: string): number {
   const len = (label || "").length
-  return Math.max(55, Math.min(100, len * 14))
+  return Math.max(58, Math.min(105, len * 14))
 }
+
+// 2D point-to-segment distance, used for edge hit-testing
+function pointToSegmentDistance(
+  px: number, py: number,
+  ax: number, ay: number,
+  bx: number, by: number,
+): number {
+  const dx = bx - ax
+  const dy = by - ay
+  const len2 = dx * dx + dy * dy
+  if (len2 === 0) return Math.hypot(px - ax, py - ay)
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2))
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+}
+
+const EDGE_HIT_TOLERANCE = 16  // px from line in rendered coords
 
 export default function PracticeCanvas() {
   const {
@@ -39,10 +56,14 @@ export default function PracticeCanvas() {
     startConnect,
     finishConnect,
     setTool,
+    updateNodeConcept,
+    updateEdgeLabel,
   } = usePracticeStore()
 
   const containerRef = useRef<HTMLDivElement>(null)
   const cyRef = useRef<Core | null>(null)
+  const layoutRef = useRef<cytoscape.Layouts | null>(null)
+  const prevTopologyRef = useRef<string>("")
   const [isDragOver, setIsDragOver] = useState(false)
 
   const handleFit = useCallback(() => {
@@ -54,6 +75,31 @@ export default function PracticeCanvas() {
   const rebuildGraph = useCallback(() => {
     const cy = cyRef.current
     if (!cy) return
+
+    // Topology = which nodes/edges exist + edge endpoints. If unchanged,
+    // skip layout re-run so manual positions and dragged-in labels persist.
+    const topology = JSON.stringify({
+      n: userNodes.map((n) => n.id).sort(),
+      e: userEdges.map((e) => `${e.id}:${e.from}-${e.to}`).sort(),
+    })
+    const topologyChanged = topology !== prevTopologyRef.current
+    prevTopologyRef.current = topology
+
+    if (!topologyChanged) {
+      // Pure data update — labels, concepts, types
+      userNodes.forEach((n) => {
+        const ele = cy.getElementById(n.id)
+        if (ele.length) {
+          ele.data("label", n.concept)
+          ele.data("nodeType", n.type)
+        }
+      })
+      userEdges.forEach((e) => {
+        const ele = cy.getElementById(e.id)
+        if (ele.length) ele.data("label", e.label)
+      })
+      return
+    }
 
     cy.elements().remove()
 
@@ -79,16 +125,21 @@ export default function PracticeCanvas() {
     })
 
     if (userNodes.length > 0) {
-      cy.layout({
+      if (layoutRef.current) {
+        try { layoutRef.current.stop() } catch {}
+      }
+      const layout = cy.layout({
         name: "cose",
-        animate: true,
+        animate: "end",
         animationDuration: 500,
         nodeRepulsion: () => 8000,
         idealEdgeLength: () => 180,
         gravity: 0.3,
         padding: 40,
         fit: true,
-      } as cytoscape.CoseLayoutOptions).run()
+      } as unknown as cytoscape.CoseLayoutOptions)
+      layoutRef.current = layout
+      layout.run()
     }
   }, [userNodes, userEdges])
 
@@ -107,70 +158,133 @@ export default function PracticeCanvas() {
               `${nodeSize(ele.data("label")) * 0.8}px`,
             "font-size": (ele: cytoscape.NodeSingular) => {
               const len = (ele.data("label") || "").length
-              return len > 5 ? "10px" : "12px"
+              return len > 5 ? "11px" : "13px"
             },
-            "font-weight": "bold",
-            color: (ele: cytoscape.NodeSingular) =>
-              NODE_TEXT_COLORS[ele.data("nodeType") as NodeType] ?? "#0f0f1a",
+            "font-family": "Noto Serif KR, Fraunces, Georgia, serif",
+            "font-weight": 500,
+            color: "#FFFFFF",
             "text-valign": "center",
             "text-halign": "center",
             "background-color": (ele: cytoscape.NodeSingular) =>
-              NODE_COLORS[ele.data("nodeType") as NodeType] ?? "#60a5fa",
+              NODE_COLORS[ele.data("nodeType") as NodeType] ?? "#6F8AA8",
+            "background-opacity": 0.95,
             width: (ele: cytoscape.NodeSingular) =>
               nodeSize(ele.data("label")),
             height: (ele: cytoscape.NodeSingular) =>
               nodeSize(ele.data("label")),
-            "border-width": 2,
-            "border-color": "#2a2a4a",
-            "transition-property": "background-color, border-color, width, height",
+            "border-width": 1,
+            "border-color": "#FFFFFF",
+            "border-opacity": 0.5,
+            "overlay-opacity": 0,
+            "overlay-color": "transparent",
+            "overlay-padding": 0,
+            "transition-property": "background-color, border-color, border-width, width, height",
             "transition-duration": 200,
           } as cytoscape.Css.Node,
         },
         {
+          selector: "node:active",
+          style: {
+            "overlay-opacity": 0,
+          },
+        },
+        {
           selector: "node.highlighted",
           style: {
-            "border-width": 4,
-            "border-color": "#ffd93d",
+            "border-width": 2.5,
+            "border-color": (ele: cytoscape.NodeSingular) =>
+              NODE_COLORS_DARK[ele.data("nodeType") as NodeType] ?? "#4F6680",
+            "border-opacity": 1,
           },
         },
         {
           selector: "node.connect-source",
           style: {
-            "border-width": 4,
-            "border-color": "#ffd93d",
+            "border-width": 2.5,
+            "border-color": (ele: cytoscape.NodeSingular) =>
+              NODE_COLORS_DARK[ele.data("nodeType") as NodeType] ?? "#4F6680",
             "border-style": "dashed",
+            "border-opacity": 1,
           },
         },
         {
           selector: "node.dimmed",
-          style: { opacity: 0.2 },
+          style: { opacity: 0.25 },
+        },
+        {
+          selector: "node.drop-target",
+          style: {
+            "border-width": 4,
+            "border-color": "#B85C3F",
+            "border-opacity": 1,
+            "border-style": "dashed",
+          },
         },
         {
           selector: "edge",
           style: {
-            width: 2,
-            "line-color": "#ffd93d",
+            width: 1.5,
+            "line-color": "#C68A3D",
+            "line-opacity": 0.7,
             "target-arrow-shape": "triangle",
-            "target-arrow-color": "#ffd93d",
+            "target-arrow-color": "#C68A3D",
+            "arrow-scale": 0.9,
             "curve-style": "bezier",
+            // Spread parallel edges so 3-4 edges between same pair don't stack
+            "control-point-step-size": 55,
             label: "data(label)",
-            "font-size": "11px",
-            color: "#ffd93d",
+            "font-family": "Noto Serif KR, Fraunces, Georgia, serif",
+            "font-style": "italic",
+            // Shrink label font when edge is too short for the text.
+            // Korean glyphs are ~1em wide so multiplier 0.9 gives a small
+            // safety margin while still shrinking aggressively when nodes
+            // get pushed close together.
+            "font-size": (ele: cytoscape.EdgeSingular) => {
+              const src = ele.source().renderedPosition()
+              const tgt = ele.target().renderedPosition()
+              const dist = Math.hypot(tgt.x - src.x, tgt.y - src.y)
+              const len = ((ele.data("label") || "") as string).length
+              if (len === 0) return "9px"
+              const srcW = ele.source().renderedWidth()
+              const tgtW = ele.target().renderedWidth()
+              const usable = Math.max(15, dist - (srcW + tgtW) / 2)
+              const maxFont = Math.floor((usable / len) * 0.9)
+              return `${Math.max(7, Math.min(10, maxFont))}px`
+            },
+            "text-wrap": "wrap",
+            "text-max-width": (ele: cytoscape.EdgeSingular) => {
+              const src = ele.source().renderedPosition()
+              const tgt = ele.target().renderedPosition()
+              const dist = Math.hypot(tgt.x - src.x, tgt.y - src.y)
+              const srcW = ele.source().renderedWidth()
+              const tgtW = ele.target().renderedWidth()
+              const usable = Math.max(28, dist - (srcW + tgtW) / 2)
+              return `${usable}px`
+            },
+            color: "#6E6557",
             "text-rotation": "autorotate",
-            "text-margin-y": -12,
-            "font-weight": "bold",
-            "text-background-color": "#0f0f1a",
-            "text-background-opacity": 0.8,
-            "text-background-padding": "3px",
+            "text-margin-y": -9,
+            "text-background-opacity": 0,
           } as cytoscape.Css.Edge,
         },
         {
           selector: "edge.selected-edge",
           style: {
+            width: 2.5,
+            "line-color": "#B85C3F",
+            "line-opacity": 1,
+            "target-arrow-color": "#B85C3F",
+            color: "#B85C3F",
+          },
+        },
+        {
+          selector: "edge.drop-target",
+          style: {
             width: 4,
-            "line-color": "#ff6b6b",
-            "target-arrow-color": "#ff6b6b",
-            color: "#ff6b6b",
+            "line-color": "#B85C3F",
+            "line-opacity": 1,
+            "line-style": "dashed",
+            "target-arrow-color": "#B85C3F",
           },
         },
       ],
@@ -218,8 +332,29 @@ export default function PracticeCanvas() {
       }
     })
 
+    // Edge label font-size/text-max-width are functions of rendered node
+    // distance. Cytoscape doesn't re-evaluate style functions on position
+    // changes by default, so trigger a manual style update whenever a node
+    // moves or the viewport pans/zooms.
+    const recomputeEdgeStyles = () => {
+      try { cy.style().update() } catch {}
+    }
+    cy.on("position", "node", recomputeEdgeStyles)
+    cy.on("zoom pan", recomputeEdgeStyles)
+
     cyRef.current = cy
-    return () => { cy.destroy() }
+    return () => {
+      if (layoutRef.current) {
+        try { layoutRef.current.stop() } catch {}
+        layoutRef.current = null
+      }
+      try { cy.stop() } catch {}
+      // Defer destroy past the current rAF loop so any pending layout
+      // animation frames don't fire on a null renderer.
+      setTimeout(() => {
+        try { cy.destroy() } catch {}
+      }, 0)
+    }
   }, [])
 
   useEffect(() => { rebuildGraph() }, [rebuildGraph])
@@ -248,85 +383,197 @@ export default function PracticeCanvas() {
     }
   }, [selectedUserNodeId, selectedEdgeId, connectSourceId, userNodes, userEdges])
 
+  // Returns the cytoscape element under the given container-relative point,
+  // preferring nodes (rendered bounding box) over edges (within tolerance).
+  const elementAt = useCallback(
+    (x: number, y: number): cytoscape.NodeSingular | cytoscape.EdgeSingular | null => {
+      const cy = cyRef.current
+      if (!cy) return null
+
+      let hitNode: cytoscape.NodeSingular | null = null
+      cy.nodes().forEach((n) => {
+        if (hitNode) return
+        const bb = n.renderedBoundingBox()
+        if (x >= bb.x1 && x <= bb.x2 && y >= bb.y1 && y <= bb.y2) {
+          hitNode = n
+        }
+      })
+      if (hitNode) return hitNode
+
+      let hitEdge: cytoscape.EdgeSingular | null = null
+      let bestDist = Infinity
+      cy.edges().forEach((eEle) => {
+        const src = eEle.source().renderedPosition()
+        const tgt = eEle.target().renderedPosition()
+        const d = pointToSegmentDistance(x, y, src.x, src.y, tgt.x, tgt.y)
+        if (d < EDGE_HIT_TOLERANCE && d < bestDist) {
+          hitEdge = eEle
+          bestDist = d
+        }
+      })
+      return hitEdge
+    },
+    []
+  )
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(true)
+
+    const cy = cyRef.current
+    if (!cy) return
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    const target = elementAt(x, y)
+
+    cy.elements(".drop-target").removeClass("drop-target")
+    if (target) target.addClass("drop-target")
+  }, [elementAt])
+
+  const handleDragLeave = useCallback(() => {
+    setIsDragOver(false)
+    const cy = cyRef.current
+    if (cy) cy.elements(".drop-target").removeClass("drop-target")
+  }, [])
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setIsDragOver(false)
     const word = e.dataTransfer.getData("text/plain")
+
+    const cy = cyRef.current
+    if (cy) cy.elements(".drop-target").removeClass("drop-target")
     if (!word) return
+
+    if (cy) {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      const target = elementAt(x, y)
+      if (target) {
+        if (target.isNode()) {
+          updateNodeConcept(target.id(), word)
+        } else if (target.isEdge()) {
+          updateEdgeLabel(target.id(), word)
+        }
+        return
+      }
+    }
     addNode(word)
-  }, [addNode])
+  }, [addNode, elementAt, updateNodeConcept, updateEdgeLabel])
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-2.5 border-b border-brain-border flex items-center justify-between">
+      <div className="px-8 py-4 border-b border-brain-border flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold" style={{ color: "#e0e0f0" }}>
+          <p
+            className="text-[10px] uppercase tracking-[0.18em] mb-1.5"
+            style={{ color: "var(--color-brain-text-soft)", fontWeight: 500 }}
+          >
+            캔버스
+          </p>
+          <h2
+            className="text-[20px] tracking-[-0.01em]"
+            style={{
+              color: "var(--color-brain-text)",
+              fontFamily: "var(--font-serif)",
+              fontWeight: 500,
+            }}
+          >
             나의 인지 구조
           </h2>
-          <p className="text-xs" style={{ color: "rgba(224,224,240,0.5)" }}>
-            {activeTool === "select" && "노드 드래그 = 배치 | 핀치 = 확대/축소"}
+          <p
+            className="text-[12px] mt-1"
+            style={{
+              color: "var(--color-brain-text-muted)",
+            }}
+          >
+            {activeTool === "select" && "노드 드래그로 배치 · 핀치로 확대/축소"}
             {activeTool === "connect" && (connectSourceId ? "도착 노드를 클릭하세요" : "시작 노드를 클릭하세요")}
             {activeTool === "delete" && "삭제할 노드 또는 선을 클릭"}
           </p>
         </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setTool("select")}
-            className="px-2 py-1.5 rounded text-xs cursor-pointer transition-all"
-            style={{
-              backgroundColor: activeTool === "select" ? "#2a2a4a" : "rgba(224,224,240,0.05)",
-              color: activeTool === "select" ? "#e0e0f0" : "rgba(224,224,240,0.35)",
-              border: `1px solid ${activeTool === "select" ? "rgba(224,224,240,0.3)" : "rgba(224,224,240,0.1)"}`,
-            }}
-            title="선택 도구"
-          >
-            ↖
-          </button>
-          <button
-            onClick={() => setTool("delete")}
-            className="px-2 py-1.5 rounded text-xs cursor-pointer transition-all"
-            style={{
-              backgroundColor: activeTool === "delete" ? "#2a2a4a" : "rgba(224,224,240,0.05)",
-              color: activeTool === "delete" ? "#ff6b6b" : "rgba(224,224,240,0.35)",
-              border: `1px solid ${activeTool === "delete" ? "#ff6b6b" : "rgba(224,224,240,0.1)"}`,
-            }}
-            title="삭제 도구"
-          >
-            ✕
-          </button>
+        <div className="flex items-center gap-1.5">
+          {([
+            { tool: "select", icon: "↖", label: "선택" },
+            { tool: "delete", icon: "✕", label: "삭제" },
+          ] as const).map(({ tool, icon, label }) => {
+            const active = activeTool === tool
+            const isDelete = tool === "delete"
+            return (
+              <button
+                key={tool}
+                onClick={() => setTool(tool)}
+                className="px-3 h-8 rounded-full text-[12px] cursor-pointer flex items-center gap-1.5 transition-all"
+                style={{
+                  backgroundColor: active
+                    ? isDelete ? "rgba(184,92,63,0.10)" : "var(--color-brain-surface-soft)"
+                    : "transparent",
+                  color: active
+                    ? isDelete ? "var(--color-brain-accent)" : "var(--color-brain-text)"
+                    : "var(--color-brain-text-soft)",
+                  border: `1px solid ${active
+                    ? isDelete ? "var(--color-brain-accent)" : "var(--color-brain-border-strong)"
+                    : "var(--color-brain-border)"}`,
+                  fontWeight: 500,
+                }}
+              >
+                <span aria-hidden="true" style={{ fontSize: 13, lineHeight: 1 }}>{icon}</span>
+                <span>{label}</span>
+              </button>
+            )
+          })}
           {userNodes.length > 0 && (
             <button
               onClick={handleFit}
-              className="px-2 py-1.5 rounded text-xs cursor-pointer"
+              className="px-3 h-8 rounded-full text-[12px] cursor-pointer flex items-center gap-1.5 transition-all"
               style={{
-                backgroundColor: "rgba(224,224,240,0.05)",
-                color: "rgba(224,224,240,0.5)",
-                border: "1px solid rgba(224,224,240,0.1)",
+                backgroundColor: "transparent",
+                color: "var(--color-brain-text-muted)",
+                border: "1px solid var(--color-brain-border-strong)",
+                fontWeight: 500,
               }}
               title="다이어그램을 화면에 맞춤"
             >
-              ⊞
+              <span aria-hidden="true" style={{ fontSize: 13, lineHeight: 1 }}>⤢</span>
+              <span>맞춤</span>
             </button>
           )}
         </div>
       </div>
       <div
         className="flex-1 min-h-0 relative"
-        onDragOver={(e) => { e.preventDefault(); setIsDragOver(true) }}
-        onDragLeave={() => setIsDragOver(false)}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         style={{
-          backgroundColor: isDragOver ? "rgba(255,107,107,0.05)" : "transparent",
+          backgroundColor: isDragOver ? "rgba(184,92,63,0.04)" : "transparent",
           transition: "background-color 0.2s",
           cursor: activeTool === "connect" ? "crosshair" : activeTool === "delete" ? "not-allowed" : "default",
         }}
       >
         {userNodes.length === 0 && !isDragOver && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-            <div className="text-center" style={{ color: "rgba(224,224,240,0.2)" }}>
-              <p className="text-4xl mb-3">↓</p>
-              <p className="text-sm">왼쪽 텍스트에서 단어를 동그라미 친 후</p>
-              <p className="text-sm">↗ 버튼 또는 드래그로 캔버스에 추가</p>
+            <div className="text-center" style={{ color: "var(--color-brain-text-soft)" }}>
+              <p
+                className="text-[40px] mb-4 leading-none"
+                style={{ color: "var(--color-brain-border-strong)" }}
+              >
+                ↓
+              </p>
+              <p className="text-[13.5px]">
+                왼쪽 텍스트에서 단어를 동그라미 친 후
+              </p>
+              <p className="text-[13.5px] mt-1">
+                더블탭 또는 드래그로 캔버스에 추가
+              </p>
+              <p
+                className="text-[12px] mt-3"
+                style={{ color: "var(--color-brain-text-soft)" }}
+              >
+                노드 위에 드롭 = 텍스트 교체  ·  선 위에 드롭 = 연결어 변경
+              </p>
             </div>
           </div>
         )}

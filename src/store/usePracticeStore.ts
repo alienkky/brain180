@@ -38,6 +38,7 @@ interface PracticeState {
   ensureNode: (word: string) => string
   removeNode: (nodeId: string) => void
   updateNodeType: (nodeId: string, type: NodeType) => void
+  updateNodeConcept: (nodeId: string, concept: string) => void
   addEdge: (from: string, to: string, label?: string) => void
   removeEdge: (edgeId: string) => void
   updateEdgeLabel: (edgeId: string, label: string) => void
@@ -133,11 +134,25 @@ export const usePracticeStore = create<PracticeState>((set, get) => ({
     }))
   },
 
+  updateNodeConcept: (nodeId, concept) => {
+    set((state) => ({
+      userNodes: state.userNodes.map((n) =>
+        n.id === nodeId ? { ...n, concept, sourceWord: concept } : n
+      ),
+    }))
+  },
+
 
   addEdge: (from, to, label?) => {
     const { nextEdgeLabel, userEdges } = get()
-    const exists = userEdges.some((e) => e.from === from && e.to === to)
-    if (exists || from === to) return
+    if (from === to) return
+    // Allow up to 4 edges between the same pair (counting both directions)
+    const pairCount = userEdges.filter(
+      (e) =>
+        (e.from === from && e.to === to) ||
+        (e.from === to && e.to === from)
+    ).length
+    if (pairCount >= 4) return
     const id = `ue-${++edgeCounter}`
     set((state) => ({
       userEdges: [...state.userEdges, { id, from, to, label: label ?? nextEdgeLabel }],

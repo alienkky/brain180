@@ -22,3 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local test infrastructure (Playwright inspection script + outputs)
+__pycache__/
+*.pyc
+inspect_out/
+run_inspection.py
+
+# Railway local state
+.railway/
