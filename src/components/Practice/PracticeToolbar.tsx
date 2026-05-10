@@ -1,6 +1,5 @@
 import { usePracticeStore } from "../../store/usePracticeStore"
 import { useStore } from "../../store/useStore"
-import type { CanvasTool } from "../../store/usePracticeStore"
 import type { NodeType } from "../../types/cognitive"
 
 const NODE_COLORS: Record<NodeType, string> = {
@@ -17,12 +16,6 @@ const NODE_TYPE_LABELS: Record<NodeType, { name: string; desc: string }> = {
   branch: { name: "가지", desc: "파생/부수적 개념" },
 }
 
-const TOOLS: { key: CanvasTool; label: string; icon: string }[] = [
-  { key: "select", label: "선택", icon: "↖" },
-  { key: "connect", label: "잇기", icon: "↗" },
-  { key: "delete", label: "삭제", icon: "✕" },
-]
-
 export default function PracticeToolbar() {
   const { currentMap } = useStore()
   const connectives = currentMap.textSource.connectives
@@ -30,6 +23,7 @@ export default function PracticeToolbar() {
     activeTool,
     nextNodeType,
     nextEdgeLabel,
+    connectSourceId,
     selectedUserNodeId,
     selectedEdgeId,
     userNodes,
@@ -47,6 +41,7 @@ export default function PracticeToolbar() {
 
   const selectedNode = userNodes.find((n) => n.id === selectedUserNodeId)
   const selectedEdge = userEdges.find((e) => e.id === selectedEdgeId)
+  const isConnecting = activeTool === "connect"
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
@@ -54,41 +49,34 @@ export default function PracticeToolbar() {
         <h2 className="text-lg font-semibold" style={{ color: "#e0e0f0" }}>도구</h2>
       </div>
 
-      <div className="p-3 space-y-4">
-        {/* Tools */}
-        <div>
-          <label className="text-xs font-semibold mb-1.5 block" style={{ color: "rgba(224,224,240,0.6)" }}>
-            캔버스 도구
-          </label>
-          <div className="flex gap-1">
-            {TOOLS.map(({ key, label, icon }) => (
-              <button
-                key={key}
-                onClick={() => setTool(key)}
-                className="flex-1 px-2 py-1.5 rounded text-xs cursor-pointer transition-all"
-                style={{
-                  backgroundColor: activeTool === key ? "#2a2a4a" : "#0f0f1a",
-                  color: activeTool === key ? "#e0e0f0" : "rgba(224,224,240,0.4)",
-                  border: `1px solid ${activeTool === key ? "#ff6b6b" : "#2a2a4a"}`,
-                }}
-              >
-                <span className="text-sm block">{icon}</span>
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
+      <div className="p-3 space-y-3">
 
-        {/* Node type (인지 구조) */}
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: "rgba(224,224,240,0.6)" }}>
-            노드 역할
+        {/* ─── STEP 1: 노드 만들기 ─── */}
+        <div
+          className="rounded-lg p-2.5"
+          style={{
+            backgroundColor: activeTool === "select" && !selectedNode && !selectedEdge
+              ? "rgba(78,205,196,0.06)" : "transparent",
+            border: "1px solid rgba(224,224,240,0.08)",
+          }}
+        >
+          <label className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: "#4ecdc4" }}>
+            <span
+              className="w-4 h-4 rounded-full flex items-center justify-center text-xs"
+              style={{ backgroundColor: "#4ecdc4", color: "#0f0f1a", fontSize: "10px", fontWeight: "800" }}
+            >
+              1
+            </span>
+            노드 만들기
           </label>
+          <p className="text-xs mb-2" style={{ color: "rgba(224,224,240,0.3)" }}>
+            역할을 고르고, 텍스트에서 단어를 캔버스에 보내세요
+          </p>
           <div className="space-y-1">
             {(Object.keys(NODE_COLORS) as NodeType[]).map((type) => (
               <button
                 key={type}
-                onClick={() => setNextNodeType(type)}
+                onClick={() => { setNextNodeType(type); setTool("select") }}
                 className="w-full px-2.5 py-1.5 rounded text-xs cursor-pointer flex items-center gap-2 transition-all"
                 style={{
                   backgroundColor: nextNodeType === type ? `${NODE_COLORS[type]}22` : "#0f0f1a",
@@ -99,7 +87,7 @@ export default function PracticeToolbar() {
                 <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: NODE_COLORS[type] }} />
                 <span className="flex flex-col items-start">
                   <span className="font-bold">{NODE_TYPE_LABELS[type].name}</span>
-                  <span style={{ color: "rgba(224,224,240,0.3)", fontSize: "10px" }}>
+                  <span style={{ color: "rgba(224,224,240,0.25)", fontSize: "10px" }}>
                     {NODE_TYPE_LABELS[type].desc}
                   </span>
                 </span>
@@ -108,11 +96,45 @@ export default function PracticeToolbar() {
           </div>
         </div>
 
-        {/* Connective words for edges */}
-        <div>
-          <label className="text-xs font-semibold mb-1.5 block" style={{ color: "rgba(224,224,240,0.6)" }}>
-            연결어
+        {/* ─── STEP 2: 선 잇기 ─── */}
+        <div
+          className="rounded-lg p-2.5"
+          style={{
+            backgroundColor: isConnecting ? "rgba(255,217,61,0.06)" : "transparent",
+            border: isConnecting ? "1px solid rgba(255,217,61,0.2)" : "1px solid rgba(224,224,240,0.08)",
+          }}
+        >
+          <label className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: "#ffd93d" }}>
+            <span
+              className="w-4 h-4 rounded-full flex items-center justify-center text-xs"
+              style={{ backgroundColor: "#ffd93d", color: "#0f0f1a", fontSize: "10px", fontWeight: "800" }}
+            >
+              2
+            </span>
+            선 잇기
           </label>
+
+          {/* 잇기 활성화 버튼 */}
+          <button
+            onClick={() => setTool(isConnecting ? "select" : "connect")}
+            className="w-full px-3 py-2 rounded-lg text-xs font-bold cursor-pointer transition-all mb-2"
+            style={{
+              backgroundColor: isConnecting ? "#ffd93d" : "rgba(255,217,61,0.1)",
+              color: isConnecting ? "#0f0f1a" : "#ffd93d",
+              border: isConnecting ? "none" : "1px solid rgba(255,217,61,0.3)",
+            }}
+          >
+            {isConnecting
+              ? connectSourceId
+                ? "→ 도착 노드를 클릭하세요"
+                : "→ 시작 노드를 클릭하세요"
+              : "↗ 두 노드 잇기 시작"}
+          </button>
+
+          {/* 연결어 선택 (잇기와 함께) */}
+          <p className="text-xs mb-1.5" style={{ color: "rgba(224,224,240,0.3)" }}>
+            선에 붙일 연결어를 고르세요
+          </p>
           <input
             type="text"
             value={nextEdgeLabel}
@@ -126,7 +148,7 @@ export default function PracticeToolbar() {
               outline: "none",
             }}
           />
-          <div className="space-y-0.5">
+          <div className="space-y-0.5" style={{ maxHeight: "140px", overflowY: "auto" }}>
             {connectives.map(({ word, role }) => (
               <button
                 key={word}
@@ -139,28 +161,54 @@ export default function PracticeToolbar() {
                 }}
               >
                 <span className="font-medium">{word}</span>
-                <span style={{ color: "rgba(224,224,240,0.25)", fontSize: "10px" }}>{role}</span>
+                <span style={{ color: "rgba(224,224,240,0.2)", fontSize: "10px" }}>{role}</span>
               </button>
             ))}
           </div>
         </div>
 
-        {/* Selected edge editor */}
+        {/* ─── 편집 도구 ─── */}
+        <div className="flex gap-1">
+          <button
+            onClick={() => setTool("select")}
+            className="flex-1 px-2 py-1.5 rounded text-xs cursor-pointer transition-all"
+            style={{
+              backgroundColor: activeTool === "select" ? "#2a2a4a" : "#0f0f1a",
+              color: activeTool === "select" ? "#e0e0f0" : "rgba(224,224,240,0.4)",
+              border: `1px solid ${activeTool === "select" ? "rgba(224,224,240,0.3)" : "#2a2a4a"}`,
+            }}
+          >
+            ↖ 선택
+          </button>
+          <button
+            onClick={() => setTool("delete")}
+            className="flex-1 px-2 py-1.5 rounded text-xs cursor-pointer transition-all"
+            style={{
+              backgroundColor: activeTool === "delete" ? "#2a2a4a" : "#0f0f1a",
+              color: activeTool === "delete" ? "#ff6b6b" : "rgba(224,224,240,0.4)",
+              border: `1px solid ${activeTool === "delete" ? "#ff6b6b" : "#2a2a4a"}`,
+            }}
+          >
+            ✕ 삭제
+          </button>
+        </div>
+
+        {/* ─── 선택된 선 편집기 ─── */}
         {selectedEdge && (
-          <div className="rounded-lg border p-2.5" style={{ borderColor: "#ff6b6b", backgroundColor: "rgba(255,107,107,0.05)" }}>
-            <label className="text-xs font-semibold mb-1.5 block" style={{ color: "#ff6b6b" }}>
-              연결: {userNodes.find((n) => n.id === selectedEdge.from)?.concept} → {userNodes.find((n) => n.id === selectedEdge.to)?.concept}
+          <div className="rounded-lg border p-2.5" style={{ borderColor: "#ffd93d", backgroundColor: "rgba(255,217,61,0.05)" }}>
+            <label className="text-xs font-semibold mb-1.5 block" style={{ color: "#ffd93d" }}>
+              {userNodes.find((n) => n.id === selectedEdge.from)?.concept} → {userNodes.find((n) => n.id === selectedEdge.to)?.concept}
             </label>
             <input
               type="text"
               value={selectedEdge.label}
               onChange={(e) => updateEdgeLabel(selectedEdge.id, e.target.value)}
-              placeholder="연결 특성 입력..."
+              placeholder="연결어 입력..."
               className="w-full px-2 py-1.5 rounded text-xs mb-1.5"
               style={{
                 backgroundColor: "#0f0f1a",
-                color: "#ff6b6b",
-                border: "1px solid rgba(255,107,107,0.3)",
+                color: "#ffd93d",
+                border: "1px solid rgba(255,217,61,0.3)",
                 outline: "none",
               }}
             />
@@ -171,9 +219,9 @@ export default function PracticeToolbar() {
                   onClick={() => updateEdgeLabel(selectedEdge.id, word)}
                   className="w-full text-left px-2 py-1 rounded text-xs cursor-pointer transition-all"
                   style={{
-                    backgroundColor: selectedEdge.label === word ? "rgba(255,107,107,0.2)" : "transparent",
-                    color: selectedEdge.label === word ? "#ff6b6b" : "rgba(224,224,240,0.4)",
-                    border: `1px solid ${selectedEdge.label === word ? "#ff6b6b" : "transparent"}`,
+                    backgroundColor: selectedEdge.label === word ? "rgba(255,217,61,0.2)" : "transparent",
+                    color: selectedEdge.label === word ? "#ffd93d" : "rgba(224,224,240,0.4)",
+                    border: `1px solid ${selectedEdge.label === word ? "#ffd93d" : "transparent"}`,
                   }}
                 >
                   {word}
@@ -185,16 +233,16 @@ export default function PracticeToolbar() {
               className="w-full py-1 rounded text-xs cursor-pointer"
               style={{ backgroundColor: "#0f0f1a", color: "rgba(255,107,107,0.7)", border: "1px solid rgba(255,107,107,0.3)" }}
             >
-              연결 삭제
+              선 삭제
             </button>
           </div>
         )}
 
-        {/* Selected node editor */}
+        {/* ─── 선택된 노드 편집기 ─── */}
         {selectedNode && (
-          <div className="rounded-lg border p-2.5" style={{ borderColor: "#ffd93d", backgroundColor: "rgba(255,217,61,0.05)" }}>
-            <label className="text-xs font-semibold mb-1.5 block" style={{ color: "#ffd93d" }}>
-              선택: {selectedNode.concept}
+          <div className="rounded-lg border p-2.5" style={{ borderColor: "#4ecdc4", backgroundColor: "rgba(78,205,196,0.05)" }}>
+            <label className="text-xs font-semibold mb-1.5 block" style={{ color: "#4ecdc4" }}>
+              노드: {selectedNode.concept}
             </label>
             <div className="flex gap-1">
               {(Object.keys(NODE_COLORS) as NodeType[]).map((type) => (
@@ -216,7 +264,7 @@ export default function PracticeToolbar() {
           </div>
         )}
 
-        {/* Evaluate button */}
+        {/* ─── 평가 ─── */}
         <button
           onClick={() => setShowEvaluation(!showEvaluation)}
           disabled={userNodes.length < 2}
@@ -231,18 +279,14 @@ export default function PracticeToolbar() {
           {showEvaluation ? "평가 닫기" : "내 인지 구조 평가받기"}
         </button>
 
-        {/* Guide */}
+        {/* ─── 안내 + 초기화 ─── */}
         <div className="rounded border p-2.5" style={{ borderColor: "#2a2a4a", backgroundColor: "rgba(255,217,61,0.03)" }}>
-          <p className="text-xs leading-relaxed" style={{ color: "rgba(224,224,240,0.4)" }}>
+          <p className="text-xs leading-relaxed mb-2" style={{ color: "rgba(224,224,240,0.35)" }}>
             인지 구조를 완성한 후 분석 모드에서 가치 구조와 시간축을 확인해 보세요.
           </p>
-        </div>
-
-        {/* Stats & clear */}
-        <div className="rounded border p-2.5" style={{ borderColor: "#2a2a4a", backgroundColor: "#1a1a2e" }}>
           <div className="flex justify-between text-xs mb-2" style={{ color: "rgba(224,224,240,0.5)" }}>
             <span>노드: {userNodes.length}</span>
-            <span>연결: {userEdges.length}</span>
+            <span>선: {userEdges.length}</span>
           </div>
           <button
             onClick={clearCanvas}

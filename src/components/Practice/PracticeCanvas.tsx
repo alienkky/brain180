@@ -264,8 +264,8 @@ export default function PracticeCanvas() {
           </h2>
           <p className="text-xs" style={{ color: "rgba(224,224,240,0.5)" }}>
             {activeTool === "select" && "노드 드래그 = 배치 | 핀치 = 확대/축소"}
-            {activeTool === "connect" && (connectSourceId ? "연결할 대상 노드를 클릭" : "시작 노드를 클릭")}
-            {activeTool === "delete" && "삭제할 노드/연결을 클릭"}
+            {activeTool === "connect" && (connectSourceId ? "도착 노드를 클릭하세요" : "시작 노드를 클릭하세요")}
+            {activeTool === "delete" && "삭제할 노드 또는 선을 클릭"}
           </p>
         </div>
         {userNodes.length > 0 && (
