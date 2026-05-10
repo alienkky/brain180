@@ -133,7 +133,7 @@ export default function PracticeToolbar() {
         {/* Connective words for edges */}
         <div>
           <label className="text-xs font-semibold mb-1.5 block" style={{ color: "rgba(224,224,240,0.6)" }}>
-            연결어 (접속사/접미사)
+            연결어
           </label>
           <input
             type="text"

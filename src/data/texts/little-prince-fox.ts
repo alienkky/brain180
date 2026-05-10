@@ -82,7 +82,7 @@ const littlePrinceFox: CognitiveMap = {
     },
     {
       id: "n-no-bond",
-      concept: "관계 없음",
+      concept: "필요 없고 아쉽지도 않은",
       type: "branch",
       dimensionality: 2,
       description: "서로에 대한 필요/아쉬움 부재",
@@ -92,7 +92,7 @@ const littlePrinceFox: CognitiveMap = {
     },
     {
       id: "n-taming",
-      concept: "길들이다",
+      concept: "길들이면",
       type: "root",
       dimensionality: 4,
       description: "관계 맺기의 핵심 행위 — 변환의 촉매",
@@ -102,7 +102,7 @@ const littlePrinceFox: CognitiveMap = {
     },
     {
       id: "n-mutual-need",
-      concept: "서로 아쉬워짐",
+      concept: "서로 아쉬워질 거야",
       type: "bridge",
       dimensionality: 3,
       description: "관계가 만드는 상호 의존과 그리움",
@@ -137,14 +137,14 @@ const littlePrinceFox: CognitiveMap = {
       to: "n-no-bond",
       relation: "causes",
       temporalOrder: 1,
-      label: "관계 없는 상태",
+      label: "필요 없고",
     },
     {
       from: "n-many-foxes",
       to: "n-no-bond",
       relation: "causes",
       temporalOrder: 1,
-      label: "관계 없는 상태",
+      label: "필요 없고",
     },
     {
       from: "n-no-bond",
@@ -165,14 +165,14 @@ const littlePrinceFox: CognitiveMap = {
       to: "n-only-one-boy",
       relation: "transforms",
       temporalOrder: 4,
-      label: "one of them → only one",
+      label: "길들이면",
     },
     {
       from: "n-taming",
       to: "n-only-one-fox",
       relation: "transforms",
       temporalOrder: 4,
-      label: "one of them → only one",
+      label: "길들이면",
     },
     {
       from: "n-many-boys",
@@ -212,9 +212,9 @@ const littlePrinceFox: CognitiveMap = {
   patterns: [
     {
       id: "pat-1",
-      name: "One of Them → Only One",
+      name: "수만 명 → 하나밖에 없는 존재",
       description:
-        "관계 맺기(길들이기)를 통해 대체 가능한 다수 속 하나에서 유일무이한 존재로의 변환. 생텍쥐페리의 핵심 사유 패턴.",
+        "길들이면 대체 가능한 다수 속 하나에서 유일무이한 존재로 변환. 생텍쥐페리의 핵심 사유 패턴.",
       involvedNodes: [
         "n-many-boys",
         "n-many-foxes",
@@ -255,9 +255,9 @@ const littlePrinceFox: CognitiveMap = {
     },
     {
       id: "pat-5",
-      name: "Before → Catalyst → After",
+      name: "전 → 촉매 → 후",
       description:
-        "전(다수 속 익명) → 촉매(길들이다) → 후(유일한 존재). 시간적으로 3단계를 거치며 비가역적 변환이 일어남.",
+        "전(수만 명) → 촉매(길들이면) → 후(하나밖에 없는 존재). 시간적으로 3단계를 거치며 비가역적 변환이 일어남.",
       involvedNodes: [
         "n-many-boys",
         "n-many-foxes",

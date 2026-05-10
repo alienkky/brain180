@@ -2,16 +2,29 @@ import { useRef, useMemo, useCallback, useState } from "react"
 import { useStore } from "../../store/useStore"
 import { usePracticeStore } from "../../store/usePracticeStore"
 import type { CircledPhrase } from "../../store/usePracticeStore"
+import type { Connective } from "../../types/cognitive"
 
 interface WordInfo {
   key: string
   text: string
   isSpace: boolean
+  charStart: number
 }
+
+interface ConnectiveRegion {
+  charStart: number
+  charEnd: number
+  connective: Connective
+}
+
+type GroupType =
+  | { kind: "phrase"; phrase: CircledPhrase; items: WordInfo[] }
+  | { kind: "connective"; region: ConnectiveRegion; items: WordInfo[] }
+  | { kind: "plain"; items: WordInfo[] }
 
 export default function PracticeTextLayer() {
   const { currentMap } = useStore()
-  const { circledPhrases, addPhrase, removePhrase, addNode } =
+  const { circledPhrases, addPhrase, removePhrase, addNode, ensureNode, addEdge } =
     usePracticeStore()
 
   const anchorKeyRef = useRef<string | null>(null)
@@ -24,18 +37,52 @@ export default function PracticeTextLayer() {
   const { textSource } = currentMap
 
   const words = useMemo<WordInfo[]>(() => {
+    let charPos = 0
     return textSource.fullText.split(/(\s+)/).flatMap((chunk, ci) => {
+      const startPos = charPos
+      charPos += chunk.length
       if (/^\s+$/.test(chunk))
-        return [{ key: `ws-${ci}`, text: chunk, isSpace: true }]
+        return [{ key: `ws-${ci}`, text: chunk, isSpace: true, charStart: startPos }]
       const tokens: WordInfo[] = []
+      let localPos = startPos
       const parts =
         chunk.match(/[가-힣A-Za-z0-9]+|[^\s가-힣A-Za-z0-9]+/g) ?? [chunk]
       parts.forEach((part, pi) => {
-        tokens.push({ key: `w-${ci}-${pi}`, text: part, isSpace: false })
+        tokens.push({ key: `w-${ci}-${pi}`, text: part, isSpace: false, charStart: localPos })
+        localPos += part.length
       })
       return tokens
     })
   }, [textSource.fullText])
+
+  const connectiveRegions = useMemo<ConnectiveRegion[]>(() => {
+    const regions: ConnectiveRegion[] = []
+    for (const conn of textSource.connectives) {
+      const searchText = conn.word.replace(/^~/, "")
+      if (searchText.length <= 1) continue
+      const idx = textSource.fullText.indexOf(searchText)
+      if (idx >= 0) {
+        regions.push({ charStart: idx, charEnd: idx + searchText.length, connective: conn })
+      }
+    }
+    regions.sort((a, b) => a.charStart - b.charStart)
+    return regions
+  }, [textSource])
+
+  const tokenConnectiveMap = useMemo(() => {
+    const map = new Map<string, ConnectiveRegion>()
+    for (const w of words) {
+      if (w.isSpace) continue
+      const tokenEnd = w.charStart + w.text.length
+      for (const region of connectiveRegions) {
+        if (w.charStart < region.charEnd && tokenEnd > region.charStart) {
+          map.set(w.key, region)
+          break
+        }
+      }
+    }
+    return map
+  }, [words, connectiveRegions])
 
   const tokenToPhraseMap = useMemo(() => {
     const map = new Map<string, CircledPhrase>()
@@ -53,28 +100,35 @@ export default function PracticeTextLayer() {
     return map
   }, [circledPhrases, words])
 
-  const renderGroups = useMemo(() => {
-    const groups: { phrase: CircledPhrase | null; items: WordInfo[] }[] = []
+  const renderGroups = useMemo<GroupType[]>(() => {
+    const groups: GroupType[] = []
     let currentPhrase: CircledPhrase | null = null
+    let currentConn: ConnectiveRegion | null = null
     let currentItems: WordInfo[] = []
+
+    const flush = () => {
+      if (currentItems.length === 0) return
+      if (currentPhrase) groups.push({ kind: "phrase", phrase: currentPhrase, items: [...currentItems] })
+      else if (currentConn) groups.push({ kind: "connective", region: currentConn, items: [...currentItems] })
+      else groups.push({ kind: "plain", items: [...currentItems] })
+    }
 
     for (const w of words) {
       const phrase = tokenToPhraseMap.get(w.key) ?? null
-      if (phrase === currentPhrase) {
+      const conn = (!phrase && tokenConnectiveMap.get(w.key)) ?? null
+
+      if (phrase === currentPhrase && conn === currentConn) {
         currentItems.push(w)
       } else {
-        if (currentItems.length > 0) {
-          groups.push({ phrase: currentPhrase, items: [...currentItems] })
-        }
+        flush()
         currentPhrase = phrase
+        currentConn = conn
         currentItems = [w]
       }
     }
-    if (currentItems.length > 0) {
-      groups.push({ phrase: currentPhrase, items: currentItems })
-    }
+    flush()
     return groups
-  }, [words, tokenToPhraseMap])
+  }, [words, tokenToPhraseMap, tokenConnectiveMap])
 
   const makePhrase = useCallback(
     (fromKey: string, toKey: string) => {
@@ -95,7 +149,6 @@ export default function PracticeTextLayer() {
 
   const handlePointerDown = useCallback(
     (wordKey: string, e: React.PointerEvent) => {
-      if (rangeMode) return
       pointerStartRef.current = { x: e.clientX, y: e.clientY }
       didLongPressRef.current = false
       longPressTimerRef.current = setTimeout(() => {
@@ -106,7 +159,7 @@ export default function PracticeTextLayer() {
         if (navigator.vibrate) navigator.vibrate(30)
       }, 500)
     },
-    [rangeMode]
+    []
   )
 
   const handlePointerUp = useCallback(() => {
@@ -134,25 +187,23 @@ export default function PracticeTextLayer() {
         return
       }
 
-      // Range mode: first tap = anchor, second tap = create phrase immediately
-      if (rangeMode) {
-        if (!rangeAnchor) {
-          setRangeAnchor(wordKey)
+      if (rangeMode && rangeAnchor) {
+        if (wordKey === rangeAnchor) {
+          addPhrase([wordKey], wordText)
         } else {
-          if (wordKey !== rangeAnchor) makePhrase(rangeAnchor, wordKey)
-          setRangeAnchor(null)
+          makePhrase(rangeAnchor, wordKey)
         }
+        setRangeAnchor(null)
+        setRangeMode(false)
         return
       }
 
-      // Shift+click quick range (desktop)
       if (e.shiftKey && anchorKeyRef.current) {
         makePhrase(anchorKeyRef.current, wordKey)
         anchorKeyRef.current = wordKey
         return
       }
 
-      // Normal: toggle circle
       const existing = circledPhrases.find((p) =>
         p.wordKeys.includes(wordKey)
       )
@@ -164,6 +215,34 @@ export default function PracticeTextLayer() {
       anchorKeyRef.current = wordKey
     },
     [rangeMode, rangeAnchor, circledPhrases, makePhrase, addPhrase, removePhrase]
+  )
+
+  const handleConnectiveTap = useCallback(
+    (region: ConnectiveRegion) => {
+      const connStartIdx = words.findIndex((w) => !w.isSpace && w.charStart >= region.charStart)
+      const connEndTokenIdx = words.findIndex((w) => !w.isSpace && w.charStart >= region.charEnd)
+
+      let beforePhrase: CircledPhrase | null = null
+      let afterPhrase: CircledPhrase | null = null
+
+      for (let i = connStartIdx - 1; i >= 0; i--) {
+        const phrase = tokenToPhraseMap.get(words[i].key)
+        if (phrase) { beforePhrase = phrase; break }
+      }
+
+      const searchStart = connEndTokenIdx >= 0 ? connEndTokenIdx : connStartIdx + 1
+      for (let i = searchStart; i < words.length; i++) {
+        const phrase = tokenToPhraseMap.get(words[i].key)
+        if (phrase) { afterPhrase = phrase; break }
+      }
+
+      if (!beforePhrase || !afterPhrase || beforePhrase.id === afterPhrase.id) return
+
+      const fromId = ensureNode(beforePhrase.text)
+      const toId = ensureNode(afterPhrase.text)
+      addEdge(fromId, toId, region.connective.word)
+    },
+    [words, tokenToPhraseMap, ensureNode, addEdge]
   )
 
   const handleSendToCanvas = useCallback(
@@ -186,7 +265,7 @@ export default function PracticeTextLayer() {
           {textSource.title}
         </h2>
         <p className="text-xs mt-1" style={{ color: "rgba(224,224,240,0.5)" }}>
-          탭 = 동그라미 | 꾹 누르기/묶기 = 구 선택 | Shift = 묶기
+          탭 = 동그라미 | 꾹 누르기 = 묶기 | Shift = 묶기
         </p>
       </div>
 
@@ -212,16 +291,16 @@ export default function PracticeTextLayer() {
       >
         <div className="text-base leading-10 select-none">
           {renderGroups.map((group, gi) => {
-            if (group.phrase) {
+            if (group.kind === "phrase") {
               return (
                 <span
                   key={group.phrase.id}
                   draggable
                   onDragStart={(e) => {
-                    e.dataTransfer.setData("text/plain", group.phrase!.text)
+                    e.dataTransfer.setData("text/plain", group.phrase.text)
                     e.dataTransfer.effectAllowed = "copy"
                   }}
-                  onClick={() => removePhrase(group.phrase!.id)}
+                  onClick={() => removePhrase(group.phrase.id)}
                   className="inline-flex items-center gap-1"
                   style={{
                     border: "2px solid #ff6b6b",
@@ -235,7 +314,7 @@ export default function PracticeTextLayer() {
                 >
                   <span>{group.items.map((w) => w.text).join("")}</span>
                   <button
-                    onClick={(e) => handleSendToCanvas(group.phrase!, e)}
+                    onClick={(e) => handleSendToCanvas(group.phrase, e)}
                     className="rounded-full flex items-center justify-center cursor-pointer"
                     style={{
                       width: 20,
@@ -250,6 +329,40 @@ export default function PracticeTextLayer() {
                   >
                     ↗
                   </button>
+                </span>
+              )
+            }
+
+            if (group.kind === "connective") {
+              return (
+                <span key={`conn-${gi}`}>
+                  {group.items.map((w) => {
+                    if (w.isSpace) return <span key={w.key}>{w.text}</span>
+                    const isPunct = /^[^\w가-힣]+$/.test(w.text)
+                    if (isPunct) return <span key={w.key}>{w.text}</span>
+
+                    const isAnchor = rangeAnchor === w.key
+
+                    return (
+                      <span
+                        key={w.key}
+                        onPointerDown={(e) => handlePointerDown(w.key, e)}
+                        onPointerUp={handlePointerUp}
+                        onClick={(e) => handleWordClick(w.key, w.text, e)}
+                        className="cursor-pointer px-0.5 inline-block"
+                        style={{
+                          transition: "all 0.15s ease",
+                          border: isAnchor ? "2px dashed #ffd93d" : "2px solid transparent",
+                          borderRadius: isAnchor ? "9999px" : "2px",
+                          backgroundColor: isAnchor ? "rgba(255,217,61,0.2)" : "transparent",
+                          padding: isAnchor ? "1px 6px" : "1px 2px",
+                          color: isAnchor ? "#ffd93d" : "#e0e0f0",
+                        }}
+                      >
+                        {w.text}
+                      </span>
+                    )
+                  })}
                 </span>
               )
             }

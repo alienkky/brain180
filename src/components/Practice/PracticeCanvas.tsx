@@ -11,6 +11,19 @@ const NODE_COLORS: Record<NodeType, string> = {
   branch: "#60a5fa",
 }
 
+const NODE_TEXT_COLORS: Record<NodeType, string> = {
+  root: "#fff",
+  anchor: "#0f0f1a",
+  bridge: "#fff",
+  branch: "#0f0f1a",
+}
+
+function nodeSize(label: string, dim: number): number {
+  const len = (label || "").length
+  const base = Math.max(55, Math.min(100, len * 14))
+  return base + dim * 6
+}
+
 export default function PracticeCanvas() {
   const {
     userNodes,
@@ -31,6 +44,12 @@ export default function PracticeCanvas() {
   const containerRef = useRef<HTMLDivElement>(null)
   const cyRef = useRef<Core | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
+
+  const handleFit = useCallback(() => {
+    const cy = cyRef.current
+    if (!cy || cy.nodes().length === 0) return
+    cy.animate({ fit: { eles: cy.elements(), padding: 40 }, duration: 300 })
+  }, [])
 
   const rebuildGraph = useCallback(() => {
     const cy = cyRef.current
@@ -65,9 +84,9 @@ export default function PracticeCanvas() {
         name: "cose",
         animate: true,
         animationDuration: 500,
-        nodeRepulsion: () => 6000,
-        idealEdgeLength: () => 140,
-        gravity: 0.4,
+        nodeRepulsion: () => 8000,
+        idealEdgeLength: () => 180,
+        gravity: 0.3,
         padding: 40,
         fit: true,
       } as cytoscape.CoseLayoutOptions).run()
@@ -85,15 +104,23 @@ export default function PracticeCanvas() {
           style: {
             label: "data(label)",
             "text-wrap": "wrap",
-            "text-max-width": "100px",
-            "font-size": "13px",
-            color: "#e0e0f0",
-            "text-valign": "bottom",
-            "text-margin-y": 8,
+            "text-max-width": (ele: cytoscape.NodeSingular) =>
+              `${nodeSize(ele.data("label"), ele.data("dim")) * 0.8}px`,
+            "font-size": (ele: cytoscape.NodeSingular) => {
+              const len = (ele.data("label") || "").length
+              return len > 5 ? "10px" : "12px"
+            },
+            "font-weight": "bold",
+            color: (ele: cytoscape.NodeSingular) =>
+              NODE_TEXT_COLORS[ele.data("nodeType") as NodeType] ?? "#0f0f1a",
+            "text-valign": "center",
+            "text-halign": "center",
             "background-color": (ele: cytoscape.NodeSingular) =>
               NODE_COLORS[ele.data("nodeType") as NodeType] ?? "#60a5fa",
-            width: (ele: cytoscape.NodeSingular) => 20 + ele.data("dim") * 12,
-            height: (ele: cytoscape.NodeSingular) => 20 + ele.data("dim") * 12,
+            width: (ele: cytoscape.NodeSingular) =>
+              nodeSize(ele.data("label"), ele.data("dim")),
+            height: (ele: cytoscape.NodeSingular) =>
+              nodeSize(ele.data("label"), ele.data("dim")),
             "border-width": 2,
             "border-color": "#2a2a4a",
             "transition-property": "background-color, border-color, width, height",
@@ -232,15 +259,31 @@ export default function PracticeCanvas() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-3 border-b border-brain-border">
-        <h2 className="text-lg font-semibold" style={{ color: "#e0e0f0" }}>
-          나의 인지 구조
-        </h2>
-        <p className="text-xs" style={{ color: "rgba(224,224,240,0.5)" }}>
-          {activeTool === "select" && "노드 드래그 = 배치 | 핀치 = 확대/축소 | 빈 곳 드래그 = 이동"}
-          {activeTool === "connect" && (connectSourceId ? "연결할 대상 노드를 클릭" : "시작 노드를 클릭")}
-          {activeTool === "delete" && "삭제할 노드를 클릭"}
-        </p>
+      <div className="px-4 py-3 border-b border-brain-border flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold" style={{ color: "#e0e0f0" }}>
+            나의 인지 구조
+          </h2>
+          <p className="text-xs" style={{ color: "rgba(224,224,240,0.5)" }}>
+            {activeTool === "select" && "노드 드래그 = 배치 | 핀치 = 확대/축소"}
+            {activeTool === "connect" && (connectSourceId ? "연결할 대상 노드를 클릭" : "시작 노드를 클릭")}
+            {activeTool === "delete" && "삭제할 노드/연결을 클릭"}
+          </p>
+        </div>
+        {userNodes.length > 0 && (
+          <button
+            onClick={handleFit}
+            className="px-2.5 py-1.5 rounded text-xs font-medium cursor-pointer"
+            style={{
+              backgroundColor: "rgba(224,224,240,0.08)",
+              color: "rgba(224,224,240,0.6)",
+              border: "1px solid rgba(224,224,240,0.15)",
+            }}
+            title="다이어그램을 화면에 맞춤"
+          >
+            ⊞ 맞춤
+          </button>
+        )}
       </div>
       <div
         className="flex-1 min-h-0 relative"

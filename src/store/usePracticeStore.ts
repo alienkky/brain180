@@ -36,10 +36,11 @@ interface PracticeState {
   addPhrase: (wordKeys: string[], text: string) => void
   removePhrase: (phraseId: string) => void
   addNode: (word: string) => void
+  ensureNode: (word: string) => string
   removeNode: (nodeId: string) => void
   updateNodeType: (nodeId: string, type: NodeType) => void
   updateNodeDimensionality: (nodeId: string, dim: Dimensionality) => void
-  addEdge: (from: string, to: string) => void
+  addEdge: (from: string, to: string, label?: string) => void
   removeEdge: (edgeId: string) => void
   updateEdgeLabel: (edgeId: string, label: string) => void
   selectEdge: (edgeId: string | null) => void
@@ -103,6 +104,20 @@ export const usePracticeStore = create<PracticeState>((set, get) => ({
     set((state) => ({ userNodes: [...state.userNodes, node] }))
   },
 
+  ensureNode: (word) => {
+    const existing = get().userNodes.find((n) => n.concept === word)
+    if (existing) return existing.id
+    const { nextNodeType, nextDimensionality } = get()
+    const id = `user-n-${++nodeCounter}`
+    set((state) => ({
+      userNodes: [...state.userNodes, {
+        id, concept: word, type: nextNodeType,
+        dimensionality: nextDimensionality, sourceWord: word,
+      }],
+    }))
+    return id
+  },
+
   removeNode: (nodeId) => {
     set((state) => ({
       userNodes: state.userNodes.filter((n) => n.id !== nodeId),
@@ -130,13 +145,13 @@ export const usePracticeStore = create<PracticeState>((set, get) => ({
     }))
   },
 
-  addEdge: (from, to) => {
+  addEdge: (from, to, label?) => {
     const { nextEdgeLabel, userEdges } = get()
     const exists = userEdges.some((e) => e.from === from && e.to === to)
     if (exists || from === to) return
     const id = `ue-${++edgeCounter}`
     set((state) => ({
-      userEdges: [...state.userEdges, { id, from, to, label: nextEdgeLabel }],
+      userEdges: [...state.userEdges, { id, from, to, label: label ?? nextEdgeLabel }],
       selectedEdgeId: id,
     }))
   },

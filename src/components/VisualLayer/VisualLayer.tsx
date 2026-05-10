@@ -56,18 +56,31 @@ function getNodeColor(ele: cytoscape.NodeSingular, perspective: Perspective): st
   return NODE_COLORS[ele.data("nodeType") as NodeType] ?? "#60a5fa"
 }
 
+const NODE_TEXT_COLORS: Record<NodeType, string> = {
+  root: "#fff",
+  anchor: "#0f0f1a",
+  bridge: "#fff",
+  branch: "#0f0f1a",
+}
+
+function getNodeTextColor(ele: cytoscape.NodeSingular, perspective: Perspective): string {
+  if (perspective === "cognitive") {
+    return NODE_TEXT_COLORS[ele.data("nodeType") as NodeType] ?? "#0f0f1a"
+  }
+  const bg = getNodeColor(ele, perspective)
+  const dark = ["#94a3b8", "#fbbf24", "#34d399", "#2dd4bf", "#f472b6"]
+  return dark.includes(bg) ? "#0f0f1a" : "#fff"
+}
+
 function getNodeLabel(ele: cytoscape.NodeSingular, perspective: Perspective): string {
   const concept = ele.data("label") as string
-  if (perspective === "value") {
-    const vt = ele.data("valueType") as string | undefined
-    return vt ? `${concept}\n[${vt}]` : concept
-  }
-  if (perspective === "temporal") {
-    const tp = ele.data("temporalPhase") as number | undefined
-    const phaseNames: Record<number, string> = { 1: "전", 2: "촉매", 3: "후" }
-    return tp ? `${concept}\n〈${phaseNames[tp] ?? tp}〉` : concept
-  }
   return concept
+}
+
+function nodeSize(label: string, dim: number): number {
+  const len = (label || "").length
+  const base = Math.max(55, Math.min(100, len * 14))
+  return base + dim * 6
 }
 
 const PERSPECTIVE_LABELS: Record<Perspective, string> = {
@@ -91,18 +104,33 @@ export default function VisualLayer() {
   useEffect(() => {
     if (!containerRef.current) return
 
-    const layoutName = perspective === "temporal" ? "grid" : "cose"
+    const temporalPositions: Record<string, { x: number; y: number }> = {}
+    if (perspective === "temporal") {
+      const phases = [1, 2, 3]
+      const phaseSpacing = 220
+      phases.forEach((phase) => {
+        const phaseNodes = currentMap.nodes.filter((n) => n.temporalPhase === phase)
+        const nodeSpacing = 120
+        const totalHeight = (phaseNodes.length - 1) * nodeSpacing
+        phaseNodes.forEach((node, idx) => {
+          temporalPositions[node.id] = {
+            x: (phase - 1) * phaseSpacing,
+            y: idx * nodeSpacing - totalHeight / 2,
+          }
+        })
+      })
+    }
 
     const layoutOptions =
       perspective === "temporal"
         ? {
-            name: "grid" as const,
+            name: "preset" as const,
+            positions: (node: cytoscape.NodeSingular) =>
+              temporalPositions[node.id()] ?? { x: 0, y: 0 },
+            fit: true,
+            padding: 50,
             animate: true,
             animationDuration: 600,
-            padding: 50,
-            rows: 1,
-            sort: (a: cytoscape.NodeSingular, b: cytoscape.NodeSingular) =>
-              (a.data("temporalPhase") ?? 0) - (b.data("temporalPhase") ?? 0),
           }
         : {
             name: "cose" as const,
@@ -146,15 +174,23 @@ export default function VisualLayer() {
           style: {
             label: (ele: cytoscape.NodeSingular) => getNodeLabel(ele, perspective),
             "text-wrap": "wrap",
-            "text-max-width": "120px",
-            "font-size": "12px",
-            color: "#e0e0f0",
-            "text-valign": "bottom",
-            "text-margin-y": 8,
+            "text-max-width": (ele: cytoscape.NodeSingular) =>
+              `${nodeSize(ele.data("label"), ele.data("dim")) * 0.8}px`,
+            "font-size": (ele: cytoscape.NodeSingular) => {
+              const len = (ele.data("label") || "").length
+              return len > 5 ? "10px" : "12px"
+            },
+            "font-weight": "bold",
+            color: (ele: cytoscape.NodeSingular) =>
+              getNodeTextColor(ele, perspective),
+            "text-valign": "center",
+            "text-halign": "center",
             "background-color": (ele: cytoscape.NodeSingular) =>
               getNodeColor(ele, perspective),
-            width: (ele: cytoscape.NodeSingular) => 20 + ele.data("dim") * 12,
-            height: (ele: cytoscape.NodeSingular) => 20 + ele.data("dim") * 12,
+            width: (ele: cytoscape.NodeSingular) =>
+              nodeSize(ele.data("label"), ele.data("dim")),
+            height: (ele: cytoscape.NodeSingular) =>
+              nodeSize(ele.data("label"), ele.data("dim")),
             "border-width": 2,
             "border-color": "#2a2a4a",
             "transition-property":
@@ -236,15 +272,41 @@ export default function VisualLayer() {
     }
   }, [selectedNodeIds, hoveredNodeId])
 
+  const handleFit = () => {
+    const cy = cyRef.current
+    if (!cy || cy.nodes().length === 0) return
+    cy.animate({ fit: { eles: cy.elements(), padding: 40 }, duration: 300 })
+  }
+
+  const PERSPECTIVE_DESCRIPTIONS: Record<Perspective, string> = {
+    cognitive: "저자가 어떻게 생각하는가 — 개념 간 논리적 관계망",
+    value: "저자가 무엇을 중시하는가 — 개념에 담긴 가치의 흐름",
+    temporal: "사고가 어떤 순서로 전개되는가 — 시간축 변환",
+  }
+
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-3 border-b border-brain-border">
-        <h2 className="text-lg font-semibold text-brain-text">
-          {PERSPECTIVE_LABELS[perspective]}
-        </h2>
-        <p className="text-sm text-brain-text/60">
-          노드를 클릭하면 텍스트가 연동됩니다
-        </p>
+      <div className="px-4 py-3 border-b border-brain-border flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-brain-text">
+            {PERSPECTIVE_LABELS[perspective]}
+          </h2>
+          <p className="text-xs" style={{ color: "rgba(224,224,240,0.4)" }}>
+            {PERSPECTIVE_DESCRIPTIONS[perspective]}
+          </p>
+        </div>
+        <button
+          onClick={handleFit}
+          className="px-2.5 py-1.5 rounded text-xs font-medium cursor-pointer"
+          style={{
+            backgroundColor: "rgba(224,224,240,0.08)",
+            color: "rgba(224,224,240,0.6)",
+            border: "1px solid rgba(224,224,240,0.15)",
+          }}
+          title="다이어그램을 화면에 맞춤"
+        >
+          ⊞ 맞춤
+        </button>
       </div>
       <div ref={containerRef} className="flex-1 min-h-0" />
     </div>

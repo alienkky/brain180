@@ -147,7 +147,7 @@ function evaluate(
 
   if (edgeAccuracy < 40 && userEdges.length > 0)
     structureAdvice.push(
-      "연결(엣지) 방향과 관계를 재검토하세요. 접속사가 개념 간 어떤 논리적 관계를 나타내는지 다시 읽어보세요."
+      "연결(엣지) 방향과 관계를 재검토하세요. 연결어가 개념 간 어떤 논리적 관계를 나타내는지 다시 읽어보세요."
     )
 
   if (extraConcepts.length > 0)
