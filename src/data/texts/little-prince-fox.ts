@@ -82,7 +82,7 @@ const littlePrinceFox: CognitiveMap = {
     },
     {
       id: "n-no-bond",
-      concept: "필요 없고 아쉽지도 않은",
+      concept: "필요 없고 아쉽지도 않은 거야",
       type: "branch",
       dimensionality: 2,
       description: "서로에 대한 필요/아쉬움 부재",
