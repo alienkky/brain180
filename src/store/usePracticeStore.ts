@@ -5,6 +5,7 @@ export type CanvasTool = "select" | "connect" | "delete"
 
 export interface UserNode extends CognitiveNode {
   sourceWord: string
+  position?: { x: number; y: number }
 }
 
 export interface UserEdge {
@@ -34,7 +35,7 @@ interface PracticeState {
 
   addPhrase: (wordKeys: string[], text: string) => void
   removePhrase: (phraseId: string) => void
-  addNode: (word: string) => void
+  addNode: (word: string, position?: { x: number; y: number }) => void
   ensureNode: (word: string) => string
   removeNode: (nodeId: string) => void
   updateNodeType: (nodeId: string, type: NodeType) => void
@@ -88,7 +89,7 @@ export const usePracticeStore = create<PracticeState>((set, get) => ({
     }))
   },
 
-  addNode: (word) => {
+  addNode: (word, position?) => {
     const { nextNodeType } = get()
     const id = `user-n-${++nodeCounter}`
     const node: UserNode = {
@@ -97,6 +98,7 @@ export const usePracticeStore = create<PracticeState>((set, get) => ({
       type: nextNodeType,
       dimensionality: 2,
       sourceWord: word,
+      position,
     }
     set((state) => ({ userNodes: [...state.userNodes, node] }))
   },

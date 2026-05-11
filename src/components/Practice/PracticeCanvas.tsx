@@ -40,6 +40,35 @@ function pointToSegmentDistance(
 
 const EDGE_HIT_TOLERANCE = 16  // px from line in rendered coords
 
+function findEmptyPosition(cy: cytoscape.Core): { x: number; y: number } {
+  const pan = cy.pan()
+  const zoom = cy.zoom()
+  const vcx = (cy.width() / 2 - pan.x) / zoom
+  const vcy = (cy.height() / 2 - pan.y) / zoom
+
+  if (cy.nodes().length === 0) return { x: vcx, y: vcy }
+
+  // Spiral outward from viewport center until a non-overlapping spot is found
+  const minDist = 110
+  for (let ring = 0; ring <= 8; ring++) {
+    const radius = ring * minDist
+    const steps = ring === 0 ? 1 : ring * 6
+    for (let i = 0; i < steps; i++) {
+      const angle = (i / steps) * 2 * Math.PI
+      const x = vcx + Math.cos(angle) * radius
+      const y = vcy + Math.sin(angle) * radius
+      let clear = true
+      cy.nodes().forEach((n) => {
+        if (!clear) return
+        const pos = n.position()
+        if (Math.hypot(pos.x - x, pos.y - y) < minDist) clear = false
+      })
+      if (clear) return { x, y }
+    }
+  }
+  return { x: vcx + Math.random() * 120 - 60, y: vcy + Math.random() * 120 - 60 }
+}
+
 export default function PracticeCanvas() {
   const {
     userNodes,
@@ -122,19 +151,13 @@ export default function PracticeCanvas() {
       }
     })
 
-    // New nodes → place at viewport center with small scatter
-    const pan = cy.pan()
-    const zoom = cy.zoom()
-    const vcx = (cy.width() / 2 - pan.x) / zoom
-    const vcy = (cy.height() / 2 - pan.y) / zoom
-
+    // New nodes: use stored position (drag) or find empty space (double-click)
     userNodes.forEach((node) => {
       if (!existingNodeIds.has(node.id)) {
-        const angle = Math.random() * 2 * Math.PI
-        const radius = 30 + Math.random() * 50
+        const position = node.position ?? findEmptyPosition(cy)
         cy.add({
           data: { id: node.id, label: node.concept, nodeType: node.type },
-          position: { x: vcx + Math.cos(angle) * radius, y: vcy + Math.sin(angle) * radius },
+          position,
         })
       }
     })
@@ -464,6 +487,11 @@ export default function PracticeCanvas() {
         }
         return
       }
+      // Convert drop screen coords to Cytoscape model coords
+      const pan = cy.pan()
+      const zoom = cy.zoom()
+      addNode(word, { x: (x - pan.x) / zoom, y: (y - pan.y) / zoom })
+      return
     }
     addNode(word)
   }, [addNode, elementAt, updateNodeConcept, updateEdgeLabel])
