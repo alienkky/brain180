@@ -62,7 +62,6 @@ export default function PracticeCanvas() {
 
   const containerRef = useRef<HTMLDivElement>(null)
   const cyRef = useRef<Core | null>(null)
-  const layoutRef = useRef<cytoscape.Layouts | null>(null)
   const prevTopologyRef = useRef<string>("")
   const [isDragOver, setIsDragOver] = useState(false)
 
@@ -101,46 +100,56 @@ export default function PracticeCanvas() {
       return
     }
 
-    cy.elements().remove()
+    // Diff: snapshot existing ids before any mutation
+    const existingNodeIds = new Set<string>()
+    cy.nodes().forEach((n) => { existingNodeIds.add(n.id()) })
+    const existingEdgeIds = new Set<string>()
+    cy.edges().forEach((e) => { existingEdgeIds.add(e.id()) })
+
+    const keepNodeIds = new Set(userNodes.map((n) => n.id))
+    const keepEdgeIds = new Set(userEdges.map((e) => e.id))
+
+    // Remove deleted elements (preserves positions of surviving nodes)
+    cy.nodes().forEach((n) => { if (!keepNodeIds.has(n.id())) n.remove() })
+    cy.edges().forEach((e) => { if (!keepEdgeIds.has(e.id())) e.remove() })
+
+    // Update surviving nodes' data
+    userNodes.forEach((node) => {
+      const ele = cy.getElementById(node.id)
+      if (ele.length) {
+        ele.data("label", node.concept)
+        ele.data("nodeType", node.type)
+      }
+    })
+
+    // New nodes → place at viewport center with small scatter
+    const pan = cy.pan()
+    const zoom = cy.zoom()
+    const vcx = (cy.width() / 2 - pan.x) / zoom
+    const vcy = (cy.height() / 2 - pan.y) / zoom
 
     userNodes.forEach((node) => {
-      cy.add({
-        data: {
-          id: node.id,
-          label: node.concept,
-          nodeType: node.type,
-        },
-      })
-    })
-
-    userEdges.forEach((edge) => {
-      cy.add({
-        data: {
-          id: edge.id,
-          source: edge.from,
-          target: edge.to,
-          label: edge.label,
-        },
-      })
-    })
-
-    if (userNodes.length > 0) {
-      if (layoutRef.current) {
-        try { layoutRef.current.stop() } catch {}
+      if (!existingNodeIds.has(node.id)) {
+        const angle = Math.random() * 2 * Math.PI
+        const radius = 30 + Math.random() * 50
+        cy.add({
+          data: { id: node.id, label: node.concept, nodeType: node.type },
+          position: { x: vcx + Math.cos(angle) * radius, y: vcy + Math.sin(angle) * radius },
+        })
       }
-      const layout = cy.layout({
-        name: "cose",
-        animate: "end",
-        animationDuration: 500,
-        nodeRepulsion: () => 8000,
-        idealEdgeLength: () => 180,
-        gravity: 0.3,
-        padding: 40,
-        fit: true,
-      } as unknown as cytoscape.CoseLayoutOptions)
-      layoutRef.current = layout
-      layout.run()
-    }
+    })
+
+    // New edges
+    userEdges.forEach((edge) => {
+      if (!existingEdgeIds.has(edge.id)) {
+        cy.add({
+          data: { id: edge.id, source: edge.from, target: edge.to, label: edge.label },
+        })
+      } else {
+        const ele = cy.getElementById(edge.id)
+        if (ele.length) ele.data("label", edge.label)
+      }
+    })
   }, [userNodes, userEdges])
 
   useEffect(() => {
@@ -344,10 +353,6 @@ export default function PracticeCanvas() {
 
     cyRef.current = cy
     return () => {
-      if (layoutRef.current) {
-        try { layoutRef.current.stop() } catch {}
-        layoutRef.current = null
-      }
       try { cy.stop() } catch {}
       // Defer destroy past the current rAF loop so any pending layout
       // animation frames don't fire on a null renderer.
