@@ -162,10 +162,11 @@ export default function VisualLayer() {
             name: "cose" as const,
             animate: "end" as const,
             animationDuration: 800,
+            fit: true,
+            padding: 50,
             nodeRepulsion: () => 8000,
             idealEdgeLength: () => 150,
             gravity: 0.3,
-            padding: 40,
           }
 
     const cy = cytoscape({
@@ -302,6 +303,10 @@ export default function VisualLayer() {
         },
       ],
       layout: layoutOptions as cytoscape.LayoutOptions,
+    })
+
+    cy.one("layoutstop", () => {
+      cy.fit(cy.elements(), 50)
     })
 
     cy.on("tap", "node", (evt) => selectNode(evt.target.id()))
