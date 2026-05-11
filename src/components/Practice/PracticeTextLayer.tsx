@@ -279,7 +279,7 @@ export default function PracticeTextLayer() {
         style={{ touchAction: "pan-y" }}
       >
         <div
-          className="text-[15px] leading-[2.8] select-none"
+          className="text-[15px] leading-[2.4] select-none"
           style={{ color: "var(--color-brain-text)", fontFamily: "var(--font-serif)" }}
         >
           {renderGroups.map((group, gi) => {
@@ -300,7 +300,7 @@ export default function PracticeTextLayer() {
                     borderRadius: "9999px",
                     backgroundColor: "rgba(184, 92, 63, 0.08)",
                     padding: "1px 10px",
-                    margin: "0 3px",
+                    margin: "0 2px",
                     verticalAlign: "middle",
                     color: "var(--color-brain-accent)",
                     cursor: "grab",
