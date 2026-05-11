@@ -1,9 +1,12 @@
 import { create } from "zustand"
 import type { CognitiveMap, Perspective } from "../types/cognitive"
-import littlePrinceFox from "../data/texts/little-prince-fox"
+import { TEXT_LIBRARY, getMapById } from "../data/texts"
+import { usePracticeStore } from "./usePracticeStore"
 
 interface BrainState {
+  currentMapId: string
   currentMap: CognitiveMap
+  showLibrary: boolean
   perspective: Perspective
   selectedNodeIds: string[]
   selectedSegmentIds: string[]
@@ -18,10 +21,14 @@ interface BrainState {
   hoverSegment: (segmentId: string | null) => void
   setTemporalPhase: (phase: number | null) => void
   clearSelection: () => void
+  setCurrentMap: (id: string) => void
+  setShowLibrary: (show: boolean) => void
 }
 
 export const useStore = create<BrainState>((set, get) => ({
-  currentMap: littlePrinceFox,
+  currentMapId: TEXT_LIBRARY[0].id,
+  currentMap: TEXT_LIBRARY[0].map,
+  showLibrary: true,
   perspective: "cognitive",
   selectedNodeIds: [],
   selectedSegmentIds: [],
@@ -110,4 +117,21 @@ export const useStore = create<BrainState>((set, get) => ({
       activeTemporalPhase: null,
     })
   },
+
+  setCurrentMap: (id) => {
+    const map = getMapById(id)
+    set({
+      currentMapId: id,
+      currentMap: map,
+      showLibrary: false,
+      selectedNodeIds: [],
+      selectedSegmentIds: [],
+      hoveredNodeId: null,
+      hoveredSegmentId: null,
+      activeTemporalPhase: null,
+    })
+    usePracticeStore.getState().clearCanvas()
+  },
+
+  setShowLibrary: (show) => set({ showLibrary: show }),
 }))
