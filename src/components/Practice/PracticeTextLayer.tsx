@@ -279,7 +279,7 @@ export default function PracticeTextLayer() {
         style={{ touchAction: "pan-y" }}
       >
         <div
-          className="text-[15px] leading-[2.2] select-none"
+          className="text-[15px] leading-[2.8] select-none"
           style={{ color: "var(--color-brain-text)", fontFamily: "var(--font-serif)" }}
         >
           {renderGroups.map((group, gi) => {
@@ -299,12 +299,15 @@ export default function PracticeTextLayer() {
                     border: "1.5px solid var(--color-brain-accent)",
                     borderRadius: "9999px",
                     backgroundColor: "rgba(184, 92, 63, 0.08)",
-                    padding: "2px 10px",
+                    padding: "1px 10px",
+                    margin: "0 3px",
+                    verticalAlign: "middle",
                     color: "var(--color-brain-accent)",
                     cursor: "grab",
                     transition: "all 0.15s ease",
                     fontWeight: 500,
                     userSelect: "none",
+                    lineHeight: 1.6,
                   }}
                   title="더블클릭 = 캔버스 추가, 클릭 = 동그라미 해제"
                 >
