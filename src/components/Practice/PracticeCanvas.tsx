@@ -374,8 +374,15 @@ export default function PracticeCanvas() {
     cy.on("position", "node", recomputeEdgeStyles)
     cy.on("zoom pan", recomputeEdgeStyles)
 
+    // Keep cytoscape's render viewport in sync when the panel is resized
+    const ro = new ResizeObserver(() => {
+      try { cy.resize() } catch {}
+    })
+    if (containerRef.current) ro.observe(containerRef.current)
+
     cyRef.current = cy
     return () => {
+      ro.disconnect()
       try { cy.stop() } catch {}
       // Defer destroy past the current rAF loop so any pending layout
       // animation frames don't fire on a null renderer.

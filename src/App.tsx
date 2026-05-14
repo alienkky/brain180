@@ -20,6 +20,31 @@ const PERSPECTIVES: { key: Perspective; label: string }[] = [
   { key: "temporal", label: "시간" },
 ]
 
+function ResizeHandle({
+  onMouseDown,
+}: {
+  onMouseDown: (e: React.MouseEvent) => void
+}) {
+  return (
+    <div
+      onMouseDown={onMouseDown}
+      className="shrink-0 cursor-col-resize"
+      style={{
+        width: 5,
+        backgroundColor: "var(--color-brain-border)",
+        transition: "background-color 0.15s",
+      }}
+      onMouseEnter={(e) =>
+        (e.currentTarget.style.backgroundColor = "var(--color-brain-accent)")
+      }
+      onMouseLeave={(e) =>
+        (e.currentTarget.style.backgroundColor = "var(--color-brain-border)")
+      }
+      title="드래그하여 패널 너비 조절"
+    />
+  )
+}
+
 export default function App() {
   const {
     currentMap,
@@ -34,6 +59,33 @@ export default function App() {
   const [mode, setMode] = useState<AppMode>("practice")
   const [textMenuOpen, setTextMenuOpen] = useState(false)
   const textMenuRef = useRef<HTMLDivElement>(null)
+  const [leftWidth, setLeftWidth] = useState(440)
+  const [rightWidth, setRightWidth] = useState(300)
+
+  const startPanelResize = (e: React.MouseEvent, which: "left" | "right") => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startLeft = leftWidth
+    const startRight = rightWidth
+    const onMove = (ev: MouseEvent) => {
+      const dx = ev.clientX - startX
+      if (which === "left") {
+        setLeftWidth(Math.max(260, Math.min(720, startLeft + dx)))
+      } else {
+        setRightWidth(Math.max(220, Math.min(560, startRight - dx)))
+      }
+    }
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove)
+      document.removeEventListener("mouseup", onUp)
+      document.body.style.cursor = ""
+      document.body.style.userSelect = ""
+    }
+    document.addEventListener("mousemove", onMove)
+    document.addEventListener("mouseup", onUp)
+    document.body.style.cursor = "col-resize"
+    document.body.style.userSelect = "none"
+  }
 
   useEffect(() => {
     if (!textMenuOpen) return
@@ -312,13 +364,17 @@ export default function App() {
       ) : mode === "practice" ? (
         <main className="flex flex-1 min-h-0">
           <section
-            className="w-[32%] border-r border-brain-border"
-            style={{ backgroundColor: "var(--color-brain-surface)" }}
+            className="shrink-0"
+            style={{
+              width: leftWidth,
+              backgroundColor: "var(--color-brain-surface)",
+            }}
           >
             <PracticeTextLayer />
           </section>
+          <ResizeHandle onMouseDown={(e) => startPanelResize(e, "left")} />
           <section
-            className="flex-1 flex flex-col"
+            className="flex-1 flex flex-col min-w-0"
             style={{ backgroundColor: "var(--color-brain-bg)" }}
           >
             <div className="flex-1 min-h-0">
@@ -326,9 +382,13 @@ export default function App() {
             </div>
             {showEvaluation && <EvaluationPanel />}
           </section>
+          <ResizeHandle onMouseDown={(e) => startPanelResize(e, "right")} />
           <section
-            className="w-[22%] border-l border-brain-border"
-            style={{ backgroundColor: "var(--color-brain-surface)" }}
+            className="shrink-0"
+            style={{
+              width: rightWidth,
+              backgroundColor: "var(--color-brain-surface)",
+            }}
           >
             <PracticeToolbar />
           </section>

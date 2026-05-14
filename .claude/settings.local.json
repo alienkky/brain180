@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e ' *)",
+      "Bash(cd \"/e/bettermondaynodesystem\" && find . -type f \\\\\\( -name \"*.js\" -o -name \"*.html\" \\\\\\) | head -20)",
+      "Read(//e/e/**)"
+    ]
+  }
+}
