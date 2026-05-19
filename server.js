@@ -1,5 +1,4 @@
 import express from "express";
-import Anthropic from "@anthropic-ai/sdk";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 
@@ -70,18 +69,126 @@ function buildContextMessage(context) {
     : "";
 }
 
-app.post("/api/chat", async (req, res) => {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
+// ─── Provider: Claude (Anthropic) ───────────────────────────────
+
+async function streamClaude(apiMessages, systemPrompt, res) {
+  const { default: Anthropic } = await import("@anthropic-ai/sdk");
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  const stream = await client.messages.stream({
+    model: process.env.CLAUDE_MODEL || "claude-sonnet-4-20250514",
+    max_tokens: 1024,
+    system: systemPrompt,
+    messages: apiMessages,
+  });
+
+  for await (const event of stream) {
+    if (
+      event.type === "content_block_delta" &&
+      event.delta.type === "text_delta"
+    ) {
+      res.write(`data: ${JSON.stringify({ text: event.delta.text })}\n\n`);
+    }
+  }
+}
+
+// ─── Provider: OpenAI (GPT / Codex) ────────────────────────────
+
+async function streamOpenAI(apiMessages, systemPrompt, res) {
+  const { default: OpenAI } = await import("openai");
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+  const openaiMessages = [
+    { role: "system", content: systemPrompt },
+    ...apiMessages.map((m) => ({ role: m.role, content: m.content })),
+  ];
+
+  const stream = await client.chat.completions.create({
+    model: process.env.OPENAI_MODEL || "gpt-4o",
+    max_tokens: 1024,
+    messages: openaiMessages,
+    stream: true,
+  });
+
+  for await (const chunk of stream) {
+    const text = chunk.choices[0]?.delta?.content;
+    if (text) {
+      res.write(`data: ${JSON.stringify({ text })}\n\n`);
+    }
+  }
+}
+
+// ─── Provider: Gemini (Google) ──────────────────────────────────
+
+async function streamGemini(apiMessages, systemPrompt, res) {
+  const { GoogleGenAI } = await import("@google/genai");
+  const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+  const contents = apiMessages.map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }));
+
+  const stream = await client.models.generateContentStream({
+    model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+    config: { systemInstruction: systemPrompt, maxOutputTokens: 1024 },
+    contents,
+  });
+
+  for await (const chunk of stream) {
+    const text = chunk.text;
+    if (text) {
+      res.write(`data: ${JSON.stringify({ text })}\n\n`);
+    }
+  }
+}
+
+// ─── Provider resolution ────────────────────────────────────────
+
+function resolveProvider(requested) {
+  const explicit = requested || process.env.AI_PROVIDER || "";
+  const normalized = explicit.toLowerCase().trim();
+
+  if (["openai", "gpt", "codex"].includes(normalized)) {
+    if (!process.env.OPENAI_API_KEY) return { error: "OPENAI_API_KEY not configured" };
+    return { provider: "openai", stream: streamOpenAI };
+  }
+  if (["gemini", "google"].includes(normalized)) {
+    if (!process.env.GEMINI_API_KEY) return { error: "GEMINI_API_KEY not configured" };
+    return { provider: "gemini", stream: streamGemini };
+  }
+  if (["claude", "anthropic", ""].includes(normalized)) {
+    if (!process.env.ANTHROPIC_API_KEY) return { error: "ANTHROPIC_API_KEY not configured" };
+    return { provider: "claude", stream: streamClaude };
   }
 
-  const { messages, context } = req.body;
+  return { error: `Unknown provider: ${explicit}` };
+}
+
+// ─── GET /api/providers — which providers are available ─────────
+
+app.get("/api/providers", (_req, res) => {
+  const available = [];
+  if (process.env.ANTHROPIC_API_KEY) available.push("claude");
+  if (process.env.OPENAI_API_KEY) available.push("openai");
+  if (process.env.GEMINI_API_KEY) available.push("gemini");
+
+  const active = (process.env.AI_PROVIDER || "claude").toLowerCase();
+  res.json({ available, active });
+});
+
+// ─── POST /api/chat ─────────────────────────────────────────────
+
+app.post("/api/chat", async (req, res) => {
+  const { messages, context, provider: requestedProvider } = req.body;
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: "messages array required" });
   }
 
-  const client = new Anthropic({ apiKey });
+  const resolved = resolveProvider(requestedProvider);
+  if (resolved.error) {
+    return res.status(500).json({ error: resolved.error });
+  }
 
   const apiMessages = [];
   const contextMsg = buildContextMessage(context || {});
@@ -101,22 +208,7 @@ app.post("/api/chat", async (req, res) => {
   res.setHeader("Connection", "keep-alive");
 
   try {
-    const stream = await client.messages.stream({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1024,
-      system: SYSTEM_PROMPT,
-      messages: apiMessages,
-    });
-
-    for await (const event of stream) {
-      if (
-        event.type === "content_block_delta" &&
-        event.delta.type === "text_delta"
-      ) {
-        res.write(`data: ${JSON.stringify({ text: event.delta.text })}\n\n`);
-      }
-    }
-
+    await resolved.stream(apiMessages, SYSTEM_PROMPT, res);
     res.write("data: [DONE]\n\n");
     res.end();
   } catch (err) {

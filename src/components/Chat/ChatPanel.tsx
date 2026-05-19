@@ -1,7 +1,14 @@
 import { useState, useRef, useEffect } from "react"
 import { useChatStore } from "../../store/useChatStore"
+import type { AIProvider } from "../../store/useChatStore"
 import { useStore } from "../../store/useStore"
 import { usePracticeStore } from "../../store/usePracticeStore"
+
+const PROVIDER_LABELS: Record<AIProvider, string> = {
+  claude: "Claude",
+  openai: "GPT",
+  gemini: "Gemini",
+}
 
 function buildContext() {
   const { currentMap } = useStore.getState()
@@ -33,6 +40,7 @@ function buildContext() {
 
 async function sendChat(
   userContent: string,
+  provider: AIProvider,
   onChunk: (text: string) => void,
   onDone: () => void,
   onError: (err: string) => void,
@@ -49,7 +57,7 @@ async function sendChat(
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: apiMessages, context }),
+      body: JSON.stringify({ messages: apiMessages, context, provider }),
     })
 
     if (!res.ok) {
@@ -102,10 +110,24 @@ async function sendChat(
 }
 
 export default function ChatPanel() {
-  const { messages, isStreaming, isOpen, setOpen } = useChatStore()
+  const { messages, isStreaming, isOpen, provider, availableProviders, setOpen, setProvider, setAvailableProviders } = useChatStore()
   const [input, setInput] = useState("")
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    fetch("/api/providers")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.available?.length > 0) {
+          setAvailableProviders(data.available)
+          if (data.active && data.available.includes(data.active)) {
+            setProvider(data.active)
+          }
+        }
+      })
+      .catch(() => {})
+  }, [setAvailableProviders, setProvider])
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -127,6 +149,7 @@ export default function ChatPanel() {
 
     sendChat(
       text,
+      provider,
       (chunk) => useChatStore.getState().appendToLastAssistant(chunk),
       () => useChatStore.getState().finishStreaming(),
       (err) => {
@@ -209,9 +232,35 @@ export default function ChatPanel() {
             >
               Brain180 튜터
             </p>
-            <p className="text-[11px]" style={{ color: "var(--color-brain-text-soft)" }}>
-              결과물 기반 대화
-            </p>
+            {/* Provider selector */}
+            {availableProviders.length > 1 ? (
+              <div className="flex items-center gap-1 mt-0.5">
+                {availableProviders.map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setProvider(p)}
+                    className="px-1.5 py-0.5 rounded text-[10px] cursor-pointer transition-all"
+                    style={{
+                      backgroundColor:
+                        provider === p
+                          ? "var(--color-brain-accent)"
+                          : "transparent",
+                      color:
+                        provider === p
+                          ? "#fff"
+                          : "var(--color-brain-text-soft)",
+                      fontWeight: provider === p ? 600 : 400,
+                    }}
+                  >
+                    {PROVIDER_LABELS[p]}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px]" style={{ color: "var(--color-brain-text-soft)" }}>
+                {PROVIDER_LABELS[provider]} · 결과물 기반 대화
+              </p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
