@@ -1,5 +1,7 @@
 import { create } from "zustand"
 
+export type AIProvider = "claude" | "openai" | "gemini"
+
 export interface ChatMessage {
   id: string
   role: "user" | "assistant"
@@ -10,8 +12,12 @@ interface ChatState {
   messages: ChatMessage[]
   isStreaming: boolean
   isOpen: boolean
+  provider: AIProvider
+  availableProviders: AIProvider[]
 
   setOpen: (open: boolean) => void
+  setProvider: (p: AIProvider) => void
+  setAvailableProviders: (ps: AIProvider[]) => void
   addUserMessage: (content: string) => void
   startStreaming: () => void
   appendToLastAssistant: (text: string) => void
@@ -25,8 +31,12 @@ export const useChatStore = create<ChatState>((set) => ({
   messages: [],
   isStreaming: false,
   isOpen: false,
+  provider: "claude",
+  availableProviders: [],
 
   setOpen: (open) => set({ isOpen: open }),
+  setProvider: (provider) => set({ provider }),
+  setAvailableProviders: (availableProviders) => set({ availableProviders }),
 
   addUserMessage: (content) => {
     const id = `msg-${++msgCounter}`

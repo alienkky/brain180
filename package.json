@@ -15,8 +15,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
+    "@google/genai": "^1.0.0",
     "cytoscape": "^3.33.3",
     "express": "^5.1.0",
+    "openai": "^5.0.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "serve": "^14.2.4",
