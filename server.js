@@ -1,0 +1,135 @@
+import express from "express";
+import Anthropic from "@anthropic-ai/sdk";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.use(express.json({ limit: "1mb" }));
+app.use(express.static(join(__dirname, "dist")));
+
+const SYSTEM_PROMPT = `당신은 Brain180 학습 프로그램의 AI 튜터입니다.
+
+Brain180은 천재들의 고전 텍스트에서 **지식(WHAT)**이 아닌 **뇌인지 구조(HOW THEY THINK)**를 시각화하여, 4차원적 글 해석 능력을 기르는 학습 프로그램입니다.
+
+학생이 텍스트를 읽고 인지 구조 다이어그램(노드와 엣지)을 만들었습니다. 학생의 결과물을 기반으로 대화하세요.
+
+## 역할
+- 학생의 인지 구조 다이어그램을 분석하고 피드백을 제공합니다.
+- 저자의 사고 흐름에 대해 토론합니다.
+- 학생이 놓친 관계나 개념을 소크라테스식 질문으로 유도합니다.
+- 학생의 해석을 존중하되, 더 깊은 사고를 자극합니다.
+
+## 노드 유형
+- root: 텍스트의 핵심 주제/개념
+- anchor: 주요 지지 개념
+- bridge: 개념 간 연결 역할
+- branch: 파생/부수 개념
+
+## 톤
+- 다정하고 격려하는 톤. 한국어로 대화.
+- 정답을 알려주지 말고, 질문으로 유도하세요.
+- 학생의 수준에 맞추어 대화하세요.`;
+
+function buildContextMessage(context) {
+  const parts = [];
+
+  if (context.textSource) {
+    parts.push(`## 텍스트 정보\n- 제목: ${context.textSource.title}\n- 저자: ${context.textSource.author}\n- 분야: ${context.textSource.field}`);
+  }
+
+  if (context.userNodes?.length > 0) {
+    const nodeList = context.userNodes
+      .map((n) => `  - "${n.concept}" (${n.type})`)
+      .join("\n");
+    parts.push(`## 학생이 만든 노드 (${context.userNodes.length}개)\n${nodeList}`);
+  }
+
+  if (context.userEdges?.length > 0) {
+    const edgeList = context.userEdges
+      .map((e) => `  - "${e.fromConcept}" → "${e.toConcept}"${e.label ? ` [${e.label}]` : ""}`)
+      .join("\n");
+    parts.push(`## 학생이 만든 연결 (${context.userEdges.length}개)\n${edgeList}`);
+  }
+
+  if (context.systemNodes?.length > 0) {
+    const sysNodeList = context.systemNodes
+      .map((n) => `  - "${n.concept}" (${n.type})`)
+      .join("\n");
+    parts.push(`## 시스템 정답 노드 (${context.systemNodes.length}개)\n${sysNodeList}`);
+  }
+
+  if (context.evaluationScore !== undefined) {
+    parts.push(`## 현재 평가 점수: ${context.evaluationScore}%`);
+  }
+
+  return parts.length > 0
+    ? `[학생의 현재 작업 컨텍스트]\n\n${parts.join("\n\n")}`
+    : "";
+}
+
+app.post("/api/chat", async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
+  }
+
+  const { messages, context } = req.body;
+  if (!messages || !Array.isArray(messages)) {
+    return res.status(400).json({ error: "messages array required" });
+  }
+
+  const client = new Anthropic({ apiKey });
+
+  const apiMessages = [];
+  const contextMsg = buildContextMessage(context || {});
+  if (contextMsg) {
+    apiMessages.push({ role: "user", content: contextMsg });
+    apiMessages.push({
+      role: "assistant",
+      content: "네, 학생의 작업 컨텍스트를 확인했습니다. 대화를 시작할 준비가 되었습니다.",
+    });
+  }
+  for (const m of messages) {
+    apiMessages.push({ role: m.role, content: m.content });
+  }
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  try {
+    const stream = await client.messages.stream({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1024,
+      system: SYSTEM_PROMPT,
+      messages: apiMessages,
+    });
+
+    for await (const event of stream) {
+      if (
+        event.type === "content_block_delta" &&
+        event.delta.type === "text_delta"
+      ) {
+        res.write(`data: ${JSON.stringify({ text: event.delta.text })}\n\n`);
+      }
+    }
+
+    res.write("data: [DONE]\n\n");
+    res.end();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    res.write(`data: ${JSON.stringify({ error: msg })}\n\n`);
+    res.end();
+  }
+});
+
+app.get("*", (_req, res) => {
+  res.sendFile(join(__dirname, "dist", "index.html"));
+});
+
+app.listen(PORT, () => {
+  console.log(`Brain180 server listening on port ${PORT}`);
+});
