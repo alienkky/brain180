@@ -31,3 +31,4 @@ run_inspection.py
 
 # Railway local state
 .railway/
+data/

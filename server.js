@@ -1,6 +1,7 @@
 import express from "express";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { readFile, writeFile, mkdir } from "fs/promises";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -216,6 +217,58 @@ app.post("/api/chat", async (req, res) => {
     res.write(`data: ${JSON.stringify({ error: msg })}\n\n`);
     res.end();
   }
+});
+
+// ─── Feedback storage ───────────────────────────────────────────
+
+const DATA_DIR = join(__dirname, "data");
+const FEEDBACK_FILE = join(DATA_DIR, "feedback.json");
+
+async function loadFeedback() {
+  try {
+    const raw = await readFile(FEEDBACK_FILE, "utf-8");
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+async function saveFeedback(entries) {
+  await mkdir(DATA_DIR, { recursive: true });
+  await writeFile(FEEDBACK_FILE, JSON.stringify(entries, null, 2), "utf-8");
+}
+
+app.post("/api/feedback", async (req, res) => {
+  const { studentName, textId, textTitle, content, rating, cognitiveMap } = req.body;
+  if (!content || !textId) {
+    return res.status(400).json({ error: "content and textId required" });
+  }
+
+  const entry = {
+    id: `fb-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    studentName: studentName || "익명",
+    textId,
+    textTitle: textTitle || "",
+    content,
+    rating: rating || null,
+    cognitiveMap: cognitiveMap || null,
+    createdAt: new Date().toISOString(),
+  };
+
+  const entries = await loadFeedback();
+  entries.push(entry);
+  await saveFeedback(entries);
+
+  res.json({ ok: true, id: entry.id });
+});
+
+app.get("/api/feedback", async (req, res) => {
+  const entries = await loadFeedback();
+  const { textId } = req.query;
+  if (textId) {
+    return res.json(entries.filter((e) => e.textId === textId));
+  }
+  res.json(entries);
 });
 
 app.get("/{*splat}", (_req, res) => {

@@ -8,6 +8,7 @@ import PracticeToolbar from "./components/Practice/PracticeToolbar"
 import EvaluationPanel from "./components/Practice/EvaluationPanel"
 import Library from "./components/Library/Library"
 import ChatPanel from "./components/Chat/ChatPanel"
+import FeedbackPanel from "./components/Feedback/FeedbackPanel"
 import { useStore } from "./store/useStore"
 import { usePracticeStore } from "./store/usePracticeStore"
 import { TEXT_LIBRARY, FIELD_COLORS } from "./data/texts"
@@ -417,7 +418,12 @@ export default function App() {
         </main>
       )}
 
-      {!showLibrary && mode === "practice" && <ChatPanel />}
+      {!showLibrary && mode === "practice" && (
+        <>
+          <FeedbackPanel />
+          <ChatPanel />
+        </>
+      )}
     </div>
   )
 }
