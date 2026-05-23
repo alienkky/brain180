@@ -9,9 +9,9 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
-# Copy source and build
+# Copy source and build (cache bust: 2026-05-23)
 COPY . .
-RUN npm run build
+RUN npx tsc -b && npx vite build
 
 # ────────────────────────────────────────────────────────────────────
 # Runtime stage: Express server serves dist/ + /api/chat proxy
