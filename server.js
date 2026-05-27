@@ -6,8 +6,17 @@ import { readFile, writeFile, mkdir } from "fs/promises";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
+const APP_VERSION =
+  process.env.RAILWAY_GIT_COMMIT_SHA ||
+  process.env.RAILWAY_DEPLOYMENT_ID ||
+  process.env.GIT_COMMIT_SHA ||
+  "local";
 
 app.use(express.json({ limit: "1mb" }));
+app.use((_req, res, next) => {
+  res.setHeader("X-BMNS-Version", APP_VERSION);
+  next();
+});
 app.use(express.static(join(__dirname, "dist")));
 
 const SYSTEM_PROMPT = `당신은 Brain180 학습 프로그램의 AI 튜터입니다.
@@ -176,6 +185,20 @@ app.get("/api/providers", (_req, res) => {
 
   const active = (process.env.AI_PROVIDER || "claude").toLowerCase();
   res.json({ available, active });
+});
+
+app.get("/__version", (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json({
+    ok: true,
+    app: "brain180",
+    version: APP_VERSION,
+    servedRoot: "dist/index.html",
+    railwayEnvironment: process.env.RAILWAY_ENVIRONMENT_NAME || null,
+    railwayProject: process.env.RAILWAY_PROJECT_NAME || null,
+    railwayService: process.env.RAILWAY_SERVICE_NAME || null,
+    time: new Date().toISOString(),
+  });
 });
 
 // ─── POST /api/chat ─────────────────────────────────────────────
