@@ -137,8 +137,8 @@ async function streamKimi(apiMessages, systemPrompt, res) {
   ];
 
   const stream = await client.chat.completions.create({
-    model: process.env.KIMI_MODEL || process.env.MOONSHOT_MODEL || "kimi-k2.6",
-    max_tokens: 1024,
+    model: process.env.KIMI_MODEL || process.env.MOONSHOT_MODEL || "kimi-k2-turbo-preview",
+    max_tokens: Number(process.env.KIMI_MAX_TOKENS || process.env.MOONSHOT_MAX_TOKENS || 512),
     messages: kimiMessages,
     stream: true,
   });
@@ -324,7 +324,8 @@ app.post("/api/chat", async (req, res) => {
       content: "네, 학생의 작업 컨텍스트를 확인했습니다. 대화를 시작할 준비가 되었습니다.",
     });
   }
-  for (const m of messages) {
+  const historyLimit = Number(process.env.CHAT_HISTORY_LIMIT || 8);
+  for (const m of messages.slice(-historyLimit)) {
     apiMessages.push({ role: m.role, content: m.content });
   }
 
