@@ -191,22 +191,28 @@ async function streamOllama(apiMessages, systemPrompt, res) {
     headers["CF-Access-Client-Secret"] = process.env.OLLAMA_CF_ACCESS_CLIENT_SECRET;
   }
 
-  const response = await fetch(`${baseUrl}/api/chat`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      model,
-      stream: true,
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...apiMessages.map((m) => ({ role: m.role, content: m.content })),
-      ],
-      options: {
-        temperature: Number(process.env.OLLAMA_TEMPERATURE || 0.4),
-        num_predict: Number(process.env.OLLAMA_MAX_TOKENS || 1024),
-      },
-    }),
-  });
+  let response;
+  try {
+    response = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model,
+        stream: true,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...apiMessages.map((m) => ({ role: m.role, content: m.content })),
+        ],
+        options: {
+          temperature: Number(process.env.OLLAMA_TEMPERATURE || 0.4),
+          num_predict: Number(process.env.OLLAMA_MAX_TOKENS || 1024),
+        },
+      }),
+    });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : "fetch failed";
+    throw new Error(`Cannot reach Ollama at ${baseUrl}. If this is Railway, set AI_PROVIDER=kimi for Kimi API or set OLLAMA_BASE_URL to a reachable tunnel. Detail: ${detail}`);
+  }
 
   if (!response.ok || !response.body) {
     const detail = await response.text().catch(() => "");
@@ -279,14 +285,20 @@ function resolveProvider(requested) {
 // ─── GET /api/providers — which providers are available ─────────
 
 app.get("/api/providers", (_req, res) => {
-  const available = ["ollama"];
+  const isRailway = Boolean(
+    process.env.RAILWAY_ENVIRONMENT ||
+      process.env.RAILWAY_PROJECT_ID ||
+      process.env.RAILWAY_SERVICE_ID
+  );
+  const available = [];
+  if (process.env.OLLAMA_BASE_URL || !isRailway) available.push("ollama");
   if (process.env.ANTHROPIC_API_KEY) available.push("claude");
   if (process.env.OPENAI_API_KEY) available.push("openai");
   if (process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY) available.push("kimi");
   if (process.env.GEMINI_API_KEY) available.push("gemini");
 
   const preferred = canonicalProviderName(process.env.AI_PROVIDER || (available.includes("claude") ? "claude" : "ollama"));
-  const active = available.includes(preferred) ? preferred : available[0];
+  const active = available.includes(preferred) ? preferred : available[0] || preferred;
   res.json({ available, active });
 });
 
