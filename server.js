@@ -132,6 +132,7 @@ async function streamKimi(apiMessages, systemPrompt, res) {
   });
   const model = process.env.KIMI_MODEL || process.env.MOONSHOT_MODEL || "kimi-k2.6";
   const maxTokens = Number(process.env.KIMI_MAX_TOKENS || process.env.MOONSHOT_MAX_TOKENS || 512);
+  const retryMaxTokens = Number(process.env.KIMI_RETRY_MAX_TOKENS || process.env.MOONSHOT_RETRY_MAX_TOKENS || Math.max(maxTokens * 2, 1024));
   const timeoutMs = Number(process.env.KIMI_TIMEOUT_MS || process.env.MOONSHOT_TIMEOUT_MS || 45000);
   const streamEnabled = String(process.env.KIMI_STREAM || process.env.MOONSHOT_STREAM || "false").toLowerCase() === "true";
 
@@ -155,17 +156,46 @@ async function streamKimi(apiMessages, systemPrompt, res) {
       );
     });
 
-  if (!streamEnabled) {
-    const completion = await withTimeout(client.chat.completions.create({
-      model,
-      max_tokens: maxTokens,
-      messages: kimiMessages,
-      stream: false,
-    }));
+  const extractText = (completion) => {
+    const message = completion?.choices?.[0]?.message;
+    const content = message?.content;
 
-    const text = completion.choices?.[0]?.message?.content;
+    if (typeof content === "string") return content.trim();
+    if (Array.isArray(content)) {
+      return content
+        .map((part) => {
+          if (typeof part === "string") return part;
+          return part?.text || part?.content || "";
+        })
+        .join("")
+        .trim();
+    }
+
+    return String(
+      message?.reasoning_content ||
+        message?.reasoning ||
+        completion?.output_text ||
+        "",
+    ).trim();
+  };
+
+  if (!streamEnabled) {
+    const createCompletion = (tokens) =>
+      withTimeout(client.chat.completions.create({
+        model,
+        max_tokens: tokens,
+        messages: kimiMessages,
+        stream: false,
+      }));
+
+    let completion = await createCompletion(maxTokens);
+    let text = extractText(completion);
+    if (!text && retryMaxTokens > maxTokens) {
+      completion = await createCompletion(retryMaxTokens);
+      text = extractText(completion);
+    }
     if (!text) {
-      throw new Error("Kimi returned an empty response");
+      throw new Error(`Kimi returned an empty response. Try raising MOONSHOT_MAX_TOKENS to ${retryMaxTokens}.`);
     }
     res.write(`data: ${JSON.stringify({ text })}\n\n`);
     return;
