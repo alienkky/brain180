@@ -70,6 +70,17 @@ function buildContextMessage(context) {
     : "";
 }
 
+function getHeaderSafeEnv(name, value) {
+  const trimmed = (value || "").trim();
+  if (!trimmed) {
+    throw new Error(`${name} not configured`);
+  }
+  if (/[^\x20-\x7E]/.test(trimmed)) {
+    throw new Error(`${name} contains non-ASCII text. Paste the real API key only; do not use Korean placeholder text like "현재 키".`);
+  }
+  return trimmed;
+}
+
 // ─── Provider: Claude (Anthropic) ───────────────────────────────
 
 async function streamClaude(apiMessages, systemPrompt, res) {
@@ -126,8 +137,9 @@ async function streamOpenAI(apiMessages, systemPrompt, res) {
 
 async function streamKimi(apiMessages, systemPrompt, res) {
   const { default: OpenAI } = await import("openai");
+  const apiKey = getHeaderSafeEnv("MOONSHOT_API_KEY", process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY);
   const client = new OpenAI({
-    apiKey: process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY,
+    apiKey,
     baseURL: process.env.KIMI_BASE_URL || process.env.MOONSHOT_BASE_URL || "https://api.moonshot.ai/v1",
   });
   const model = process.env.KIMI_MODEL || process.env.MOONSHOT_MODEL || "kimi-k2.6";
