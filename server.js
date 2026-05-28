@@ -149,10 +149,19 @@ async function streamGemini(apiMessages, systemPrompt, res) {
 async function streamOllama(apiMessages, systemPrompt, res) {
   const baseUrl = (process.env.OLLAMA_BASE_URL || "http://localhost:11434").replace(/\/$/, "");
   const model = process.env.OLLAMA_MODEL || "qwen2.5:14b";
+  const headers = { "Content-Type": "application/json" };
+
+  if (process.env.OLLAMA_AUTH_TOKEN) {
+    headers.Authorization = `Bearer ${process.env.OLLAMA_AUTH_TOKEN}`;
+  }
+  if (process.env.OLLAMA_CF_ACCESS_CLIENT_ID && process.env.OLLAMA_CF_ACCESS_CLIENT_SECRET) {
+    headers["CF-Access-Client-Id"] = process.env.OLLAMA_CF_ACCESS_CLIENT_ID;
+    headers["CF-Access-Client-Secret"] = process.env.OLLAMA_CF_ACCESS_CLIENT_SECRET;
+  }
 
   const response = await fetch(`${baseUrl}/api/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({
       model,
       stream: true,
