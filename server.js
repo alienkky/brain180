@@ -97,7 +97,10 @@ async function streamClaude(apiMessages, systemPrompt, res) {
 
 async function streamOpenAI(apiMessages, systemPrompt, res) {
   const { default: OpenAI } = await import("openai");
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const client = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+    baseURL: process.env.OPENAI_BASE_URL || undefined,
+  });
 
   const openaiMessages = [
     { role: "system", content: systemPrompt },
@@ -108,6 +111,35 @@ async function streamOpenAI(apiMessages, systemPrompt, res) {
     model: process.env.OPENAI_MODEL || "gpt-4o",
     max_tokens: 1024,
     messages: openaiMessages,
+    stream: true,
+  });
+
+  for await (const chunk of stream) {
+    const text = chunk.choices[0]?.delta?.content;
+    if (text) {
+      res.write(`data: ${JSON.stringify({ text })}\n\n`);
+    }
+  }
+}
+
+// ─── Provider: Kimi / Moonshot (OpenAI-compatible API) ───────────
+
+async function streamKimi(apiMessages, systemPrompt, res) {
+  const { default: OpenAI } = await import("openai");
+  const client = new OpenAI({
+    apiKey: process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY,
+    baseURL: process.env.KIMI_BASE_URL || process.env.MOONSHOT_BASE_URL || "https://api.moonshot.ai/v1",
+  });
+
+  const kimiMessages = [
+    { role: "system", content: systemPrompt },
+    ...apiMessages.map((m) => ({ role: m.role, content: m.content })),
+  ];
+
+  const stream = await client.chat.completions.create({
+    model: process.env.KIMI_MODEL || process.env.MOONSHOT_MODEL || "kimi-k2.6",
+    max_tokens: 1024,
+    messages: kimiMessages,
     stream: true,
   });
 
@@ -208,6 +240,7 @@ async function streamOllama(apiMessages, systemPrompt, res) {
 function canonicalProviderName(value) {
   const normalized = (value || "").toLowerCase().trim();
   if (["ollama", "local", "qwen", "qwen3.5", "qwen35", "gemma", "hermes"].includes(normalized)) return "ollama";
+  if (["kimi", "moonshot", "kimi-k2.6", "kimi-k26"].includes(normalized)) return "kimi";
   if (["openai", "gpt", "codex"].includes(normalized)) return "openai";
   if (["gemini", "google"].includes(normalized)) return "gemini";
   if (["claude", "anthropic", ""].includes(normalized)) return "claude";
@@ -220,6 +253,12 @@ function resolveProvider(requested) {
 
   if (["ollama", "local", "qwen", "qwen3.5", "qwen35", "gemma", "hermes"].includes(normalized)) {
     return { provider: "ollama", stream: streamOllama };
+  }
+  if (["kimi", "moonshot", "kimi-k2.6", "kimi-k26"].includes(normalized)) {
+    if (!process.env.KIMI_API_KEY && !process.env.MOONSHOT_API_KEY) {
+      return { error: "KIMI_API_KEY or MOONSHOT_API_KEY not configured" };
+    }
+    return { provider: "kimi", stream: streamKimi };
   }
   if (["openai", "gpt", "codex"].includes(normalized)) {
     if (!process.env.OPENAI_API_KEY) return { error: "OPENAI_API_KEY not configured" };
@@ -243,6 +282,7 @@ app.get("/api/providers", (_req, res) => {
   const available = ["ollama"];
   if (process.env.ANTHROPIC_API_KEY) available.push("claude");
   if (process.env.OPENAI_API_KEY) available.push("openai");
+  if (process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY) available.push("kimi");
   if (process.env.GEMINI_API_KEY) available.push("gemini");
 
   const preferred = canonicalProviderName(process.env.AI_PROVIDER || (available.includes("claude") ? "claude" : "ollama"));

@@ -9,6 +9,7 @@ const PROVIDER_LABELS: Record<AIProvider, string> = {
   openai: "GPT",
   gemini: "Gemini",
   ollama: "Qwen",
+  kimi: "Kimi",
 }
 
 function buildContext() {
