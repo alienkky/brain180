@@ -8,6 +8,7 @@ const PROVIDER_LABELS: Record<AIProvider, string> = {
   claude: "Claude",
   openai: "GPT",
   gemini: "Gemini",
+  ollama: "Qwen",
 }
 
 function buildContext() {
@@ -123,6 +124,8 @@ export default function ChatPanel() {
           setAvailableProviders(data.available)
           if (data.active && data.available.includes(data.active)) {
             setProvider(data.active)
+          } else {
+            setProvider(data.available[0])
           }
         }
       })

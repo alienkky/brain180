@@ -144,12 +144,74 @@ async function streamGemini(apiMessages, systemPrompt, res) {
   }
 }
 
+// ─── Provider: Ollama (local Qwen/Gemma/Hermes) ──────────────────
+
+async function streamOllama(apiMessages, systemPrompt, res) {
+  const baseUrl = (process.env.OLLAMA_BASE_URL || "http://localhost:11434").replace(/\/$/, "");
+  const model = process.env.OLLAMA_MODEL || "qwen2.5:14b";
+
+  const response = await fetch(`${baseUrl}/api/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      stream: true,
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...apiMessages.map((m) => ({ role: m.role, content: m.content })),
+      ],
+      options: {
+        temperature: Number(process.env.OLLAMA_TEMPERATURE || 0.4),
+        num_predict: Number(process.env.OLLAMA_MAX_TOKENS || 1024),
+      },
+    }),
+  });
+
+  if (!response.ok || !response.body) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`Ollama request failed: HTTP ${response.status}${detail ? ` - ${detail}` : ""}`);
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  for await (const chunk of response.body) {
+    buffer += decoder.decode(chunk, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      const data = JSON.parse(trimmed);
+      const text = data.message?.content;
+      if (text) {
+        res.write(`data: ${JSON.stringify({ text })}\n\n`);
+      }
+      if (data.done) return;
+    }
+  }
+}
+
 // ─── Provider resolution ────────────────────────────────────────
+
+function canonicalProviderName(value) {
+  const normalized = (value || "").toLowerCase().trim();
+  if (["ollama", "local", "qwen", "gemma", "hermes"].includes(normalized)) return "ollama";
+  if (["openai", "gpt", "codex"].includes(normalized)) return "openai";
+  if (["gemini", "google"].includes(normalized)) return "gemini";
+  if (["claude", "anthropic", ""].includes(normalized)) return "claude";
+  return normalized;
+}
 
 function resolveProvider(requested) {
   const explicit = requested || process.env.AI_PROVIDER || "";
   const normalized = explicit.toLowerCase().trim();
 
+  if (["ollama", "local", "qwen", "gemma", "hermes"].includes(normalized)) {
+    return { provider: "ollama", stream: streamOllama };
+  }
   if (["openai", "gpt", "codex"].includes(normalized)) {
     if (!process.env.OPENAI_API_KEY) return { error: "OPENAI_API_KEY not configured" };
     return { provider: "openai", stream: streamOpenAI };
@@ -169,12 +231,13 @@ function resolveProvider(requested) {
 // ─── GET /api/providers — which providers are available ─────────
 
 app.get("/api/providers", (_req, res) => {
-  const available = [];
+  const available = ["ollama"];
   if (process.env.ANTHROPIC_API_KEY) available.push("claude");
   if (process.env.OPENAI_API_KEY) available.push("openai");
   if (process.env.GEMINI_API_KEY) available.push("gemini");
 
-  const active = (process.env.AI_PROVIDER || "claude").toLowerCase();
+  const preferred = canonicalProviderName(process.env.AI_PROVIDER || (available.includes("claude") ? "claude" : "ollama"));
+  const active = available.includes(preferred) ? preferred : available[0];
   res.json({ available, active });
 });
 

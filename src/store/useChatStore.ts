@@ -1,6 +1,6 @@
 import { create } from "zustand"
 
-export type AIProvider = "claude" | "openai" | "gemini"
+export type AIProvider = "claude" | "openai" | "gemini" | "ollama"
 
 export interface ChatMessage {
   id: string
