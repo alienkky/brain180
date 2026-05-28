@@ -130,24 +130,64 @@ async function streamKimi(apiMessages, systemPrompt, res) {
     apiKey: process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY,
     baseURL: process.env.KIMI_BASE_URL || process.env.MOONSHOT_BASE_URL || "https://api.moonshot.ai/v1",
   });
+  const model = process.env.KIMI_MODEL || process.env.MOONSHOT_MODEL || "kimi-k2.6";
+  const maxTokens = Number(process.env.KIMI_MAX_TOKENS || process.env.MOONSHOT_MAX_TOKENS || 512);
+  const timeoutMs = Number(process.env.KIMI_TIMEOUT_MS || process.env.MOONSHOT_TIMEOUT_MS || 45000);
+  const streamEnabled = String(process.env.KIMI_STREAM || process.env.MOONSHOT_STREAM || "false").toLowerCase() === "true";
 
   const kimiMessages = [
     { role: "system", content: systemPrompt },
     ...apiMessages.map((m) => ({ role: m.role, content: m.content })),
   ];
 
-  const stream = await client.chat.completions.create({
-    model: process.env.KIMI_MODEL || process.env.MOONSHOT_MODEL || "kimi-k2.6",
-    max_tokens: Number(process.env.KIMI_MAX_TOKENS || process.env.MOONSHOT_MAX_TOKENS || 512),
+  const withTimeout = (promise) =>
+    new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error(`Kimi request timed out after ${timeoutMs}ms`)), timeoutMs);
+      promise.then(
+        (value) => {
+          clearTimeout(timeout);
+          resolve(value);
+        },
+        (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        },
+      );
+    });
+
+  if (!streamEnabled) {
+    const completion = await withTimeout(client.chat.completions.create({
+      model,
+      max_tokens: maxTokens,
+      messages: kimiMessages,
+      stream: false,
+    }));
+
+    const text = completion.choices?.[0]?.message?.content;
+    if (!text) {
+      throw new Error("Kimi returned an empty response");
+    }
+    res.write(`data: ${JSON.stringify({ text })}\n\n`);
+    return;
+  }
+
+  const stream = await withTimeout(client.chat.completions.create({
+    model,
+    max_tokens: maxTokens,
     messages: kimiMessages,
     stream: true,
-  });
+  }));
 
+  let wroteText = false;
   for await (const chunk of stream) {
     const text = chunk.choices[0]?.delta?.content;
     if (text) {
+      wroteText = true;
       res.write(`data: ${JSON.stringify({ text })}\n\n`);
     }
+  }
+  if (!wroteText) {
+    throw new Error("Kimi stream ended without text");
   }
 }
 
