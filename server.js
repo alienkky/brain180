@@ -137,7 +137,7 @@ async function streamKimi(apiMessages, systemPrompt, res) {
   ];
 
   const stream = await client.chat.completions.create({
-    model: process.env.KIMI_MODEL || process.env.MOONSHOT_MODEL || "kimi-k2-turbo-preview",
+    model: process.env.KIMI_MODEL || process.env.MOONSHOT_MODEL || "kimi-k2.6",
     max_tokens: Number(process.env.KIMI_MAX_TOKENS || process.env.MOONSHOT_MAX_TOKENS || 512),
     messages: kimiMessages,
     stream: true,
