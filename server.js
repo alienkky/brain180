@@ -148,7 +148,7 @@ async function streamGemini(apiMessages, systemPrompt, res) {
 
 async function streamOllama(apiMessages, systemPrompt, res) {
   const baseUrl = (process.env.OLLAMA_BASE_URL || "http://localhost:11434").replace(/\/$/, "");
-  const model = process.env.OLLAMA_MODEL || "qwen3:14b";
+  const model = process.env.OLLAMA_MODEL || "qwen3:30b";
   const headers = { "Content-Type": "application/json" };
 
   if (process.env.OLLAMA_AUTH_TOKEN) {
