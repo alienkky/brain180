@@ -149,7 +149,10 @@ async function streamKimi(apiMessages, systemPrompt, res) {
   const timeoutMs = Number(process.env.KIMI_TIMEOUT_MS || process.env.MOONSHOT_TIMEOUT_MS || 45000);
   const streamEnabled = String(process.env.KIMI_STREAM || process.env.MOONSHOT_STREAM || "false").toLowerCase() === "true";
   const thinkingType = String(process.env.KIMI_THINKING || process.env.MOONSHOT_THINKING || "disabled").toLowerCase();
-  const temperature = Number(process.env.KIMI_TEMPERATURE || process.env.MOONSHOT_TEMPERATURE || 0.3);
+  const envTemperature = process.env.KIMI_TEMPERATURE || process.env.MOONSHOT_TEMPERATURE;
+  // Moonshot's kimi-* thinking models reject any temperature other than 0.6.
+  const resolveTemperature = (requestedModel) =>
+    requestedModel.startsWith("kimi-") ? 0.6 : Number(envTemperature || 0.3);
 
   const kimiMessages = [
     { role: "system", content: systemPrompt },
@@ -203,7 +206,7 @@ async function streamKimi(apiMessages, systemPrompt, res) {
         messages: kimiMessages,
         response_format: { type: "text" },
         stream: false,
-        temperature,
+        temperature: resolveTemperature(requestedModel),
         ...(requestedModel.startsWith("kimi-") ? { thinking: { type: thinkingType } } : {}),
       }));
 
@@ -230,7 +233,7 @@ async function streamKimi(apiMessages, systemPrompt, res) {
     max_tokens: maxTokens,
     messages: kimiMessages,
     stream: true,
-    temperature,
+    temperature: resolveTemperature(model),
     ...(model.startsWith("kimi-") ? { thinking: { type: thinkingType } } : {}),
   }));
 
