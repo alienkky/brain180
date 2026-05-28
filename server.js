@@ -148,7 +148,7 @@ async function streamGemini(apiMessages, systemPrompt, res) {
 
 async function streamOllama(apiMessages, systemPrompt, res) {
   const baseUrl = (process.env.OLLAMA_BASE_URL || "http://localhost:11434").replace(/\/$/, "");
-  const model = process.env.OLLAMA_MODEL || "qwen3:30b";
+  const model = process.env.OLLAMA_MODEL || "qwen3.5:35b";
   const headers = { "Content-Type": "application/json" };
 
   if (process.env.OLLAMA_AUTH_TOKEN) {
@@ -207,7 +207,7 @@ async function streamOllama(apiMessages, systemPrompt, res) {
 
 function canonicalProviderName(value) {
   const normalized = (value || "").toLowerCase().trim();
-  if (["ollama", "local", "qwen", "gemma", "hermes"].includes(normalized)) return "ollama";
+  if (["ollama", "local", "qwen", "qwen3.5", "qwen35", "gemma", "hermes"].includes(normalized)) return "ollama";
   if (["openai", "gpt", "codex"].includes(normalized)) return "openai";
   if (["gemini", "google"].includes(normalized)) return "gemini";
   if (["claude", "anthropic", ""].includes(normalized)) return "claude";
@@ -218,7 +218,7 @@ function resolveProvider(requested) {
   const explicit = requested || process.env.AI_PROVIDER || "";
   const normalized = explicit.toLowerCase().trim();
 
-  if (["ollama", "local", "qwen", "gemma", "hermes"].includes(normalized)) {
+  if (["ollama", "local", "qwen", "qwen3.5", "qwen35", "gemma", "hermes"].includes(normalized)) {
     return { provider: "ollama", stream: streamOllama };
   }
   if (["openai", "gpt", "codex"].includes(normalized)) {
