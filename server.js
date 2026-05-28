@@ -402,15 +402,33 @@ app.post("/api/chat", async (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+
+  const writeSse = (chunk) => {
+    if (!res.writableEnded && !res.destroyed) {
+      res.write(chunk);
+    }
+  };
+
+  res.flushHeaders?.();
+  writeSse(": connected\n\n");
+
+  const heartbeat = setInterval(() => {
+    writeSse(": waiting\n\n");
+  }, 10000);
+  res.on("close", () => clearInterval(heartbeat));
 
   try {
     await resolved.stream(apiMessages, SYSTEM_PROMPT, res);
-    res.write("data: [DONE]\n\n");
-    res.end();
+    writeSse("data: [DONE]\n\n");
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
-    res.write(`data: ${JSON.stringify({ error: msg })}\n\n`);
-    res.end();
+    writeSse(`data: ${JSON.stringify({ error: msg })}\n\n`);
+  } finally {
+    clearInterval(heartbeat);
+    if (!res.writableEnded && !res.destroyed) {
+      res.end();
+    }
   }
 });
 
