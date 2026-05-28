@@ -131,10 +131,13 @@ async function streamKimi(apiMessages, systemPrompt, res) {
     baseURL: process.env.KIMI_BASE_URL || process.env.MOONSHOT_BASE_URL || "https://api.moonshot.ai/v1",
   });
   const model = process.env.KIMI_MODEL || process.env.MOONSHOT_MODEL || "kimi-k2.6";
+  const fallbackModel = process.env.KIMI_FALLBACK_MODEL || process.env.MOONSHOT_FALLBACK_MODEL || "moonshot-v1-8k";
   const maxTokens = Number(process.env.KIMI_MAX_TOKENS || process.env.MOONSHOT_MAX_TOKENS || 512);
   const retryMaxTokens = Number(process.env.KIMI_RETRY_MAX_TOKENS || process.env.MOONSHOT_RETRY_MAX_TOKENS || Math.max(maxTokens * 2, 1024));
   const timeoutMs = Number(process.env.KIMI_TIMEOUT_MS || process.env.MOONSHOT_TIMEOUT_MS || 45000);
   const streamEnabled = String(process.env.KIMI_STREAM || process.env.MOONSHOT_STREAM || "false").toLowerCase() === "true";
+  const thinkingType = String(process.env.KIMI_THINKING || process.env.MOONSHOT_THINKING || "disabled").toLowerCase();
+  const temperature = Number(process.env.KIMI_TEMPERATURE || process.env.MOONSHOT_TEMPERATURE || 0.3);
 
   const kimiMessages = [
     { role: "system", content: systemPrompt },
@@ -180,12 +183,16 @@ async function streamKimi(apiMessages, systemPrompt, res) {
   };
 
   if (!streamEnabled) {
-    const createCompletion = (tokens) =>
+    const createCompletion = (tokens, requestedModel = model) =>
       withTimeout(client.chat.completions.create({
-        model,
+        model: requestedModel,
+        max_completion_tokens: tokens,
         max_tokens: tokens,
         messages: kimiMessages,
+        response_format: { type: "text" },
         stream: false,
+        temperature,
+        ...(requestedModel.startsWith("kimi-") ? { thinking: { type: thinkingType } } : {}),
       }));
 
     let completion = await createCompletion(maxTokens);
@@ -194,8 +201,12 @@ async function streamKimi(apiMessages, systemPrompt, res) {
       completion = await createCompletion(retryMaxTokens);
       text = extractText(completion);
     }
+    if (!text && fallbackModel && fallbackModel !== model) {
+      completion = await createCompletion(retryMaxTokens, fallbackModel);
+      text = extractText(completion);
+    }
     if (!text) {
-      throw new Error(`Kimi returned an empty response. Try raising MOONSHOT_MAX_TOKENS to ${retryMaxTokens}.`);
+      throw new Error("Kimi returned an empty response after retry. Check Moonshot balance, model access, or Railway deploy logs.");
     }
     res.write(`data: ${JSON.stringify({ text })}\n\n`);
     return;
@@ -203,9 +214,12 @@ async function streamKimi(apiMessages, systemPrompt, res) {
 
   const stream = await withTimeout(client.chat.completions.create({
     model,
+    max_completion_tokens: maxTokens,
     max_tokens: maxTokens,
     messages: kimiMessages,
     stream: true,
+    temperature,
+    ...(model.startsWith("kimi-") ? { thinking: { type: thinkingType } } : {}),
   }));
 
   let wroteText = false;
