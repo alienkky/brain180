@@ -6,6 +6,7 @@ export interface ChatMessage {
   id: string
   role: "user" | "assistant"
   content: string
+  status?: string
 }
 
 interface ChatState {
@@ -19,7 +20,8 @@ interface ChatState {
   setProvider: (p: AIProvider) => void
   setAvailableProviders: (ps: AIProvider[]) => void
   addUserMessage: (content: string) => void
-  startStreaming: () => void
+  startStreaming: (status?: string) => void
+  setLastAssistantStatus: (status: string) => void
   appendToLastAssistant: (text: string) => void
   finishStreaming: () => void
   clearMessages: () => void
@@ -45,12 +47,23 @@ export const useChatStore = create<ChatState>((set) => ({
     }))
   },
 
-  startStreaming: () => {
+  startStreaming: (status) => {
     const id = `msg-${++msgCounter}`
     set((s) => ({
       isStreaming: true,
-      messages: [...s.messages, { id, role: "assistant", content: "" }],
+      messages: [...s.messages, { id, role: "assistant", content: "", status }],
     }))
+  },
+
+  setLastAssistantStatus: (status) => {
+    set((s) => {
+      const msgs = [...s.messages]
+      const last = msgs[msgs.length - 1]
+      if (last?.role === "assistant" && !last.content) {
+        msgs[msgs.length - 1] = { ...last, status }
+      }
+      return { messages: msgs }
+    })
   },
 
   appendToLastAssistant: (text) => {
@@ -58,7 +71,7 @@ export const useChatStore = create<ChatState>((set) => ({
       const msgs = [...s.messages]
       const last = msgs[msgs.length - 1]
       if (last?.role === "assistant") {
-        msgs[msgs.length - 1] = { ...last, content: last.content + text }
+        msgs[msgs.length - 1] = { ...last, content: last.content + text, status: undefined }
       }
       return { messages: msgs }
     })

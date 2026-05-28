@@ -200,17 +200,39 @@ export default function ChatPanel() {
     const text = input.trim()
     if (!text || isStreaming) return
 
+    const providerLabel = PROVIDER_LABELS[provider]
+    const startedAt = Date.now()
+    let statusTimer: number | undefined
+    const stopStatusTimer = () => {
+      if (statusTimer !== undefined) {
+        window.clearInterval(statusTimer)
+        statusTimer = undefined
+      }
+    }
+    const updateStatus = () => {
+      const elapsedSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
+      useChatStore.getState().setLastAssistantStatus(`${providerLabel}에 요청 중... ${elapsedSeconds}초`)
+    }
+
     useChatStore.getState().addUserMessage(text)
-    useChatStore.getState().startStreaming()
+    useChatStore.getState().startStreaming(`${providerLabel}에 연결 중...`)
+    statusTimer = window.setInterval(updateStatus, 1000)
     setInput("")
 
     sendChat(
       text,
       provider,
-      (chunk) => useChatStore.getState().appendToLastAssistant(chunk),
-      () => useChatStore.getState().finishStreaming(),
+      (chunk) => {
+        stopStatusTimer()
+        useChatStore.getState().appendToLastAssistant(chunk)
+      },
+      () => {
+        stopStatusTimer()
+        useChatStore.getState().finishStreaming()
+      },
       (err) => {
-        useChatStore.getState().appendToLastAssistant(`\n\n⚠️ ${err}`)
+        stopStatusTimer()
+        useChatStore.getState().appendToLastAssistant(`\n\n오류: ${err}`)
         useChatStore.getState().finishStreaming()
       },
     )
@@ -443,10 +465,16 @@ export default function ChatPanel() {
                     }
               }
             >
-              {msg.content || (
+              {msg.content || msg.status || (
                 <span
                   className="inline-block w-1.5 h-4 animate-pulse"
                   style={{ backgroundColor: "var(--color-brain-text-soft)" }}
+                />
+              )}
+              {!msg.content && msg.status && (
+                <span
+                  className="ml-2 inline-block w-1.5 h-1.5 rounded-full animate-pulse align-middle"
+                  style={{ backgroundColor: "var(--color-brain-accent)" }}
                 />
               )}
             </div>
