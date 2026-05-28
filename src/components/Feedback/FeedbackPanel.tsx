@@ -79,7 +79,7 @@ export default function FeedbackPanel() {
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 left-6 px-4 py-3 rounded-full flex items-center gap-2 cursor-pointer transition-all z-50"
+        className="fixed bottom-24 left-6 px-4 py-3 rounded-full flex items-center gap-2 cursor-pointer transition-all z-50"
         style={{
           backgroundColor: "var(--color-brain-sage)",
           color: "#fff",

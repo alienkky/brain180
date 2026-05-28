@@ -12,6 +12,10 @@ const PROVIDER_LABELS: Record<AIProvider, string> = {
   kimi: "Kimi",
 }
 
+const PANEL_WIDTH = 400
+const PANEL_HEIGHT = 560
+const PANEL_MARGIN = 24
+
 function buildContext() {
   const { currentMap } = useStore.getState()
   const { userNodes, userEdges } = usePracticeStore.getState()
@@ -114,8 +118,21 @@ async function sendChat(
 export default function ChatPanel() {
   const { messages, isStreaming, isOpen, provider, availableProviders, setOpen, setProvider, setAvailableProviders } = useChatStore()
   const [input, setInput] = useState("")
+  const [panelPosition, setPanelPosition] = useState<{ x: number; y: number } | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const dragOffsetRef = useRef({ x: 0, y: 0 })
+
+  const clampPosition = (x: number, y: number) => {
+    const maxX = Math.max(PANEL_MARGIN, window.innerWidth - PANEL_WIDTH - PANEL_MARGIN)
+    const maxY = Math.max(PANEL_MARGIN, window.innerHeight - PANEL_HEIGHT - PANEL_MARGIN)
+    return {
+      x: Math.min(Math.max(PANEL_MARGIN, x), maxX),
+      y: Math.min(Math.max(PANEL_MARGIN, y), maxY),
+    }
+  }
 
   useEffect(() => {
     fetch("/api/providers")
@@ -142,6 +159,42 @@ export default function ChatPanel() {
   useEffect(() => {
     if (isOpen) inputRef.current?.focus()
   }, [isOpen])
+
+  useEffect(() => {
+    if (!isDragging) return
+
+    const handlePointerMove = (event: PointerEvent) => {
+      setPanelPosition(
+        clampPosition(
+          event.clientX - dragOffsetRef.current.x,
+          event.clientY - dragOffsetRef.current.y,
+        ),
+      )
+    }
+
+    const handlePointerUp = () => setIsDragging(false)
+
+    window.addEventListener("pointermove", handlePointerMove)
+    window.addEventListener("pointerup", handlePointerUp)
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove)
+      window.removeEventListener("pointerup", handlePointerUp)
+    }
+  }, [isDragging])
+
+  const handleDragStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || !panelRef.current) return
+    const target = event.target as HTMLElement
+    if (target.closest("button")) return
+
+    const rect = panelRef.current.getBoundingClientRect()
+    dragOffsetRef.current = {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    }
+    setPanelPosition(clampPosition(rect.left, rect.top))
+    setIsDragging(true)
+  }
 
   const handleSend = () => {
     const text = input.trim()
@@ -197,10 +250,15 @@ export default function ChatPanel() {
 
   return (
     <div
-      className="fixed bottom-6 right-6 flex flex-col rounded-2xl border overflow-hidden z-50"
+      ref={panelRef}
+      className="fixed flex flex-col rounded-2xl border overflow-hidden z-50"
       style={{
-        width: 400,
-        height: 560,
+        width: PANEL_WIDTH,
+        height: PANEL_HEIGHT,
+        left: panelPosition ? panelPosition.x : undefined,
+        top: panelPosition ? panelPosition.y : undefined,
+        right: panelPosition ? undefined : PANEL_MARGIN,
+        bottom: panelPosition ? undefined : PANEL_MARGIN,
         backgroundColor: "var(--color-brain-surface)",
         borderColor: "var(--color-brain-border)",
         boxShadow: "0 16px 48px rgba(42, 36, 29, 0.12), 0 4px 12px rgba(42, 36, 29, 0.06)",
@@ -208,7 +266,8 @@ export default function ChatPanel() {
     >
       {/* Header */}
       <div
-        className="flex items-center justify-between px-5 py-3.5 border-b"
+        onPointerDown={handleDragStart}
+        className="flex items-center justify-between px-5 py-3.5 border-b cursor-move select-none"
         style={{
           borderColor: "var(--color-brain-border)",
           backgroundColor: "var(--color-brain-surface-soft)",
