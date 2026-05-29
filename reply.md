@@ -1,24 +1,24 @@
-## 🛸 스킬 발전 사항 일일 보고 — 2026-05-28 (KST)
+## 🛸 스킬 발전 사항 일일 보고 — 2026-05-29 (KST)
 
 ### 📡 최신 동향
 
-**Claude Code v2.1.152~v2.1.154 주요 업데이트 (2026년 5월)**
+**Claude Code 스킬 시스템 공식 문서 기준 최신 확인 사항 (2026-05-29)**
 
-1. **Skills 2.0 통합 완료**: custom commands와 skills가 완전히 통합됨. `.claude/commands/deploy.md`와 `.claude/skills/deploy/SKILL.md`가 동일하게 `/deploy`를 생성하며 동작함. 기존 commands 파일은 자동 호환.
+1. **AgentSkills 오픈 스탠다드 채택 공식화**: Claude Code 스킬이 [agentskills.io](https://agentskills.io) 오픈 스탠다드를 따름. Claude Code, Codex, Gemini CLI, Cursor 등 여러 AI 도구에서 동일한 `SKILL.md` 형식으로 동작. **크로스 툴 스킬 재사용 가능**.
 
-2. **신규 보안 플러그인 출시 (2026-05-27)**: `security-guidance` 플러그인이 공식 출시됨 (무료, 전체 플랜 지원). `eval()`, `os.system()`, SQL 인젝션, XSS 등 25개 고위험 취약점 클래스를 실시간 탐지. 내부 테스트에서 PR 보안 리뷰 코멘트 **30~40% 감소** 효과 확인.
+2. **`/run-skill-generator` 신규 번들 스킬 확인**: 프로젝트의 앱 실행 레시피를 자동으로 기록하여 `.claude/skills/run-<name>/`에 저장. 이후 `/run`, `/verify` 실행 시 재발견 없이 저장된 레시피 사용. v2.1.145 이상 필요.
 
-3. **Opus 4.8 기본 모델 채택**: `/effort xhigh` 레벨에서 Opus 4.8 사용 가능. Fast mode에서 2x 요금으로 2.5x 속도 제공.
+3. **`paths:` 프론트매터 신규 필드**: 스킬이 활성화되는 파일 패턴(glob)을 지정. 특정 경로 파일 작업 시에만 스킬 자동 로드. **모노레포 지원 강화**.
 
-4. **`/simplify` 재설계**: 전체 코드 리뷰가 아닌 정리(cleanup) 전용으로 변경됨 (재사용, 단순화, 효율, 고도 정리 후 자동 적용).
+4. **`${CLAUDE_SKILL_DIR}` 변수 추가**: 스킬의 `SKILL.md` 파일이 위치한 디렉토리 경로. 스킬에 번들된 스크립트/파일을 현재 작업 디렉토리에 관계없이 참조 가능.
 
-5. **`/goal` 명령 추가**: 완료 조건을 설정하면 Claude가 목표 달성까지 자동 실행. 경과 시간/턴/토큰 실시간 추적.
+5. **`${CLAUDE_EFFORT}` 변수 추가**: 현재 effort 수준(`low`/`medium`/`high`/`xhigh`/`max`)을 스킬 내에서 참조 가능. Ultracode는 `xhigh`로 보고됨.
 
-6. **Plugin 생태계 성숙**: `disallowed-tools` frontmatter, `skillOverrides` 설정, plugin 의존성 관리(`prune`, `enable`, `disable` 강제), 테마 번들 지원 추가.
+6. **`disallowed-tools` 공식 문서 확인**: 특정 스킬 활성 중 도구 제거. 백그라운드 루프 스킬에서 `AskUserQuestion`을 금지하는 용도가 공식 예시. 제한은 사용자 다음 메시지 전송 시 해제.
 
-7. **MCP 개선**: `alwaysLoad` 옵션 추가로 도구 검색 없이 항상 로드 가능. stdio 서버에 `CLAUDE_PROJECT_DIR` 환경변수 자동 주입.
+7. **Anthropic 공식 11개 knowledge-work 플러그인 오픈소스화**: `anthropics/knowledge-work-plugins` 리포에서 영업, 법무, 재무, 데이터, 제품 관리 분야 커버.
 
-8. **OpenTelemetry 강화**: `claude_code.skill_activated` 이벤트, `agent_id`/`parent_agent_id` span 속성 추가로 멀티에이전트 추적 개선.
+8. **커뮤니티 스킬 생태계 급성장**: [VoltAgent/awesome-agent-skills](https://github.com/VoltAgent/awesome-agent-skills) 1,000+ 스킬, [Samarth0211/awesome-claude-skills-2026](https://github.com/Samarth0211/awesome-claude-skills-2026) 2,300+ 스킬. [awesomeskills.dev](https://www.awesomeskills.dev) 검색 디렉토리 운영 중.
 
 ---
 
@@ -29,30 +29,32 @@
 |-------|------|-----|
 | `session-start-hook` | ✅ 설치됨 | Claude Code 웹 세션 시작 훅 생성 지원 |
 
-**시스템 번들 스킬 (현재 세션 기준)**
+**시스템 번들 스킬 (2026-05-29 현재 세션 기준)**
 | 스킬명 | 유형 | 설명 |
 |-------|------|-----|
 | `autopilot` | 번들 | 엔드투엔드 작업 자동 실행 + PR 생성 |
 | `bugfix` | 번들 | 재현 우선 버그 수정 워크플로 |
-| `dashboard` | 번들 | 데이터 소스 기반 대시보드 생성 |
-| `docs` | 번들 | 문서 생성 및 업데이트 |
-| `investigate` | 번들 | 근본 원인 조사 보고서 |
 | `deep-research` | 번들 | 멀티소스 팩트체크 리서치 보고서 |
 | `update-config` | 번들 | settings.json 설정 자동화 |
 | `keybindings-help` | 번들 | 키보드 단축키 설정 |
 | `verify` | 번들 | 코드 변경 사항 검증 |
 | `code-review` | 번들 | 코드 리뷰 (--fix, --comment 옵션) |
-| `simplify` | 번들 | 코드 정리 자동 적용 |
+| `simplify` | 번들 | 코드 정리 자동 적용 (reuse/simplification/efficiency) |
 | `fewer-permission-prompts` | 번들 | 권한 프롬프트 최소화 설정 |
 | `loop` | 번들 | 반복 작업 예약 실행 |
-| `claude-api` | 번들 | Claude API/Anthropic SDK 개발 지원 |
-| `run` | 번들 | 앱 실행 및 동작 확인 |
+| `claude-api` | 번들 | Claude API/Anthropic SDK + Opus 4.8 마이그레이션 |
+| `run` | 번들 | 앱 실행 및 동작 확인 (v2.1.145+) |
+| `verify` | 번들 | 변경 사항 실제 앱으로 검증 (v2.1.145+) |
 | `init` | 번들 | CLAUDE.md 초기화 |
 | `review` | 번들 | PR 리뷰 |
 | `security-review` | 번들 | 보안 리뷰 |
+| `session-start-hook` | 번들 | 웹 세션 시작 훅 생성 |
 
 **프로젝트 수준 스킬 (brain180)**
-- 없음 (`.claude/commands/` 또는 `.claude/skills/` 디렉토리 미존재)
+- 없음 (`.claude/skills/` 디렉토리 미존재)
+
+**어제(2026-05-28)와 비교한 변경사항**
+- `run-skill-generator` 번들 스킬이 공식 문서에서 `/run`, `/verify`와 함께 묶음 확인됨 (어제 목록에 누락)
 
 ---
 
@@ -60,40 +62,46 @@
 
 | 스킬명 | 유형 | 우선순위 | 이유 |
 |-------|------|---------|-----|
-| `security-guidance` plugin | 신규 플러그인 | 🔴 긴급 | 2026-05-27 공식 출시. Brain180 Claude API 코드 개발 시 보안 취약점 실시간 탐지. PR 보안 이슈 30~40% 감소 효과 확인됨 |
-| `alien-consulting` | 프로젝트 커스텀 스킬 | 🟠 높음 | WHY-HOW-WHAT 컨설팅 워크플로를 스킬로 정의하면 27명 에이전트 시스템에서 일관된 컨설팅 패턴 실행 가능 |
-| `cognitive-map-extractor` | 프로젝트 커스텀 스킬 | 🟠 높음 | Brain180 핵심 기능인 텍스트→인지구조 추출을 `/extract-cognitive-map` 스킬로 표준화. Claude API 호출 패턴 재사용 |
-| `agent-orchestrator` | 프로젝트 커스텀 스킬 | 🟡 중간 | 27명 에이전트 시스템 오케스트레이션을 `/orchestrate` 스킬로 정의. `/goal` 명령과 연계하여 자동화 가능 |
-| `multica-reporter` | 프로젝트 커스텀 스킬 | 🟡 중간 | 이 일일 보고 작업 자체를 스킬로 표준화. `/daily-report` 명령으로 매일 같은 절차 자동 실행 |
-| Skills Eval 테스트 | 기존 스킬 개선 | 🟡 중간 | Skills 2.0의 A/B 테스트 및 eval 기능을 사용하여 `session-start-hook` 스킬 효과 측정 |
-| `OTel + multica` 통합 | 인프라 | 🔵 낮음 | [가설] Claude Code의 `claude_code.skill_activated` OpenTelemetry 이벤트를 multica 이슈 자동 업데이트에 연결 가능성 검토 필요 |
+| `run-skill-generator` 실행 | 기존 번들 활용 | 🔴 긴급 | brain180은 Vite 서버 + port 5173 구성. `/run-skill-generator` 실행 시 `.claude/skills/run-brain180/` 자동 생성. 이후 `/run`, `/verify` 재발견 없이 일관된 실행 보장 |
+| `alien-consulting` | 프로젝트 커스텀 스킬 | 🟠 높음 | WHY-HOW-WHAT 3레이어 컨설팅 프레임워크를 `SKILL.md`로 정의. `disable-model-invocation: true`로 수동 트리거 전용 설정 권장 |
+| `cognitive-map-extractor` | 프로젝트 커스텀 스킬 | 🟠 높음 | Brain180 핵심 기능. `paths: src/data/**` 프론트매터로 데이터 파일 작업 시 자동 활성화. `${CLAUDE_SKILL_DIR}/templates/` 활용 권장 |
+| `agent-orchestrator` | 커스텀 스킬 (Alien Agentic) | 🟡 중간 | `context: fork` + `disallowed-tools: AskUserQuestion`으로 27명 에이전트 백그라운드 자율 실행 스킬. `/loop`와 조합하여 주기적 오케스트레이션 구현 |
+| `multica-reporter` | 커스텀 스킬 (이 작업 자동화) | 🟡 중간 | 이 일일 보고 절차 전체를 `SKILL.md`로 작성. `disable-model-invocation: true` + `!git log --oneline -5` 동적 컨텍스트 주입으로 매일 자동화 가능 |
+| `agentskills.io` 스킬 검토 | 외부 스킬 도입 | 🟡 중간 | agentskills.io 표준 준수 스킬은 Claude Code에서 바로 사용 가능. VoltAgent/awesome-agent-skills 내 consulting/automation 카테고리 검토 권장 |
+| `disallowed-tools` 적용 | 기존 스킬 개선 | 🔵 낮음 | 현재 `session-start-hook` 스킬에 `disallowed-tools: Bash` 추가 검토. 훅 설정 스킬이 의도치 않은 Bash 실행 방지 |
+| OpenTelemetry + multica 연동 | 인프라 | 🔵 낮음 | [가설] `claude_code.skill_activated` OTel 이벤트를 multica 이슈 자동 업데이트에 연결 가능성. multica daemon이 이 이벤트를 수신할 수 있다면 스킬 활성화마다 이슈 상태 자동 갱신 가능 |
 
 ---
 
 ### 📋 오늘의 액션 아이템
 
-1. **[즉시] `security-guidance` 플러그인 설치**
+1. **[즉시] `/run-skill-generator` 실행**
    ```bash
-   # Claude Code 세션에서 실행
-   /plugins
-   # Marketplace에서 security-guidance 검색 후 설치
+   # brain180 프로젝트에서 Claude Code 세션 내 실행
+   /run-skill-generator
    ```
-   Brain180 Claude API 코드 및 JS/TS 컴포넌트 개발 시 즉시 적용 가능.
+   brain180의 Vite 개발 서버 실행 레시피를 자동 기록. `launch.json`의 `npx vite --port 5173` 설정을 참고하여 진행.
 
-2. **[이번 주] `alien-consulting` 커스텀 스킬 초안 작성**
-   WHY-HOW-WHAT 3레이어 컨설팅 프레임워크를 스킬 frontmatter와 함께 정의.
-   `user-invocable: true` 설정으로 `/alien-consulting` 명령 생성.
+2. **[이번 주] `alien-consulting` 스킬 초안 작성**
+   ```
+   ~/.claude/skills/alien-consulting/SKILL.md
+   ```
+   WHY-HOW-WHAT 3레이어 + 고객 브리프 파싱 + 컨설팅 문서 생성 포함.
+   `disable-model-invocation: true`로 수동 호출 전용 설정.
 
 3. **[이번 주] `cognitive-map-extractor` 스킬 작성**
-   Brain180 프로젝트 내 `.claude/skills/cognitive-map-extractor/SKILL.md` 생성.
-   `PatternExtractor.ts`와 연동하는 표준 프롬프트 템플릿 포함.
+   ```
+   /home/user/brain180/.claude/skills/cognitive-map-extractor/SKILL.md
+   ```
+   `paths: src/data/**,src/core/**` 프론트매터로 Brain180 핵심 파일 작업 시 자동 로드.
 
-4. **[다음 주] `/goal` 명령 활용 자동화 워크플로 설계**
-   `/goal` 명령으로 "Brain180 MVP 완성"을 목표로 설정하고 멀티에이전트 오케스트레이션 실험.
+4. **[다음 주] agentskills.io 스킬 디렉토리 검토**
+   [awesomeskills.dev](https://www.awesomeskills.dev/en) 방문 → consulting/automation 필터로 Alien Agentic에 바로 적용 가능한 스킬 선별.
 
-5. **[확인 필요] multica 0.3.11 인증 설정**
-   이 환경에서 `multica login`으로 인증 후 알림 수신 설정 검토.
+5. **[확인 필요] multica CLI 인증 설정**
+   이 원격 실행 환경에서 `multica setup cloud` 실행 후 브라우저 OAuth 인증 완료 필요.
+   현재 환경: `server_url`, `workspace_id` 미설정 상태.
 
 ---
 
-*조사 출처: [Claude Code Changelog](https://code.claude.com/docs/en/changelog) · [Skills Docs](https://code.claude.com/docs/en/skills) · [Security Plugin 발표](https://cybersecuritynews.com/anthropic-updates-claude-code/) · [Releasebot May 2026](https://releasebot.io/updates/anthropic/claude-code)*
+*조사 출처: [Claude Code Skills Docs](https://code.claude.com/docs/en/skills) · [Claude Code Changelog (raw)](https://raw.githubusercontent.com/anthropics/claude-code/refs/heads/main/CHANGELOG.md) · [VoltAgent/awesome-agent-skills](https://github.com/VoltAgent/awesome-agent-skills) · [awesomeskills.dev](https://www.awesomeskills.dev/en) · [Releasebot Anthropic](https://releasebot.io/updates/anthropic/claude-code)*
