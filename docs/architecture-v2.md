@@ -1,7 +1,7 @@
 # Brain180 v2 — System Architecture (TO-BE)
 
 > Source spec: [`docs/system-v2.json`](./system-v2.json) — 60 nodes / 79 edges
-> Owner: 연다리 [통합설계] (integration-specialist) · 2026-05-30
+> Owner: 연다리 [통합설계] (integration-specialist)
 > Parent issue: ALI-60 — 버전2 브레인 180 프로그램 개발 착수
 
 ## 0. 변경 요약 (v1 → v2)
@@ -242,14 +242,16 @@ WHAT (HOW 완료 후 promote):
 - AI 호출은 사용자 본인 세션에서만, `APIUsageLog`로 토큰·비용 누적. 일일 한도 초과 시 자동 차단.
 - 개인정보(성별·나이·직업)는 학습 분석 외 용도 사용 금지. 리포트 익명화 옵션 제공.
 
-## 8. 첫 4주 단계별 계획
+## 8. 단계별 의존 순서 (시간 제약 없음)
 
-| Week | HOW 완료물 | WHAT 시작 |
+| 단계 | HOW 완료물 | WHAT 시작 |
 |---|---|---|
-| 1 | 프로세스 매핑 · DB 스키마 초안 · 와이어 v0 | Auth 라우트 + Drizzle 마이그레이션 |
-| 2 | 상태기계 · KPI 확정 · 와이어 v1 | Billing(토스) + Library/Practice 확장 |
-| 3 | — | Canvas 3-mode + Tutor 프롬프트 v1 + 알림 |
-| 4 | — | Assessment/Report + Admin + QA E2E |
+| A | 프로세스 매핑 · DB 스키마 초안 · 와이어 v0 | Auth 라우트 + Drizzle 마이그레이션 |
+| B | 상태기계 · KPI 확정 · 와이어 v1 | Billing(토스) + Library/Practice 확장 |
+| C | — | Canvas 3-mode + Tutor 프롬프트 v1 + 알림 |
+| D | — | Assessment/Report + Admin + QA E2E |
+
+각 단계는 직선이 아니라 선후 의존을 의미. 동일 단계 내 산출물은 병렬 가능, 다음 단계는 직전 단계 완결 후 시작.
 
 ---
 

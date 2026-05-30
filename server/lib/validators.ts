@@ -59,7 +59,7 @@ export const PatchSessionBody = z.object({
   self_evaluation: Axis.extend({ note: z.string().max(2000) }).optional(),
 });
 
-// CanvasJSON v1 (free-form mode — Day-1)
+// CanvasJSON v1 (free-form mode — MVP)
 export const CanvasNode = z.object({
   id: z.string().min(1).max(64),
   type: z.enum(["concept", "anchor", "bridge", "branch"]),

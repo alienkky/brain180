@@ -1,7 +1,7 @@
 import { Router } from "express";
 
 // Owner: ALI-66 남말씨[글말] (system prompts) + ALI-67 방연동[MCP] (Anthropic wrapper)
-// Day-1: basic tutor chat + 5-star rating. Streaming + caching → Day-2+.
+// MVP: basic tutor chat + 5-star rating. Streaming + caching → MVP 이후.
 
 export const tutorRouter = Router();
 

@@ -1,6 +1,6 @@
 # Brain180 v2 — Integration Blueprint
 
-> Owner: 연다리 [통합설계] (integration-specialist) · 2026-05-30
+> Owner: 연다리 [통합설계] (integration-specialist).
 > Implementation: ALI-67 (방연동[MCP]).
 > 본 문서는 *블루프린트* — 어떤 외부 시스템을, 어떤 권한으로, 어떤 데이터 방향으로, 어디서 익명화하여 연결할지 정의. 구체 코드(라우트, 클라이언트 래퍼)는 ALI-67이 본 문서를 입력으로 받아 구현.
 
@@ -12,10 +12,10 @@
 | OpenAI API | 폴백/임베딩(선택) | 보조 | 직접 SDK (`openai`) | v1 의존성 유지, 기본 비활성 |
 | Google Gemini | 분석용 보조(선택) | 보조 | 직접 SDK (`@google/genai`) | v1 의존성 유지, 기본 비활성 |
 | PostgreSQL (Neon) | 운영 DB | 항시 | DATABASE_URL | Drizzle ORM |
-| Resend | 트랜잭션 이메일(인증·비번재설정·리마인더) | 이벤트 트리거 | 직접 API | Day-1 MVP 컷, 인프라만 준비 |
-| Toss Payments | 카드/카카오페이 결제 | 결제 이벤트 | 직접 API + Webhook | Day-1 MVP 컷, 인프라만 준비 |
-| Cloudflare R2 | 캔버스 아티팩트·내보내기 저장 | 사용자 저장 시 | S3 호환 SDK (`@aws-sdk/client-s3`) | Day-1: 로컬 디스크 폴백, 운영은 R2 |
-| Web Push (VAPID) | 알림 푸시 | 알림 이벤트 | 표준 Web Push | Day-1 MVP 컷 |
+| Resend | 트랜잭션 이메일(인증·비번재설정·리마인더) | 이벤트 트리거 | 직접 API | MVP 컷, 인프라만 준비 |
+| Toss Payments | 카드/카카오페이 결제 | 결제 이벤트 | 직접 API + Webhook | MVP 컷, 인프라만 준비 |
+| Cloudflare R2 | 캔버스 아티팩트·내보내기 저장 | 사용자 저장 시 | S3 호환 SDK (`@aws-sdk/client-s3`) | MVP: 로컬 디스크 폴백, 운영은 R2 |
+| Web Push (VAPID) | 알림 푸시 | 알림 이벤트 | 표준 Web Push | MVP 컷 |
 | Railway | 배포 | 항시 | railway.json | 기존 설정 활용 |
 
 ## 2. 인증 방식 · 권한 범위 (최소 권한)
@@ -68,7 +68,7 @@
 - 외부 AI 호출: `userId` → `sha256(userId + ANON_SALT)` 로 변환 후 송신.
 - 외부 결제: `orderId` 는 UUID v7, `customerKey` 는 동일 해시.
 - 외부 스토리지 키: `artifacts/{uuid}/{filename}` — userId 미노출.
-- GrowthReport 익명화 옵션 (Day-1 컷, 컬럼만 준비).
+- GrowthReport 익명화 옵션 (MVP 컷, 컬럼만 준비).
 
 ## 4. Webhook · 인입 트래픽 보안
 
@@ -77,15 +77,15 @@
 | `POST /webhooks/toss` | Toss Payments | `Toss-Signature` HMAC 검증 (`TOSS_WEBHOOK_SECRET`) | 이벤트 ID로 dedupe 테이블 검사 |
 | `POST /webhooks/resend` (선택) | Resend | 서명 검증 | 동일 |
 
-Day-1 MVP 컷 — webhook 라우트는 405 응답 + 로그만. 결제 인프라 활성 시 ALI-67이 검증 로직 추가.
+MVP 컷 — webhook 라우트는 405 응답 + 로그만. 결제 인프라 활성 시 ALI-67이 검증 로직 추가.
 
 ## 5. .env 구조
 
 [../../.env.example](../../.env.example) 참조. 모든 키 인벤토리만, 값은 비움.
 
-## 6. Day-1 구현 최소선 (ALI-67 인입)
+## 6. MVP 구현 최소선 (ALI-67 인입)
 
-ALI-67 방연동이 Day-1 마감(2026-05-31T14:59Z) 기준 구현해야 할 *최소* 범위:
+ALI-67 방연동이 MVP 범위에서 구현해야 할 *최소* surface:
 
 1. **활성:** Anthropic SDK 래퍼 (`server/lib/anthropic.ts`) — 재시도·예외 매핑·토큰 카운트·`APIUsageLog` 기록
 2. **활성:** Postgres 연결 (`server/db/client.ts`) — Drizzle 인스턴스, pool 설정
@@ -94,7 +94,7 @@ ALI-67 방연동이 Day-1 마감(2026-05-31T14:59Z) 기준 구현해야 할 *최
 
 OpenAI/Gemini는 환경변수 있을 때만 활성, 없으면 graceful skip.
 
-## 7. 다음 스프린트 (Day-1 이후)
+## 7. MVP 이후 스프린트
 
 - Toss 결제창 + webhook 활성 → ALI-67 잔여 작업
 - Resend 템플릿 등록 + 이메일 인증/리마인더 활성

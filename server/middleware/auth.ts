@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 
 // Lucia v3 session middleware — owner: ALI-62 차곡담[자료] (schema) + ALI-67 방연동[MCP] (wire-up)
-// Day-1: pass-through. ALI-62 lands users/sessions schema, then this reads
+// MVP: pass-through. ALI-62 lands users/sessions schema, then this reads
 // session cookie (b180_session) → validates via Lucia → attaches req.user.
 
 declare global {

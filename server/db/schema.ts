@@ -7,7 +7,7 @@
 // GrowthReport, Notification, ReminderRule, GroupClass, APIUsageLog) 는
 // ALI-62 가 본 파일을 확장하여 채운다.
 //
-// Day-1 MVP cut (decisions-day1.md §1):
+// MVP cut (docs/decisions.md §1):
 //   유지: User, Session, EmailToken, Module, Lesson, TextExcerpt,
 //         LearningSession, CanvasArtifact, TutorSystemPrompt, TutorMessage,
 //         TutorRating, APIUsageLog

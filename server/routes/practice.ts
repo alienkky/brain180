@@ -3,7 +3,7 @@ import { Router } from "express";
 // Owner: ALI-62 차곡담[자료] (LearningSession/CanvasArtifact schema)
 //        + ALI-63 류한길[흐름] (state machine: draft → submitted → reviewed)
 //        + ALI-64 백그림[그림] (canvas viewport contract)
-// Day-1 mode: free-form canvas only (n262/n263/n274 cut).
+// MVP mode: free-form canvas only (n262/n263/n274 cut).
 
 export const practiceRouter = Router();
 
@@ -27,7 +27,7 @@ practiceRouter.get("/artifacts/:id", (_req, res) =>
   res.status(501).json(NOT_IMPL),
 );
 
-const NOT_AVAIL = { error: "service_unavailable", reason: "day1_cut" };
+const NOT_AVAIL = { error: "service_unavailable", reason: "mvp_cut" };
 practiceRouter.post("/artifacts/:id/export", (_req, res) =>
   res.status(503).json(NOT_AVAIL),
 );

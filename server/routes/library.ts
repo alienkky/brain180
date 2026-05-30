@@ -1,8 +1,8 @@
 import { Router } from "express";
 
 // Owner: ALI-62 차곡담[자료] (Module/Lesson/TextExcerpt schema + 3 seed rows)
-// Day-1 seeds: little-prince-fox (가치 ★★★), popper-positivism (인지 ★★★),
-//              tao-te-ching-01 (시간 ★★★ + 인지 ★★★)
+// MVP seeds: little-prince-fox (가치 ★★★), popper-positivism (인지 ★★★),
+//             tao-te-ching-01 (시간 ★★★ + 인지 ★★★)
 
 export const libraryRouter = Router();
 
