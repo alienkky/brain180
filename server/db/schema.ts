@@ -36,7 +36,14 @@ export const subscriptionStatusEnum = pgEnum("subscription_status", [
   "expired",
 ]);
 export const paymentMethodEnum = pgEnum("payment_method", ["card", "kakao_pay", "bank_transfer"]);
-export const paymentStatusEnum = pgEnum("payment_status", ["pending", "paid", "failed", "refunded", "canceled"]);
+export const paymentStatusEnum = pgEnum("payment_status", [
+  "pending",
+  "success",
+  "paid",
+  "failed",
+  "refunded",
+  "canceled",
+]);
 export const moduleAxisEnum = pgEnum("module_axis", ["cognitive", "value", "time"]);
 export const enrollmentStatusEnum = pgEnum("enrollment_status", ["not_started", "active", "completed", "paused"]);
 export const sessionModeEnum = pgEnum("session_mode", ["analyze", "reverse", "practice"]);
@@ -45,6 +52,7 @@ export const exportFormatEnum = pgEnum("export_format", ["pdf", "png"]);
 export const tutorMessageRoleEnum = pgEnum("tutor_message_role", ["user", "assistant", "system"]);
 export const reminderFrequencyEnum = pgEnum("reminder_frequency", ["daily", "weekly"]);
 export const reminderChannelEnum = pgEnum("reminder_channel", ["push", "email"]);
+export const apiProviderEnum = pgEnum("api_provider", ["claude", "openai", "kimi", "gemini", "ollama"]);
 
 export const users = pgTable(
   "users",
@@ -65,6 +73,8 @@ export const users = pgTable(
   },
   (table) => ({
     emailIdx: uniqueIndex("users_email_idx").on(table.email),
+    createdAtIdx: index("users_created_at_idx").on(table.createdAt),
+    verifiedAtIdx: index("users_verified_at_idx").on(table.emailVerifiedAt),
     roleIdx: index("users_role_idx").on(table.role),
     deletedAtIdx: index("users_deleted_at_idx").on(table.deletedAt),
     ageCheck: check("users_age_check", sql`${table.age} IS NULL OR (${table.age} >= 0 AND ${table.age} <= 120)`),
@@ -169,7 +179,9 @@ export const payments = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     subscriptionId: uuid("subscription_id").references(() => subscriptions.id, { onDelete: "set null" }),
+    planName: planNameEnum("plan_name"),
     amount: integer("amount").notNull(),
+    currency: varchar("currency", { length: 3 }).notNull().default("KRW"),
     method: paymentMethodEnum("method").notNull(),
     tossPaymentKey: text("toss_payment_key"),
     status: paymentStatusEnum("status").notNull().default("pending"),
@@ -177,7 +189,10 @@ export const payments = pgTable(
     createdAt,
   },
   (table) => ({
+    userIdx: index("payments_user_id_idx").on(table.userId),
     userPaidAtIdx: index("payments_user_paid_at_idx").on(table.userId, table.paidAt),
+    statusCreatedIdx: index("payments_status_created_idx").on(table.status, table.createdAt),
+    planNameIdx: index("payments_plan_name_idx").on(table.planName),
     tossPaymentKeyIdx: uniqueIndex("payments_toss_payment_key_idx").on(table.tossPaymentKey),
   }),
 );
@@ -289,14 +304,18 @@ export const learningSessions = pgTable(
     lessonId: uuid("lesson_id")
       .notNull()
       .references(() => lessons.id, { onDelete: "restrict" }),
+    perspective: moduleAxisEnum("perspective"),
     mode: sessionModeEnum("mode").notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
     endedAt: timestamp("ended_at", { withTimezone: true }),
     deletedAt,
   },
   (table) => ({
+    startedAtIdx: index("learning_sessions_started_at_idx").on(table.startedAt),
     userStartedIdx: index("learning_sessions_user_started_idx").on(table.userId, table.startedAt),
     lessonModeIdx: index("learning_sessions_lesson_mode_idx").on(table.lessonId, table.mode),
+    lessonIdx: index("learning_sessions_lesson_id_idx").on(table.lessonId),
+    perspectiveIdx: index("learning_sessions_perspective_idx").on(table.perspective),
   }),
 );
 
@@ -361,13 +380,27 @@ export const tutorMessages = pgTable(
     role: tutorMessageRoleEnum("role").notNull(),
     content: text("content").notNull(),
     model: varchar("model", { length: 120 }),
+    promptVersion: varchar("prompt_version", { length: 80 }),
     tokensIn: integer("tokens_in").notNull().default(0),
     tokensOut: integer("tokens_out").notNull().default(0),
+    tokens: integer("tokens").notNull().default(0),
+    latencyMs: integer("latency_ms"),
+    rating: integer("rating"),
+    rejected: boolean("rejected").notNull().default(false),
     createdAt,
   },
   (table) => ({
     sessionCreatedIdx: index("tutor_messages_session_created_idx").on(table.sessionId, table.createdAt),
     roleCreatedIdx: index("tutor_messages_role_created_idx").on(table.role, table.createdAt),
+    promptVersionIdx: index("tutor_messages_prompt_version_idx").on(table.promptVersion),
+    assistantLatencyIdx: index("tutor_messages_assistant_latency_idx")
+      .on(table.latencyMs)
+      .where(sql`${table.role} = 'assistant'`),
+    assistantRejectedIdx: index("tutor_messages_assistant_rejected_idx")
+      .on(table.createdAt)
+      .where(sql`${table.role} = 'assistant' AND ${table.rejected} = true`),
+    ratingCheck: check("tutor_messages_rating_check", sql`${table.rating} IS NULL OR (${table.rating} >= 1 AND ${table.rating} <= 5)`),
+    latencyCheck: check("tutor_messages_latency_ms_check", sql`${table.latencyMs} IS NULL OR ${table.latencyMs} >= 0`),
   }),
 );
 
@@ -403,16 +436,41 @@ export const sessionEvaluations = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     selfScore: integer("self_score").notNull(),
+    score: integer("score"),
+    nodeCount: integer("node_count"),
+    edgeCount: integer("edge_count"),
     freeText: text("free_text"),
     savedAt: timestamp("saved_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt,
   },
   (table) => ({
     sessionIdx: uniqueIndex("session_evaluations_session_idx").on(table.sessionId),
+    scoreIdx: index("session_evaluations_score_idx").on(table.score),
+    createdAtIdx: index("session_evaluations_created_at_idx").on(table.createdAt),
     userSavedIdx: index("session_evaluations_user_saved_idx").on(table.userId, table.savedAt),
     selfScoreCheck: check(
       "session_evaluations_self_score_check",
       sql`${table.selfScore} >= 1 AND ${table.selfScore} <= 5`,
     ),
+    scoreCheck: check("session_evaluations_score_check", sql`${table.score} IS NULL OR (${table.score} >= 0 AND ${table.score} <= 100)`),
+    nodeCountCheck: check("session_evaluations_node_count_check", sql`${table.nodeCount} IS NULL OR ${table.nodeCount} >= 0`),
+    edgeCountCheck: check("session_evaluations_edge_count_check", sql`${table.edgeCount} IS NULL OR ${table.edgeCount} >= 0`),
+  }),
+);
+
+export const apiCosts = pgTable(
+  "api_costs",
+  {
+    id: id(),
+    provider: apiProviderEnum("provider").notNull(),
+    costUsd: numeric("cost_usd", { precision: 10, scale: 6 }).notNull(),
+    tokensUsed: integer("tokens_used"),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    recordedAtIdx: index("api_costs_recorded_at_idx").on(table.recordedAt),
+    providerRecordedAtIdx: index("api_costs_provider_recorded_at_idx").on(table.provider, table.recordedAt),
+    tokensUsedCheck: check("api_costs_tokens_used_check", sql`${table.tokensUsed} IS NULL OR ${table.tokensUsed} >= 0`),
   }),
 );
 

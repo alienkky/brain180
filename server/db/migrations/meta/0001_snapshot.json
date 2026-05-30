@@ -1,9 +1,97 @@
 {
-  "id": "7d4e81b8-facd-4e41-a54e-5fb09215dee8",
+  "id": "996c1be3-d167-4870-aafd-343f20298b26",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.api_costs": {
+      "name": "api_costs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "uuid_v7()"
+        },
+        "provider": {
+          "name": "provider",
+          "type": "api_provider",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cost_usd": {
+          "name": "cost_usd",
+          "type": "numeric(10, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tokens_used": {
+          "name": "tokens_used",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "api_costs_recorded_at_idx": {
+          "name": "api_costs_recorded_at_idx",
+          "columns": [
+            {
+              "expression": "recorded_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "api_costs_provider_recorded_at_idx": {
+          "name": "api_costs_provider_recorded_at_idx",
+          "columns": [
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "recorded_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "api_costs_tokens_used_check": {
+          "name": "api_costs_tokens_used_check",
+          "value": "\"api_costs\".\"tokens_used\" IS NULL OR \"api_costs\".\"tokens_used\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.api_usage_logs": {
       "name": "api_usage_logs",
       "schema": "",
@@ -518,7 +606,12 @@
       },
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "enrollments_progress_check": {
+          "name": "enrollments_progress_check",
+          "value": "\"enrollments\".\"progress\" >= 0 AND \"enrollments\".\"progress\" <= 100"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.group_classes": {
@@ -822,7 +915,24 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "growth_reports_period_check": {
+          "name": "growth_reports_period_check",
+          "value": "\"growth_reports\".\"period_start\" <= \"growth_reports\".\"period_end\""
+        },
+        "growth_reports_cognitive_score_check": {
+          "name": "growth_reports_cognitive_score_check",
+          "value": "\"growth_reports\".\"axis_cognitive_score\" >= 0 AND \"growth_reports\".\"axis_cognitive_score\" <= 100"
+        },
+        "growth_reports_value_score_check": {
+          "name": "growth_reports_value_score_check",
+          "value": "\"growth_reports\".\"axis_value_score\" >= 0 AND \"growth_reports\".\"axis_value_score\" <= 100"
+        },
+        "growth_reports_time_score_check": {
+          "name": "growth_reports_time_score_check",
+          "value": "\"growth_reports\".\"axis_time_score\" >= 0 AND \"growth_reports\".\"axis_time_score\" <= 100"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.learning_sessions": {
@@ -847,6 +957,13 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "perspective": {
+          "name": "perspective",
+          "type": "module_axis",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
         },
         "mode": {
           "name": "mode",
@@ -876,6 +993,21 @@
         }
       },
       "indexes": {
+        "learning_sessions_started_at_idx": {
+          "name": "learning_sessions_started_at_idx",
+          "columns": [
+            {
+              "expression": "started_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "learning_sessions_user_started_idx": {
           "name": "learning_sessions_user_started_idx",
           "columns": [
@@ -908,6 +1040,36 @@
             },
             {
               "expression": "mode",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "learning_sessions_lesson_id_idx": {
+          "name": "learning_sessions_lesson_id_idx",
+          "columns": [
+            {
+              "expression": "lesson_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "learning_sessions_perspective_idx": {
+          "name": "learning_sessions_perspective_idx",
+          "columns": [
+            {
+              "expression": "perspective",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1127,7 +1289,12 @@
       },
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "module_prerequisites_no_self_check": {
+          "name": "module_prerequisites_no_self_check",
+          "value": "\"module_prerequisites\".\"module_id\" <> \"module_prerequisites\".\"prerequisite_module_id\""
+        }
+      },
       "isRLSEnabled": false
     },
     "public.modules": {
@@ -1452,11 +1619,25 @@
           "primaryKey": false,
           "notNull": false
         },
+        "plan_name": {
+          "name": "plan_name",
+          "type": "plan_name",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
         "amount": {
           "name": "amount",
           "type": "integer",
           "primaryKey": false,
           "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "varchar(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'KRW'"
         },
         "method": {
           "name": "method",
@@ -1494,6 +1675,21 @@
         }
       },
       "indexes": {
+        "payments_user_id_idx": {
+          "name": "payments_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "payments_user_paid_at_idx": {
           "name": "payments_user_paid_at_idx",
           "columns": [
@@ -1505,6 +1701,42 @@
             },
             {
               "expression": "paid_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payments_status_created_idx": {
+          "name": "payments_status_created_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payments_plan_name_idx": {
+          "name": "payments_plan_name_idx",
+          "columns": [
+            {
+              "expression": "plan_name",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1829,6 +2061,24 @@
           "primaryKey": false,
           "notNull": true
         },
+        "score": {
+          "name": "score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "node_count": {
+          "name": "node_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "edge_count": {
+          "name": "edge_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "free_text": {
           "name": "free_text",
           "type": "text",
@@ -1837,6 +2087,13 @@
         },
         "saved_at": {
           "name": "saved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
@@ -1855,6 +2112,36 @@
             }
           ],
           "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "session_evaluations_score_idx": {
+          "name": "session_evaluations_score_idx",
+          "columns": [
+            {
+              "expression": "score",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "session_evaluations_created_at_idx": {
+          "name": "session_evaluations_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -1912,7 +2199,24 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "session_evaluations_self_score_check": {
+          "name": "session_evaluations_self_score_check",
+          "value": "\"session_evaluations\".\"self_score\" >= 1 AND \"session_evaluations\".\"self_score\" <= 5"
+        },
+        "session_evaluations_score_check": {
+          "name": "session_evaluations_score_check",
+          "value": "\"session_evaluations\".\"score\" IS NULL OR (\"session_evaluations\".\"score\" >= 0 AND \"session_evaluations\".\"score\" <= 100)"
+        },
+        "session_evaluations_node_count_check": {
+          "name": "session_evaluations_node_count_check",
+          "value": "\"session_evaluations\".\"node_count\" IS NULL OR \"session_evaluations\".\"node_count\" >= 0"
+        },
+        "session_evaluations_edge_count_check": {
+          "name": "session_evaluations_edge_count_check",
+          "value": "\"session_evaluations\".\"edge_count\" IS NULL OR \"session_evaluations\".\"edge_count\" >= 0"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.sessions": {
@@ -2266,6 +2570,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "prompt_version": {
+          "name": "prompt_version",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": false
+        },
         "tokens_in": {
           "name": "tokens_in",
           "type": "integer",
@@ -2279,6 +2589,32 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
+        },
+        "tokens": {
+          "name": "tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "latency_ms": {
+          "name": "latency_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rating": {
+          "name": "rating",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rejected": {
+          "name": "rejected",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "created_at": {
           "name": "created_at",
@@ -2330,6 +2666,53 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "tutor_messages_prompt_version_idx": {
+          "name": "tutor_messages_prompt_version_idx",
+          "columns": [
+            {
+              "expression": "prompt_version",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tutor_messages_assistant_latency_idx": {
+          "name": "tutor_messages_assistant_latency_idx",
+          "columns": [
+            {
+              "expression": "latency_ms",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"tutor_messages\".\"role\" = 'assistant'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tutor_messages_assistant_rejected_idx": {
+          "name": "tutor_messages_assistant_rejected_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"tutor_messages\".\"role\" = 'assistant' AND \"tutor_messages\".\"rejected\" = true",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2350,7 +2733,16 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "tutor_messages_rating_check": {
+          "name": "tutor_messages_rating_check",
+          "value": "\"tutor_messages\".\"rating\" IS NULL OR (\"tutor_messages\".\"rating\" >= 1 AND \"tutor_messages\".\"rating\" <= 5)"
+        },
+        "tutor_messages_latency_ms_check": {
+          "name": "tutor_messages_latency_ms_check",
+          "value": "\"tutor_messages\".\"latency_ms\" IS NULL OR \"tutor_messages\".\"latency_ms\" >= 0"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.tutor_ratings": {
@@ -2471,7 +2863,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "tutor_ratings_stars_check": {
+          "name": "tutor_ratings_stars_check",
+          "value": "\"tutor_ratings\".\"stars\" >= 1 AND \"tutor_ratings\".\"stars\" <= 5"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.tutor_system_prompts": {
@@ -2675,6 +3072,36 @@
           "method": "btree",
           "with": {}
         },
+        "users_created_at_idx": {
+          "name": "users_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "users_verified_at_idx": {
+          "name": "users_verified_at_idx",
+          "columns": [
+            {
+              "expression": "email_verified_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "users_role_idx": {
           "name": "users_role_idx",
           "columns": [
@@ -2710,11 +3137,27 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "users_age_check": {
+          "name": "users_age_check",
+          "value": "\"users\".\"age\" IS NULL OR (\"users\".\"age\" >= 0 AND \"users\".\"age\" <= 120)"
+        }
+      },
       "isRLSEnabled": false
     }
   },
   "enums": {
+    "public.api_provider": {
+      "name": "api_provider",
+      "schema": "public",
+      "values": [
+        "claude",
+        "openai",
+        "kimi",
+        "gemini",
+        "ollama"
+      ]
+    },
     "public.canvas_mode": {
       "name": "canvas_mode",
       "schema": "public",
@@ -2783,6 +3226,7 @@
       "schema": "public",
       "values": [
         "pending",
+        "success",
         "paid",
         "failed",
         "refunded",
