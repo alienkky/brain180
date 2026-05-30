@@ -163,6 +163,8 @@ Responsive:
 | `LoadingSkeleton` | loading state | table, card list, report |
 | `ErrorPanel` | recoverable route/API error | inline, full-page |
 | `ReportChart` | progress/axis charts | line, radar, bar, timeline |
+| `StatsKpiCard` | n317 KPI dashboard card with current value, delta, threshold border, chart preview | line, horizontal bar, composite, heatmap, dual-axis |
+| `StatsDrilldownDrawer` | slide-in detail panel opened from a KPI card | metric detail, source rows, SQL/data notes |
 | `ExportMenu` | CSV/PDF/PNG export | student report, admin stats |
 | `NotificationList` | notifications | unread, read, grouped |
 | `ReminderRuleEditor` | reminder creation | daily, weekly |
@@ -916,9 +918,13 @@ States:
 
 ```
 ┌ AdminShell ───────────────────────────────────────────┐
-│ 통계 대시보드       date range / group / module        │
-│ ┌ Chart: active users ┐ ┌ completion funnel ┐          │
-│ ┌ Axis distribution ┐  ┌ session table ┐               │
+│ 통계 대시보드       date range / group / module/export  │
+│ ┌ DAU 7일 추이 ─────┐ ┌ 모듈 완료율 × 텍스트 ───────┐ │
+│ │ value + Δ + line  │ │ value + Δ + horizontal bars │ │
+│ ├ AI 별점+p95 ─────┤ ├ D7 잔존율 코호트 ───────────┤ │
+│ │ score + latency   │ │ cohort heatmap              │ │
+│ ├ MRR+API 비용비율 ┤ ├ Drilldown preview/alerts ───┤ │
+│ │ dual line axes    │ │ selected card details       │ │
 └───────────────────────────────────────────────────────┘
 ```
 
@@ -926,21 +932,56 @@ Component tree:
 
 - `AdminShell`
 - `StatsFilterBar`
-- `ReportChartGrid`
+- `StatsKpiGrid(columns={desktop:2, mobile:1})`
+- `StatsKpiCard`
+- `StatsDrilldownDrawer`
+- `ThresholdStatusBorder`
 - `StatsDataTable`
 - `ExportMenu`
+
+KPI card spec from `docs/modules/kpi.md` / ALI-65:
+
+| Rank | Card | Visualization | Primary value | Data source |
+|---:|---|---|---|---|
+| 1 | DAU 7일 추이 | Line chart | latest DAU + previous-period delta | `sessions.started_at` by DATE + `COUNT(DISTINCT user_id)` |
+| 2 | 모듈 완료율 × 텍스트 | Horizontal bar chart | average completion % + delta | `sessions` LEFT JOIN `evaluations`, `completion_pct` per `text_id` |
+| 3 | AI 튜터 별점 + p95 레이턴시 | Composite metric + sparkline | avg rating, p95 latency | `chat_messages.rating`, `latency_ms` p95 |
+| 4 | D7 잔존율 코호트 | Cohort heatmap | latest cohort D7 % + delta | `users.created_at` cohort x `sessions` return day |
+| 5 | MRR + API 비용/매출 비율 | Dual-axis line chart | MRR, API-cost/revenue ratio | monthly `payments.amount`, `api_costs.cost_usd / mrr` |
+
+Card anatomy:
+
+```
+┌ StatsKpiCard ──────────────────────────────┐
+│ label                         status dot   │
+│ current value        Δ vs previous period  │
+│ chart preview / heatmap / bar preview       │
+│ threshold note          [drilldown chevron] │
+└────────────────────────────────────────────┘
+```
+
+Threshold treatment:
+
+- Normal: sage border, subtle green status dot.
+- Warning: amber border, warning label in card footer.
+- Danger: terracotta border, card moves to alert priority and drawer opens with mitigation notes when clicked.
+- Status must be text + color, never color-only.
 
 Interaction:
 
 - Filters update charts and table together.
-- Chart click filters table segment.
+- Card click opens `StatsDrilldownDrawer` from the right with full chart, source table rows, threshold rule, and recommended action.
+- Chart segment click filters the drawer table segment without navigating away.
 - Export routes to `/reports/export` or `/admin/stats/export` implementation alias.
+- Desktop uses a 2 x 3 grid: five metric cards plus one alert/detail preview slot.
+- Mobile stacks cards in one column; drawer becomes full-screen bottom sheet.
 
 States:
 
-- Empty: no data for range.
-- Loading: chart/table skeleton.
-- Error: chart failed; table can still load.
+- Empty: no data for range; each card shows required event/table source and setup CTA.
+- Loading: card-level skeletons; filter bar remains interactive.
+- Error: failed card keeps other cards visible; drawer shows raw query/source error and retry.
+- Partial: MRR/API card can show "API cost not connected" while revenue line remains visible.
 
 ### A08. AI Quality (`/admin/ai-quality`, n319/n308)
 
@@ -1138,4 +1179,3 @@ States:
   - `src/components/Admin/`
 - Add route-level empty/loading/error states before API integration is complete.
 - Use fake fixture data only inside page story/dev fixtures, not embedded in reusable components.
-
