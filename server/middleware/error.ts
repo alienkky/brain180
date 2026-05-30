@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { loadEnv } from "../lib/env.js";
+import { UpstreamError } from "../lib/anthropic.js";
 
 export class HttpError extends Error {
   constructor(
@@ -24,6 +25,14 @@ export function errorHandler(
   const env = loadEnv();
   if (err instanceof HttpError) {
     res.status(err.status).json({ error: err.code, message: err.message });
+    return;
+  }
+  if (err instanceof UpstreamError) {
+    res.status(502).json({
+      error: "upstream_error",
+      provider: err.provider,
+      code: err.code,
+    });
     return;
   }
   const message =
