@@ -33,3 +33,4 @@ run_inspection.py
 .railway/
 data/
 .env
+dist-server/
