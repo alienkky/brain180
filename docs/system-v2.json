@@ -1,0 +1,1607 @@
+{
+  "meta": {
+    "version": "2.0",
+    "description": "Brain 180 AI 교육 시뮬레이션 - 보완 노드 추가",
+    "originalNodes": 36,
+    "addedNodes": 24,
+    "totalNodes": 60,
+    "originalEdges": 47,
+    "addedEdges": 32,
+    "totalEdges": 79,
+    "addedCategories": [
+      "인증 강화 (이메일 인증, 소셜 로그인)",
+      "온보딩 플로우 (튜토리얼, Brain180 소개)",
+      "구독/결제 플로우",
+      "캔버스 모드 결정 (assumption 3개 → 실제 기능 전환)",
+      "AI 튜터 관리 (프롬프트 설정, 품질 관리, 대화 히스토리)",
+      "학습 완료 평가 + 개인 성장 리포트",
+      "작업물 저장/갤러리/다운로드",
+      "알림 센터 + 리마인더",
+      "관리자 기능 확장 (통계, 그룹관리, 콘텐츠 업로드, 모듈 관리)"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "n162",
+      "kind": "goal",
+      "title": "목적",
+      "sub": "오프라인 브레인 180 교육 시스템을 AI기반 교육이 가능하도록 시뮬레이션 프로그램을 만드는것",
+      "x": -1681,
+      "y": 525
+    },
+    {
+      "id": "n163",
+      "kind": "system",
+      "title": "기존 시스템",
+      "sub": "초기 시스템 만든것 ver1",
+      "x": -915,
+      "y": 77
+    },
+    {
+      "id": "n164",
+      "kind": "system",
+      "title": "시스템",
+      "sub": "다시 만들 시스템",
+      "x": -1119,
+      "y": 634
+    },
+    {
+      "id": "n165",
+      "kind": "screen",
+      "title": "화면",
+      "sub": "라이브러리",
+      "x": -782,
+      "y": 161
+    },
+    {
+      "id": "n166",
+      "kind": "screen",
+      "title": "화면",
+      "sub": "연습",
+      "x": -595,
+      "y": 161
+    },
+    {
+      "id": "n170",
+      "kind": "screen",
+      "title": "카테고리",
+      "sub": "인지",
+      "x": -318,
+      "y": 251
+    },
+    {
+      "id": "n171",
+      "kind": "screen",
+      "title": "화면",
+      "sub": "분석",
+      "x": -318,
+      "y": 162
+    },
+    {
+      "id": "n172",
+      "kind": "screen",
+      "title": "기능",
+      "sub": "텍스트",
+      "x": -595,
+      "y": 250
+    },
+    {
+      "id": "n173",
+      "kind": "screen",
+      "title": "기능",
+      "sub": "캔버스",
+      "x": -595,
+      "y": 331
+    },
+    {
+      "id": "n174",
+      "kind": "screen",
+      "title": "기능",
+      "sub": "도구",
+      "x": -595,
+      "y": 409
+    },
+    {
+      "id": "n179",
+      "kind": "screen",
+      "title": "카테고리",
+      "sub": "가치",
+      "x": -318,
+      "y": 332
+    },
+    {
+      "id": "n180",
+      "kind": "screen",
+      "title": "카테고리",
+      "sub": "시간",
+      "x": -318,
+      "y": 410
+    },
+    {
+      "id": "n181",
+      "kind": "screen",
+      "title": "로그인화면",
+      "sub": "",
+      "x": -969,
+      "y": 769
+    },
+    {
+      "id": "n182",
+      "kind": "screen",
+      "title": "이름",
+      "sub": "",
+      "x": -463,
+      "y": 836
+    },
+    {
+      "id": "n191",
+      "kind": "feedback",
+      "title": "피드백",
+      "sub": "ai튜터",
+      "x": -877,
+      "y": 274
+    },
+    {
+      "id": "n193",
+      "kind": "screen",
+      "title": "회원가입",
+      "sub": "화면 구상",
+      "x": -740,
+      "y": 710
+    },
+    {
+      "id": "n194",
+      "kind": "screen",
+      "title": "비번찾기",
+      "sub": "화면 구상",
+      "x": -740,
+      "y": 813
+    },
+    {
+      "id": "n195",
+      "kind": "feedback",
+      "title": "질문",
+      "sub": "ai튜터",
+      "x": -877,
+      "y": 381
+    },
+    {
+      "id": "n201",
+      "kind": "screen",
+      "title": "메일주소",
+      "sub": "",
+      "x": -463,
+      "y": 902
+    },
+    {
+      "id": "n202",
+      "kind": "screen",
+      "title": "성별",
+      "sub": "",
+      "x": -463,
+      "y": 973
+    },
+    {
+      "id": "n203",
+      "kind": "screen",
+      "title": "나이",
+      "sub": "",
+      "x": -463,
+      "y": 1052
+    },
+    {
+      "id": "n204",
+      "kind": "screen",
+      "title": "직업",
+      "sub": "",
+      "x": -463,
+      "y": 1125
+    },
+    {
+      "id": "n205",
+      "kind": "screen",
+      "title": "학습대시보드",
+      "sub": "화면 구상",
+      "x": -219,
+      "y": 710
+    },
+    {
+      "id": "n206",
+      "kind": "screen",
+      "title": "학습진행 사항",
+      "sub": "화면 구상",
+      "x": -219,
+      "y": 829
+    },
+    {
+      "id": "n213",
+      "kind": "screen",
+      "title": "라이브러리",
+      "sub": "라이브러리",
+      "x": -1,
+      "y": 710
+    },
+    {
+      "id": "n215",
+      "kind": "screen",
+      "title": "로그인화면",
+      "sub": "",
+      "x": -958,
+      "y": 1289
+    },
+    {
+      "id": "n216",
+      "kind": "system",
+      "title": "일반 학생",
+      "sub": "다시 만들 시스템",
+      "x": -1172,
+      "y": 756
+    },
+    {
+      "id": "n217",
+      "kind": "system",
+      "title": "관리자계정",
+      "sub": "다시 만들 시스템",
+      "x": -1157,
+      "y": 1276
+    },
+    {
+      "id": "n220",
+      "kind": "screen",
+      "title": "메일로 비밀번호 재설정",
+      "sub": "",
+      "x": -683,
+      "y": 951
+    },
+    {
+      "id": "n224",
+      "kind": "screen",
+      "title": "고객 가입현황",
+      "sub": "",
+      "x": -511,
+      "y": 1289
+    },
+    {
+      "id": "n225",
+      "kind": "screen",
+      "title": "연습 페이지",
+      "sub": "연습",
+      "x": 486,
+      "y": 710
+    },
+    {
+      "id": "n226",
+      "kind": "screen",
+      "title": "카테고리",
+      "sub": "인지",
+      "x": 1018,
+      "y": 800
+    },
+    {
+      "id": "n227",
+      "kind": "screen",
+      "title": "분석 페이지",
+      "sub": "분석",
+      "x": 1018,
+      "y": 711
+    },
+    {
+      "id": "n228",
+      "kind": "screen",
+      "title": "기능 (원문)",
+      "sub": "텍스트",
+      "x": 486,
+      "y": 799
+    },
+    {
+      "id": "n229",
+      "kind": "screen",
+      "title": "기능",
+      "sub": "캔버스",
+      "x": 486,
+      "y": 880
+    },
+    {
+      "id": "n230",
+      "kind": "screen",
+      "title": "기능",
+      "sub": "도구",
+      "x": 486,
+      "y": 958
+    },
+    {
+      "id": "n231",
+      "kind": "screen",
+      "title": "카테고리",
+      "sub": "가치",
+      "x": 1018,
+      "y": 881
+    },
+    {
+      "id": "n232",
+      "kind": "screen",
+      "title": "카테고리",
+      "sub": "시간",
+      "x": 1018,
+      "y": 959
+    },
+    {
+      "id": "n240",
+      "kind": "feedback",
+      "title": "피드백",
+      "sub": "금일 평가 작성 및 질문 작성",
+      "x": -9,
+      "y": 988
+    },
+    {
+      "id": "n241",
+      "kind": "feedback",
+      "title": "튜터 질문",
+      "sub": "ai튜터",
+      "x": -9,
+      "y": 1097
+    },
+    {
+      "id": "n242",
+      "kind": "screen",
+      "title": "고객관리(학생질문)",
+      "sub": "",
+      "x": -511,
+      "y": 1385
+    },
+    {
+      "id": "n243",
+      "kind": "screen",
+      "title": "관리자 대시보드",
+      "sub": "",
+      "x": -740,
+      "y": 1289
+    },
+    {
+      "id": "n244",
+      "kind": "screen",
+      "title": "가입승인/보류",
+      "sub": "",
+      "x": -146,
+      "y": 1289
+    },
+    {
+      "id": "n256",
+      "kind": "screen",
+      "title": "튜터 응답사항 저장",
+      "sub": "",
+      "x": -511,
+      "y": 1489
+    },
+    {
+      "id": "n258",
+      "kind": "screen",
+      "title": "API 사용량",
+      "sub": "",
+      "x": -511,
+      "y": 1602
+    },
+    {
+      "id": "n262",
+      "kind": "assumption",
+      "title": "지금처럼 도형의 한계를 주는게 좋은가?",
+      "sub": "",
+      "x": 704,
+      "y": 1084
+    },
+    {
+      "id": "n263",
+      "kind": "assumption",
+      "title": "자유롭게 그림을 그린걸 튜터가 캡쳐하여 분석?",
+      "sub": "",
+      "x": 704,
+      "y": 1003
+    },
+    {
+      "id": "n268",
+      "kind": "screen",
+      "title": "학습진도 선택",
+      "sub": "라이브러리 / 교육 항목 선택",
+      "x": -1,
+      "y": 800
+    },
+    {
+      "id": "n274",
+      "kind": "assumption",
+      "title": "모드를 선택 할 수 있게?",
+      "sub": "",
+      "x": 704,
+      "y": 1163
+    },
+    {
+      "id": "n285",
+      "kind": "group",
+      "title": "그룹",
+      "sub": "",
+      "x": -1054,
+      "y": 0,
+      "w": 1018,
+      "h": 533
+    },
+
+    {
+      "id": "n300",
+      "kind": "screen",
+      "title": "이메일 인증",
+      "sub": "가입 후 인증 메일 확인",
+      "x": -463,
+      "y": 1210,
+      "isNew": true,
+      "category": "인증 강화"
+    },
+    {
+      "id": "n301",
+      "kind": "screen",
+      "title": "소셜 로그인",
+      "sub": "구글 / 카카오",
+      "x": -969,
+      "y": 880,
+      "isNew": true,
+      "category": "인증 강화"
+    },
+    {
+      "id": "n302",
+      "kind": "screen",
+      "title": "온보딩 튜토리얼",
+      "sub": "첫 로그인 시 안내",
+      "x": -219,
+      "y": 600,
+      "isNew": true,
+      "category": "온보딩"
+    },
+    {
+      "id": "n303",
+      "kind": "screen",
+      "title": "Brain180 방법론 소개",
+      "sub": "인지/가치/시간 3축 설명",
+      "x": -219,
+      "y": 510,
+      "isNew": true,
+      "category": "온보딩"
+    },
+    {
+      "id": "n304",
+      "kind": "screen",
+      "title": "캔버스 모드 선택",
+      "sub": "자유형 / 제약형 / 단계형",
+      "x": 704,
+      "y": 880,
+      "isNew": true,
+      "category": "캔버스 기능 확장",
+      "resolves": ["n262", "n263", "n274"],
+      "note": "assumption 3개(n262, n263, n274)를 실제 기능 노드로 전환"
+    },
+    {
+      "id": "n305",
+      "kind": "screen",
+      "title": "작업물 저장/불러오기",
+      "sub": "캔버스 세션 보존",
+      "x": 704,
+      "y": 960,
+      "isNew": true,
+      "category": "캔버스 기능 확장"
+    },
+    {
+      "id": "n306",
+      "kind": "screen",
+      "title": "작업물 갤러리",
+      "sub": "이전 회차 열람",
+      "x": 704,
+      "y": 1050,
+      "isNew": true,
+      "category": "캔버스 기능 확장"
+    },
+    {
+      "id": "n307",
+      "kind": "screen",
+      "title": "AI 프롬프트 관리",
+      "sub": "튜터 시스템 프롬프트 설정",
+      "x": -511,
+      "y": 1700,
+      "isNew": true,
+      "category": "AI 튜터 관리"
+    },
+    {
+      "id": "n308",
+      "kind": "feedback",
+      "title": "응답 품질 평가",
+      "sub": "학생 → AI 응답 별점/코멘트",
+      "x": 250,
+      "y": 1097,
+      "isNew": true,
+      "category": "AI 튜터 관리"
+    },
+    {
+      "id": "n309",
+      "kind": "screen",
+      "title": "튜터 대화 히스토리",
+      "sub": "누적 대화 기록 열람",
+      "x": 250,
+      "y": 988,
+      "isNew": true,
+      "category": "AI 튜터 관리"
+    },
+    {
+      "id": "n310",
+      "kind": "screen",
+      "title": "학습 완료 평가",
+      "sub": "세션 종료 자가 평가",
+      "x": 1250,
+      "y": 711,
+      "isNew": true,
+      "category": "평가/리포트"
+    },
+    {
+      "id": "n311",
+      "kind": "screen",
+      "title": "개인 성장 리포트",
+      "sub": "누적 학습 데이터 시각화",
+      "x": 1250,
+      "y": 800,
+      "isNew": true,
+      "category": "평가/리포트"
+    },
+    {
+      "id": "n312",
+      "kind": "screen",
+      "title": "3축 분석 리포트",
+      "sub": "인지/가치/시간 종합 분석",
+      "x": 1250,
+      "y": 900,
+      "isNew": true,
+      "category": "평가/리포트"
+    },
+    {
+      "id": "n313",
+      "kind": "screen",
+      "title": "알림 센터",
+      "sub": "튜터 응답 / 진도 알림",
+      "x": -219,
+      "y": 1110,
+      "isNew": true,
+      "category": "알림 시스템"
+    },
+    {
+      "id": "n314",
+      "kind": "screen",
+      "title": "리마인더 설정",
+      "sub": "학습 주기 / 푸시 알림",
+      "x": -219,
+      "y": 1190,
+      "isNew": true,
+      "category": "알림 시스템"
+    },
+    {
+      "id": "n315",
+      "kind": "screen",
+      "title": "콘텐츠 업로드",
+      "sub": "교육 자료 관리자 등록",
+      "x": -740,
+      "y": 1600,
+      "isNew": true,
+      "category": "관리자 기능 확장"
+    },
+    {
+      "id": "n316",
+      "kind": "screen",
+      "title": "교육 모듈 관리",
+      "sub": "커리큘럼 순서 / 잠금 설정",
+      "x": -740,
+      "y": 1690,
+      "isNew": true,
+      "category": "관리자 기능 확장"
+    },
+    {
+      "id": "n317",
+      "kind": "screen",
+      "title": "통계 대시보드",
+      "sub": "전체 학습 현황 한눈에",
+      "x": -740,
+      "y": 1400,
+      "isNew": true,
+      "category": "관리자 기능 확장"
+    },
+    {
+      "id": "n318",
+      "kind": "screen",
+      "title": "그룹/클래스 관리",
+      "sub": "학생 그룹핑 / 일괄 관리",
+      "x": -740,
+      "y": 1490,
+      "isNew": true,
+      "category": "관리자 기능 확장"
+    },
+    {
+      "id": "n319",
+      "kind": "screen",
+      "title": "AI 품질 관리",
+      "sub": "응답 검토 / 프롬프트 개선",
+      "x": -511,
+      "y": 1800,
+      "isNew": true,
+      "category": "AI 튜터 관리"
+    },
+    {
+      "id": "n320",
+      "kind": "screen",
+      "title": "구독 플랜 선택",
+      "sub": "무료 / 스탠다드 / 프리미엄",
+      "x": -740,
+      "y": 900,
+      "isNew": true,
+      "category": "구독/결제"
+    },
+    {
+      "id": "n321",
+      "kind": "screen",
+      "title": "결제 처리",
+      "sub": "카드 / 카카오페이",
+      "x": -740,
+      "y": 977,
+      "isNew": true,
+      "category": "구독/결제"
+    },
+    {
+      "id": "n322",
+      "kind": "screen",
+      "title": "작업물 다운로드",
+      "sub": "PDF / 이미지 내보내기",
+      "x": 704,
+      "y": 1140,
+      "isNew": true,
+      "category": "캔버스 기능 확장"
+    },
+    {
+      "id": "n323",
+      "kind": "screen",
+      "title": "학습 통계 내보내기",
+      "sub": "학생 데이터 CSV/PDF 출력",
+      "x": -146,
+      "y": 1490,
+      "isNew": true,
+      "category": "관리자 기능 확장"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e175",
+      "from": "n163",
+      "to": "n165",
+      "fromPort": "s",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e183",
+      "from": "n165",
+      "to": "n166",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e184",
+      "from": "n166",
+      "to": "n171",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e185",
+      "from": "n166",
+      "to": "n172",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "both",
+      "weight": "normal"
+    },
+    {
+      "id": "e186",
+      "from": "n172",
+      "to": "n173",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "both",
+      "weight": "normal"
+    },
+    {
+      "id": "e187",
+      "from": "n173",
+      "to": "n174",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "both",
+      "weight": "normal"
+    },
+    {
+      "id": "e188",
+      "from": "n171",
+      "to": "n170",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "both",
+      "weight": "normal"
+    },
+    {
+      "id": "e189",
+      "from": "n170",
+      "to": "n179",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "both",
+      "weight": "normal"
+    },
+    {
+      "id": "e190",
+      "from": "n179",
+      "to": "n180",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "both",
+      "weight": "normal"
+    },
+    {
+      "id": "e192",
+      "from": "n191",
+      "to": "n173",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e196",
+      "from": "n195",
+      "to": "n173",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e198",
+      "from": "n181",
+      "to": "n193",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e199",
+      "from": "n181",
+      "to": "n194",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e200",
+      "from": "n193",
+      "to": "n182",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e207",
+      "from": "n182",
+      "to": "n201",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "none",
+      "weight": "normal"
+    },
+    {
+      "id": "e208",
+      "from": "n201",
+      "to": "n202",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "none",
+      "weight": "normal"
+    },
+    {
+      "id": "e209",
+      "from": "n202",
+      "to": "n203",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "none",
+      "weight": "normal"
+    },
+    {
+      "id": "e210",
+      "from": "n203",
+      "to": "n204",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "none",
+      "weight": "normal"
+    },
+    {
+      "id": "e212",
+      "from": "n193",
+      "to": "n205",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e218",
+      "from": "n216",
+      "to": "n181",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e219",
+      "from": "n217",
+      "to": "n215",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e221",
+      "from": "n194",
+      "to": "n220",
+      "fromPort": "e",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e233",
+      "from": "n225",
+      "to": "n227",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e234",
+      "from": "n225",
+      "to": "n228",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "both",
+      "weight": "normal"
+    },
+    {
+      "id": "e235",
+      "from": "n228",
+      "to": "n229",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "both",
+      "weight": "normal"
+    },
+    {
+      "id": "e236",
+      "from": "n229",
+      "to": "n230",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "both",
+      "weight": "normal"
+    },
+    {
+      "id": "e237",
+      "from": "n227",
+      "to": "n226",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "both",
+      "weight": "normal"
+    },
+    {
+      "id": "e238",
+      "from": "n226",
+      "to": "n231",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "both",
+      "weight": "normal"
+    },
+    {
+      "id": "e239",
+      "from": "n231",
+      "to": "n232",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "both",
+      "weight": "normal"
+    },
+    {
+      "id": "e245",
+      "from": "n224",
+      "to": "n244",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e246",
+      "from": "n243",
+      "to": "n224",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e247",
+      "from": "n215",
+      "to": "n243",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e248",
+      "from": "n205",
+      "to": "n206",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "none",
+      "weight": "normal"
+    },
+    {
+      "id": "e249",
+      "from": "n240",
+      "to": "n229",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "none",
+      "weight": "normal"
+    },
+    {
+      "id": "e250",
+      "from": "n241",
+      "to": "n229",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "none",
+      "weight": "normal"
+    },
+    {
+      "id": "e251",
+      "from": "n205",
+      "to": "n213",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e254",
+      "from": "n242",
+      "to": "n224",
+      "fromPort": "n",
+      "toPort": "s",
+      "label": "",
+      "style": "solid",
+      "arrow": "none",
+      "weight": "normal"
+    },
+    {
+      "id": "e255",
+      "from": "n182",
+      "to": "n205",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e264",
+      "from": "n229",
+      "to": "n262",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e265",
+      "from": "n229",
+      "to": "n263",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e269",
+      "from": "n213",
+      "to": "n268",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e270",
+      "from": "n268",
+      "to": "n225",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e271",
+      "from": "n242",
+      "to": "n256",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "none",
+      "weight": "normal"
+    },
+    {
+      "id": "e275",
+      "from": "n229",
+      "to": "n274",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e278",
+      "from": "n241",
+      "to": "n256",
+      "fromPort": "w",
+      "toPort": "e",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e279",
+      "from": "n240",
+      "to": "n242",
+      "fromPort": "w",
+      "toPort": "e",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e280",
+      "from": "n262",
+      "to": "n241",
+      "fromPort": "w",
+      "toPort": "e",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e281",
+      "from": "n274",
+      "to": "n241",
+      "fromPort": "w",
+      "toPort": "e",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e282",
+      "from": "n263",
+      "to": "n241",
+      "fromPort": "w",
+      "toPort": "e",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal"
+    },
+    {
+      "id": "e283",
+      "from": "n256",
+      "to": "n258",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "none",
+      "weight": "normal"
+    },
+
+    {
+      "id": "eN01",
+      "from": "n193",
+      "to": "n300",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "회원가입 완료 후",
+      "style": "dashed",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN02",
+      "from": "n300",
+      "to": "n205",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "인증 완료",
+      "style": "dashed",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN03",
+      "from": "n181",
+      "to": "n301",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "dashed",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN04",
+      "from": "n301",
+      "to": "n205",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "dashed",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN05",
+      "from": "n205",
+      "to": "n302",
+      "fromPort": "n",
+      "toPort": "s",
+      "label": "첫 로그인",
+      "style": "dashed",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN06",
+      "from": "n302",
+      "to": "n303",
+      "fromPort": "n",
+      "toPort": "s",
+      "label": "",
+      "style": "dashed",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN07",
+      "from": "n229",
+      "to": "n304",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "모드 진입",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN08",
+      "from": "n229",
+      "to": "n305",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN09",
+      "from": "n305",
+      "to": "n306",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN10",
+      "from": "n305",
+      "to": "n322",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN11",
+      "from": "n262",
+      "to": "n304",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "→ 기능 전환",
+      "style": "dashed",
+      "arrow": "end",
+      "weight": "thin",
+      "isNew": true
+    },
+    {
+      "id": "eN12",
+      "from": "n263",
+      "to": "n304",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "→ 기능 전환",
+      "style": "dashed",
+      "arrow": "end",
+      "weight": "thin",
+      "isNew": true
+    },
+    {
+      "id": "eN13",
+      "from": "n274",
+      "to": "n304",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "→ 기능 전환",
+      "style": "dashed",
+      "arrow": "end",
+      "weight": "thin",
+      "isNew": true
+    },
+    {
+      "id": "eN14",
+      "from": "n243",
+      "to": "n307",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN15",
+      "from": "n241",
+      "to": "n308",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN16",
+      "from": "n308",
+      "to": "n256",
+      "fromPort": "w",
+      "toPort": "e",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN17",
+      "from": "n241",
+      "to": "n309",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN18",
+      "from": "n225",
+      "to": "n310",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "세션 종료",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN19",
+      "from": "n310",
+      "to": "n311",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN20",
+      "from": "n311",
+      "to": "n312",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN21",
+      "from": "n205",
+      "to": "n313",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN22",
+      "from": "n313",
+      "to": "n314",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN23",
+      "from": "n243",
+      "to": "n317",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN24",
+      "from": "n317",
+      "to": "n318",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN25",
+      "from": "n243",
+      "to": "n315",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN26",
+      "from": "n315",
+      "to": "n316",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN27",
+      "from": "n256",
+      "to": "n319",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN28",
+      "from": "n193",
+      "to": "n320",
+      "fromPort": "w",
+      "toPort": "e",
+      "label": "요금제 선택",
+      "style": "dashed",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN29",
+      "from": "n320",
+      "to": "n321",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN30",
+      "from": "n321",
+      "to": "n300",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "결제 완료",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN31",
+      "from": "n206",
+      "to": "n323",
+      "fromPort": "e",
+      "toPort": "w",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    },
+    {
+      "id": "eN32",
+      "from": "n307",
+      "to": "n319",
+      "fromPort": "s",
+      "toPort": "n",
+      "label": "",
+      "style": "solid",
+      "arrow": "end",
+      "weight": "normal",
+      "isNew": true
+    }
+  ]
+}
