@@ -18,7 +18,7 @@ import { users } from "../db/schema.js";
 import { lucia } from "../lib/lucia.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
 import { ok, fail } from "../lib/envelope.js";
-import { parseBody, RegisterBody, LoginBody } from "../lib/validators.js";
+import { parseBody, RegisterBody, LoginBody, ChangePasswordBody } from "../lib/validators.js";
 import { requireAuth } from "../middleware/auth.js";
 import { authRateLimit } from "../middleware/rate-limit.js";
 
@@ -201,9 +201,45 @@ authRouter.get(
   }),
 );
 
-// ── 501 landing zone (still pending) ────────────────────────────────
-authRouter.post("/change-password", (_req, res) =>
-  res.status(501).json({ error: "not_implemented", owner: "ALI-67" }),
+// ── POST /api/auth/change-password ──────────────────────────────────
+// Rotates argon2id hash, invalidates ALL existing sessions, issues a
+// fresh session cookie for the active client per api-contracts §1-5.
+authRouter.post(
+  "/change-password",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const body = parseBody(ChangePasswordBody, req, res);
+    if (!body) return;
+
+    const u = req.user!;
+    const found = await db
+      .select({ id: users.id, passwordHash: users.passwordHash })
+      .from(users)
+      .where(eq(users.id, u.id))
+      .limit(1);
+
+    const row = found[0];
+    if (!row || !row.passwordHash) {
+      fail(res, 401, "invalid_credentials");
+      return;
+    }
+    const okCurrent = await verifyPassword(row.passwordHash, body.current_password);
+    if (!okCurrent) {
+      fail(res, 401, "invalid_credentials");
+      return;
+    }
+
+    const newHash = await hashPassword(body.new_password);
+    await db.update(users).set({ passwordHash: newHash }).where(eq(users.id, row.id));
+
+    // Invalidate every existing session (including the one in this request)
+    // then issue a brand-new session cookie for the active client so the
+    // user doesn't get logged out on success.
+    await lucia.invalidateUserSessions(row.id);
+    await issueSessionCookie(res, row.id);
+
+    ok(res, { ok: true });
+  }),
 );
 
 // ── 503 mvp_cut stubs (no infra) ────────────────────────────────────
