@@ -179,13 +179,19 @@ export const api = {
         client_revision: clientRevision,
       }),
     }),
-  chat: (sessionId: string, lessonId: string, message: string) =>
+  chat: (
+    sessionId: string,
+    lessonId: string,
+    message: string,
+    canvasSnapshot?: CanvasJson | null,
+  ) =>
     call<TutorMessageDto>("/api/tutor/chat", {
       method: "POST",
       body: JSON.stringify({
         session_id: sessionId,
         lesson_id: lessonId,
         message,
+        ...(canvasSnapshot ? { canvas_snapshot: canvasSnapshot } : {}),
       }),
     }),
 };

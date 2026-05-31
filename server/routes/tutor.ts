@@ -53,7 +53,55 @@ const FALLBACK_PROMPT = [
   "원문: {{text_body}}",
   "축 가중치: {{axis_focus}}",
   "학생: {{user_name}}",
+  "현재 인지 캔버스 상태:",
+  "{{canvas_state}}",
 ].join("\n");
+
+const CANVAS_STATE_EMPTY = "(아직 비어 있음 — 학생이 첫 노드를 놓기 전입니다)";
+
+const NODE_TYPE_KO: Record<string, string> = {
+  concept: "개념",
+  anchor: "정박",
+  bridge: "연결",
+  branch: "분기",
+};
+
+const RELATION_KO: Record<string, string> = {
+  causes: "원인",
+  supports: "지지",
+  contrasts: "대비",
+  transforms: "변형",
+  contains: "포함",
+};
+
+interface CanvasSnapshotShape {
+  nodes: { id: string; type: string; label: string }[];
+  edges: { from: string; to: string; relation: string }[];
+}
+
+function formatCanvasState(snap: CanvasSnapshotShape | undefined): string {
+  if (!snap || snap.nodes.length === 0) return CANVAS_STATE_EMPTY;
+  const labelOf = new Map(snap.nodes.map((n) => [n.id, n.label]));
+  const nodeLines = snap.nodes
+    .map((n) => `- [${NODE_TYPE_KO[n.type] ?? n.type}] ${n.label}`)
+    .join("\n");
+  const edgeLines = snap.edges.length
+    ? snap.edges
+        .map((e) => {
+          const from = labelOf.get(e.from) ?? e.from;
+          const to = labelOf.get(e.to) ?? e.to;
+          const rel = RELATION_KO[e.relation] ?? e.relation;
+          return `- ${from} → (${rel}) → ${to}`;
+        })
+        .join("\n")
+    : "- (관계 아직 없음)";
+  return [
+    `노드 ${snap.nodes.length}개:`,
+    nodeLines,
+    `관계 ${snap.edges.length}개:`,
+    edgeLines,
+  ].join("\n");
+}
 
 function asyncHandler(
   fn: (req: Request, res: Response) => Promise<unknown>,
@@ -223,6 +271,7 @@ tutorRouter.post(
       text_body: textBody,
       axis_focus: JSON.stringify(lesson.axisFocus ?? {}),
       user_name: userName,
+      canvas_state: formatCanvasState(body.canvas_snapshot),
     });
 
     // Conversation history (chronological), excluding system rows.

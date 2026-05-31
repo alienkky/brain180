@@ -337,6 +337,7 @@ function PracticeScreen({
   const [tab, setTab] = useState<PracticeTab>("chat");
   const [initialCanvas, setInitialCanvas] = useState<CanvasJson | null>(null);
   const [canvasReady, setCanvasReady] = useState(false);
+  const currentCanvas = useRef<CanvasJson | null>(null);
   const clientRevision = useRef(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -348,6 +349,7 @@ function PracticeScreen({
     setMessages([]);
     setInitialCanvas(null);
     setCanvasReady(false);
+    currentCanvas.current = null;
     clientRevision.current = 0;
 
     (async () => {
@@ -369,6 +371,7 @@ function PracticeScreen({
         if (cancelled) return;
         setMessages(msgs);
         setInitialCanvas(artifact?.canvas_json ?? null);
+        currentCanvas.current = artifact?.canvas_json ?? null;
         setCanvasReady(true);
       } catch (e: unknown) {
         if (!cancelled) setError(toMessage(e));
@@ -389,6 +392,61 @@ function PracticeScreen({
     [session],
   );
 
+  const onCanvasChange = useCallback((next: CanvasJson) => {
+    currentCanvas.current = next;
+  }, []);
+
+  const sendChat = async (
+    message: string,
+    snapshot?: CanvasJson | null,
+  ): Promise<void> => {
+    if (!session) return;
+    setError(null);
+    const optimistic: TutorMessageDto = {
+      id: `pending-${Date.now()}`,
+      session_id: session.id,
+      role: "user",
+      content: message,
+      model: null,
+      input_tokens: 0,
+      output_tokens: 0,
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    try {
+      await api.chat(session.id, lesson.id, message, snapshot);
+      const fresh = await api.messages(session.id);
+      setMessages(fresh);
+    } catch (e: unknown) {
+      setError(toMessage(e));
+      setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+      throw e;
+    }
+  };
+
+  const onAskTutor = useCallback(
+    async (snapshot: CanvasJson) => {
+      if (!session || sending) return;
+      const message =
+        snapshot.nodes.length === 0
+          ? "현재 캔버스는 비어 있습니다. 이 본문에서 첫 번째로 추출해야 할 핵심 개념 노드를 한 개 제안해 주시고, 그 이유를 짧게 설명해 주세요."
+          : "현재 인지 캔버스 상태를 함께 첨부했습니다. 다음으로 추가하면 좋을 노드 1~2개와 그 노드들을 기존 노드와 어떻게 연결하면 좋을지(관계 유형 포함)를 제안해 주세요. 학생이 직접 그릴 수 있도록 *이유와 방향*만 알려주시고 정답을 단정하지는 마세요.";
+      setTab("chat");
+      setSending(true);
+      try {
+        await sendChat(message, snapshot);
+      } catch {
+        /* sendChat already surfaced the error */
+      } finally {
+        setSending(false);
+      }
+    },
+    // sendChat closes over session/lesson; React's exhaustive-deps isn't strict here
+    // because sendChat is recreated each render but only used inside this callback.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [session, lesson.id, sending],
+  );
+
   useEffect(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
@@ -402,27 +460,12 @@ function PracticeScreen({
     const message = input.trim();
     setInput("");
     setSending(true);
-    setError(null);
-    // Optimistically render the user turn — server returns only the assistant
-    // row, so we refetch the full thread to get authoritative ids/timestamps.
-    const optimistic: TutorMessageDto = {
-      id: `pending-${Date.now()}`,
-      session_id: session.id,
-      role: "user",
-      content: message,
-      model: null,
-      input_tokens: 0,
-      output_tokens: 0,
-      created_at: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, optimistic]);
     try {
-      await api.chat(session.id, lesson.id, message);
-      const fresh = await api.messages(session.id);
-      setMessages(fresh);
-    } catch (e: unknown) {
-      setError(toMessage(e));
-      setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+      // Attach current canvas snapshot only when student is actively in the
+      // canvas tab — keeps chat-only sessions lean (no extra tokens).
+      const snapshot = tab === "canvas" ? currentCanvas.current : null;
+      await sendChat(message, snapshot);
+    } catch {
       setInput(message);
     } finally {
       setSending(false);
@@ -545,6 +588,8 @@ function PracticeScreen({
               <CognitiveMap
                 initial={initialCanvas}
                 onSave={onSaveCanvas}
+                onChange={onCanvasChange}
+                onAskTutor={onAskTutor}
                 disabled={!session}
               />
             ) : (

@@ -45,6 +45,8 @@ interface PendingEdge {
 interface Props {
   initial: CanvasJson | null;
   onSave: (next: CanvasJson) => Promise<void> | void;
+  onChange?: (next: CanvasJson) => void;
+  onAskTutor?: (snapshot: CanvasJson) => void;
   disabled?: boolean;
 }
 
@@ -55,7 +57,13 @@ const EMPTY: CanvasJson = {
   edges: [],
 };
 
-export function CognitiveMap({ initial, onSave, disabled }: Props) {
+export function CognitiveMap({
+  initial,
+  onSave,
+  onChange,
+  onAskTutor,
+  disabled,
+}: Props) {
   const [canvas, setCanvas] = useState<CanvasJson>(initial ?? EMPTY);
   const [paletteType, setPaletteType] = useState<NodeType | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -76,12 +84,15 @@ export function CognitiveMap({ initial, onSave, disabled }: Props) {
     isFirstLoad.current = true;
   }, [initial]);
 
-  // Debounced auto-save.
+  // Debounced auto-save. Parent gets a synchronous mirror via onChange so
+  // sibling features (tutor hint button) can read the current canvas without
+  // waiting for the save round-trip.
   useEffect(() => {
     if (isFirstLoad.current) {
       isFirstLoad.current = false;
       return;
     }
+    onChange?.(canvas);
     if (disabled) return;
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(async () => {
@@ -96,7 +107,7 @@ export function CognitiveMap({ initial, onSave, disabled }: Props) {
     return () => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
     };
-  }, [canvas, onSave, disabled]);
+  }, [canvas, onSave, onChange, disabled]);
 
   const screenToCanvas = (clientX: number, clientY: number) => {
     const svg = svgRef.current;
@@ -229,6 +240,16 @@ export function CognitiveMap({ initial, onSave, disabled }: Props) {
           </button>
         ))}
         <div className="ml-auto flex items-center gap-2 text-xs text-brain-text-muted">
+          {onAskTutor && (
+            <button
+              onClick={() => onAskTutor(canvas)}
+              disabled={disabled}
+              className="rounded border border-brain-accent/60 px-2 py-1 text-brain-accent hover:bg-brain-accent-soft/50 disabled:opacity-50"
+              title="현재 캔버스 스냅샷을 튜터에게 보내 다음 노드를 제안받습니다"
+            >
+              튜터에게 패턴 제안
+            </button>
+          )}
           {selectedNodeId && (
             <button
               onClick={deleteSelected}
