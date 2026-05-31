@@ -41,7 +41,12 @@ export async function seedAdmin(): Promise<SeedAdminResult> {
   const email = env.ADMIN_SEED_EMAIL.toLowerCase();
 
   const existing = await db
-    .select({ id: users.id, role: users.role, status: users.status })
+    .select({
+      id: users.id,
+      role: users.role,
+      status: users.status,
+      mustChangePassword: users.mustChangePassword,
+    })
     .from(users)
     .where(eq(users.email, email))
     .limit(1);
@@ -63,16 +68,26 @@ export async function seedAdmin(): Promise<SeedAdminResult> {
         approvedAt: new Date(),
         passwordHash,
         emailVerifiedAt: new Date(),
+        mustChangePassword: false,
       })
       .returning({ id: users.id });
     return { outcome: "created", userId: inserted[0]!.id, email };
   }
 
   const row = existing[0]!;
-  if (row.role !== "admin" || row.status !== "approved") {
+  if (
+    row.role !== "admin" ||
+    row.status !== "approved" ||
+    row.mustChangePassword
+  ) {
     await db
       .update(users)
-      .set({ role: "admin", status: "approved", approvedAt: new Date() })
+      .set({
+        role: "admin",
+        status: "approved",
+        approvedAt: new Date(),
+        mustChangePassword: false,
+      })
       .where(eq(users.id, row.id));
     return { outcome: "promoted", userId: row.id, email };
   }
