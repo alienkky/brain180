@@ -63,7 +63,7 @@ The Drizzle schema is in `server/db/schema.ts`; the initial migration is
 - `reminder_rule_channels`: normalized push/email channel list
 - `group_classes`: admin-owned cohorts/classes
 - `group_members`: class membership
-- `api_usage_logs`: AI token and cost telemetry
+- `api_usage_logs`: AI token, latency, and outcome telemetry (anonymized; no plaintext user_id per api-contracts §8-2)
 - `api_costs`: provider-level API cost ledger for revenue/cost KPI reporting
 
 ## KPI Mapping
@@ -115,7 +115,8 @@ erDiagram
   users ||--o{ group_classes : owns
   group_classes ||--o{ group_members : includes
   users ||--o{ group_members : joins
-  users ||--o{ api_usage_logs : consumes
+  %% api_usage_logs intentionally has no users FK — only anonymized_user_id
+  %% per api-contracts §8-2 (privacy: plaintext user_id never persisted).
 ```
 
 Note: `tutor_messages.prompt_version` is a lightweight KPI/A-B snapshot, not a prompt foreign key.
@@ -170,7 +171,7 @@ Add a direct `prompt_id` later if the runtime needs exact prompt lineage per mes
 - `growth_reports_user_period_idx` supports period report lookup.
 - `notifications_user_read_idx` supports unread filtering.
 - `reminder_rules_user_active_idx` supports reminder worker scans.
-- `api_usage_logs_user_ts_idx` and `api_usage_logs_model_ts_idx` support token/cost reporting.
+- `api_usage_logs_anon_user_created_idx`, `api_usage_logs_provider_model_created_idx`, and `api_usage_logs_status_created_idx` support privacy-preserving token/cost reporting and error triage per api-contracts §8-2.
 - `api_costs_recorded_at_idx` supports monthly API cost aggregation.
 - `api_costs_provider_recorded_at_idx` supports provider-level cost trends.
 
@@ -217,7 +218,7 @@ The initial migration creates regular tables. For production scale, convert the 
 range partitions before high-volume launch:
 
 - `tutor_messages`, partition key: `created_at`
-- `api_usage_logs`, partition key: `ts`
+- `api_usage_logs`, partition key: `created_at`
 - `api_costs`, partition key: `recorded_at` if provider cost imports become high volume
 
 Recommended partition naming:
