@@ -16,6 +16,7 @@
 //   Parses seeds/*.md (3 MVP cold-start docs) and upserts 1 module + 1 lesson +
 //   1 text_excerpt per file. Idempotency hinge is `modules.slug` (unique idx).
 
+import { pathToFileURL } from "node:url";
 import { and, eq, isNull } from "drizzle-orm";
 import { db, closeDb } from "./client.js";
 import {
@@ -304,7 +305,13 @@ export async function seedLibraryContent(): Promise<SeedLibraryResult> {
   };
 }
 
-const isMain = import.meta.url === `file://${process.argv[1]}`;
+// On Windows, `file://${process.argv[1]}` yields `file://E:\...` (backslashes,
+// double-slash) while `import.meta.url` is `file:///E:/...` (forward, triple).
+// String compare always fails → isMain=false → main block silently no-ops and
+// the script exits 0 having done nothing. pathToFileURL() produces the same
+// canonical form as import.meta.url on every platform, so it actually matches.
+const entryArg = process.argv[1];
+const isMain = entryArg != null && import.meta.url === pathToFileURL(entryArg).href;
 if (isMain) {
   (async () => {
     const admin = await seedAdmin();
