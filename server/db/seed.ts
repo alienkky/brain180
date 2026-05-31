@@ -34,7 +34,7 @@ export async function seedAdmin(): Promise<SeedAdminResult> {
   const email = env.ADMIN_SEED_EMAIL.toLowerCase();
 
   const existing = await db
-    .select({ id: users.id, role: users.role })
+    .select({ id: users.id, role: users.role, status: users.status })
     .from(users)
     .where(eq(users.email, email))
     .limit(1);
@@ -52,6 +52,8 @@ export async function seedAdmin(): Promise<SeedAdminResult> {
         email,
         name: "Brain180 Admin",
         role: "admin",
+        status: "approved",
+        approvedAt: new Date(),
         passwordHash,
         emailVerifiedAt: new Date(),
       })
@@ -60,8 +62,11 @@ export async function seedAdmin(): Promise<SeedAdminResult> {
   }
 
   const row = existing[0]!;
-  if (row.role !== "admin") {
-    await db.update(users).set({ role: "admin" }).where(eq(users.id, row.id));
+  if (row.role !== "admin" || row.status !== "approved") {
+    await db
+      .update(users)
+      .set({ role: "admin", status: "approved", approvedAt: new Date() })
+      .where(eq(users.id, row.id));
     return { outcome: "promoted", userId: row.id, email };
   }
 

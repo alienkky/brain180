@@ -25,6 +25,12 @@ const updatedAt = timestamp("updated_at", { withTimezone: true }).notNull().defa
 const deletedAt = timestamp("deleted_at", { withTimezone: true });
 
 export const userRoleEnum = pgEnum("user_role", ["student", "admin"]);
+export const userStatusEnum = pgEnum("user_status", [
+  "pending_approval",
+  "approved",
+  "rejected",
+  "suspended",
+]);
 export const genderEnum = pgEnum("gender", ["female", "male", "other", "prefer_not_to_say"]);
 export const emailTokenPurposeEnum = pgEnum("email_token_purpose", ["verify", "reset"]);
 export const planNameEnum = pgEnum("plan_name", ["free", "standard", "premium"]);
@@ -66,6 +72,13 @@ export const users = pgTable(
     age: integer("age"),
     occupation: varchar("occupation", { length: 160 }),
     role: userRoleEnum("role").notNull().default("student"),
+    status: userStatusEnum("status").notNull().default("pending_approval"),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    approvedById: uuid("approved_by_id").references((): AnyPgColumn => users.id, {
+      onDelete: "set null",
+    }),
+    rejectedReason: text("rejected_reason"),
+    mustChangePassword: boolean("must_change_password").notNull().default(false),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
     createdAt,
     updatedAt,
@@ -76,6 +89,8 @@ export const users = pgTable(
     createdAtIdx: index("users_created_at_idx").on(table.createdAt),
     verifiedAtIdx: index("users_verified_at_idx").on(table.emailVerifiedAt),
     roleIdx: index("users_role_idx").on(table.role),
+    statusIdx: index("users_status_idx").on(table.status),
+    approvedByIdx: index("users_approved_by_idx").on(table.approvedById),
     deletedAtIdx: index("users_deleted_at_idx").on(table.deletedAt),
     ageCheck: check("users_age_check", sql`${table.age} IS NULL OR (${table.age} >= 0 AND ${table.age} <= 120)`),
   }),

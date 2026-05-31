@@ -1,14 +1,11 @@
 // Owner: ALI-67 방연동[MCP] — wires register/login/logout/me on top of
 // Lucia session + argon2id password hashing per api-contracts §1.
 //
-// Schema drift note: api-contracts §1-6 declares UserDTO.role as
-// "user" | "admin" and includes status / must_change_password /
-// onboarded_at; the landed ALI-62 schema models role as
-// "student" | "admin" with no status / must_change_password column.
-// DTO emits schema truth (role: "student"|"admin") and synthesizes
-// status="approved", must_change_password=false, onboarded_at=null
-// to keep the frontend contract honored under MVP simulation stage.
-// Reconciliation handed to ALI-62 follow-up.
+// Schema drift reconciled in migration 0003_user_status_approval:
+// users now carries status / must_change_password / approved_at /
+// approved_by_id / rejected_reason. Role enum still uses "student"
+// internally; DTO maps to the contracts vocabulary "user" | "admin".
+// onboarded_at stays null until onboarding flow ships (cut per MVP §1).
 
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
@@ -24,31 +21,40 @@ import { authRateLimit } from "../middleware/rate-limit.js";
 
 export const authRouter = Router();
 
-interface UserDTO {
+export type DtoRole = "user" | "admin";
+export type DtoStatus = "pending_approval" | "approved" | "rejected" | "suspended";
+
+export interface UserDTO {
   id: string;
   email: string;
   name: string;
-  role: "student" | "admin";
-  status: "approved";
-  must_change_password: false;
-  onboarded_at: null;
+  role: DtoRole;
+  status: DtoStatus;
+  must_change_password: boolean;
+  onboarded_at: string | null;
   created_at: string;
 }
 
-function toUserDTO(row: {
+function mapRole(internal: "student" | "admin"): DtoRole {
+  return internal === "admin" ? "admin" : "user";
+}
+
+export function toUserDTO(row: {
   id: string;
   email: string;
   name: string;
   role: "student" | "admin";
+  status: DtoStatus;
+  mustChangePassword: boolean;
   createdAt: Date;
 }): UserDTO {
   return {
     id: row.id,
     email: row.email,
     name: row.name,
-    role: row.role,
-    status: "approved",
-    must_change_password: false,
+    role: mapRole(row.role),
+    status: row.status,
+    must_change_password: row.mustChangePassword,
     onboarded_at: null,
     created_at: row.createdAt.toISOString(),
   };
@@ -101,6 +107,8 @@ authRouter.post(
         email: users.email,
         name: users.name,
         role: users.role,
+        status: users.status,
+        mustChangePassword: users.mustChangePassword,
         createdAt: users.createdAt,
       });
 
@@ -129,6 +137,8 @@ authRouter.post(
         email: users.email,
         name: users.name,
         role: users.role,
+        status: users.status,
+        mustChangePassword: users.mustChangePassword,
         passwordHash: users.passwordHash,
         createdAt: users.createdAt,
       })
@@ -187,6 +197,8 @@ authRouter.get(
         email: users.email,
         name: users.name,
         role: users.role,
+        status: users.status,
+        mustChangePassword: users.mustChangePassword,
         createdAt: users.createdAt,
       })
       .from(users)
