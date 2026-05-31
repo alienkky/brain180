@@ -59,6 +59,38 @@ export interface SessionDto {
   submitted_at: string | null;
 }
 
+export interface CanvasNode {
+  id: string;
+  type: "concept" | "anchor" | "bridge" | "branch";
+  label: string;
+  x: number;
+  y: number;
+  axis_tag?: "cognition" | "value" | "time";
+}
+
+export interface CanvasEdge {
+  id: string;
+  from: string;
+  to: string;
+  relation: "causes" | "supports" | "contrasts" | "transforms" | "contains";
+  temporal_order?: number;
+}
+
+export interface CanvasJson {
+  version: 1;
+  viewport: { x: number; y: number; zoom: number };
+  nodes: CanvasNode[];
+  edges: CanvasEdge[];
+}
+
+export interface ArtifactDto {
+  id: string;
+  session_id: string;
+  mode: "free" | "constrained" | "guided";
+  canvas_json: CanvasJson;
+  saved_at: string;
+}
+
 export interface TutorMessageDto {
   id: string;
   session_id: string;
@@ -137,6 +169,16 @@ export const api = {
     }),
   messages: (sessionId: string) =>
     call<TutorMessageDto[]>(`/api/tutor/sessions/${sessionId}/messages`),
+  getArtifact: (sessionId: string) =>
+    call<ArtifactDto | null>(`/api/practice/sessions/${sessionId}/artifact`),
+  putArtifact: (sessionId: string, canvas: CanvasJson, clientRevision: number) =>
+    call<ArtifactDto>(`/api/practice/sessions/${sessionId}/artifact`, {
+      method: "PUT",
+      body: JSON.stringify({
+        canvas_json: canvas,
+        client_revision: clientRevision,
+      }),
+    }),
   chat: (sessionId: string, lessonId: string, message: string) =>
     call<TutorMessageDto>("/api/tutor/chat", {
       method: "POST",

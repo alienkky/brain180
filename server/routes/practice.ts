@@ -23,7 +23,11 @@ import { and, eq, desc } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { canvasArtifacts, learningSessions, lessons } from "../db/schema.js";
 import { ok, fail } from "../lib/envelope.js";
-import { parseBody, StartSessionBody } from "../lib/validators.js";
+import {
+  parseBody,
+  PutArtifactBody,
+  StartSessionBody,
+} from "../lib/validators.js";
 import {
   requireApprovedUser,
   requireAuth,
@@ -155,6 +159,118 @@ practiceRouter.get(
       return;
     }
     ok(res, await toSessionDTO(row));
+  }),
+);
+
+// ── Session-scoped artifact endpoints (v2 shell seam) ──────────────
+//
+// We keep the artifact-id-scoped routes (`PUT /artifacts/:id`,
+// `GET /artifacts/:id`) as 501 placeholders for ALI-64's full canvas state
+// machine. The session-scoped pair below covers the MVP loop: the client
+// always saves the *latest* snapshot for a session, and reads it back on
+// resume. Each PUT inserts a new canvas_artifacts row (snapshot history)
+// rather than UPDATE-in-place so we never destroy prior states.
+
+interface ArtifactDTO {
+  id: string;
+  session_id: string;
+  mode: "free" | "constrained" | "guided";
+  canvas_json: unknown;
+  saved_at: string;
+}
+
+async function ensureOwnedSession(
+  req: Request,
+  res: Response,
+  sessionId: string,
+): Promise<{ id: string } | null> {
+  if (!UUID_RE.test(sessionId)) {
+    fail(res, 422, "validation_error", { message: "invalid_session_id" });
+    return null;
+  }
+  const rows = await db
+    .select({ id: learningSessions.id, userId: learningSessions.userId })
+    .from(learningSessions)
+    .where(eq(learningSessions.id, sessionId))
+    .limit(1);
+  const row = rows[0];
+  if (!row) {
+    fail(res, 404, "not_found");
+    return null;
+  }
+  if (row.userId !== req.user!.id) {
+    fail(res, 403, "forbidden");
+    return null;
+  }
+  return { id: row.id };
+}
+
+practiceRouter.get(
+  "/sessions/:id/artifact",
+  userRateLimit,
+  asyncHandler(async (req, res) => {
+    const owned = await ensureOwnedSession(req, res, req.params.id ?? "");
+    if (!owned) return;
+    const rows = await db
+      .select({
+        id: canvasArtifacts.id,
+        sessionId: canvasArtifacts.sessionId,
+        mode: canvasArtifacts.mode,
+        payload: canvasArtifacts.payload,
+        savedAt: canvasArtifacts.savedAt,
+      })
+      .from(canvasArtifacts)
+      .where(eq(canvasArtifacts.sessionId, owned.id))
+      .orderBy(desc(canvasArtifacts.savedAt))
+      .limit(1);
+    const row = rows[0];
+    if (!row) {
+      ok(res, null);
+      return;
+    }
+    const dto: ArtifactDTO = {
+      id: row.id,
+      session_id: row.sessionId,
+      mode: row.mode,
+      canvas_json: row.payload,
+      saved_at: row.savedAt.toISOString(),
+    };
+    ok(res, dto);
+  }),
+);
+
+practiceRouter.put(
+  "/sessions/:id/artifact",
+  userRateLimit,
+  asyncHandler(async (req, res) => {
+    const owned = await ensureOwnedSession(req, res, req.params.id ?? "");
+    if (!owned) return;
+    const body = parseBody(PutArtifactBody, req, res);
+    if (!body) return;
+
+    const inserted = await db
+      .insert(canvasArtifacts)
+      .values({
+        sessionId: owned.id,
+        mode: "free",
+        payload: body.canvas_json as Record<string, unknown>,
+      })
+      .returning({
+        id: canvasArtifacts.id,
+        sessionId: canvasArtifacts.sessionId,
+        mode: canvasArtifacts.mode,
+        payload: canvasArtifacts.payload,
+        savedAt: canvasArtifacts.savedAt,
+      });
+    const row = inserted[0]!;
+    const dto: ArtifactDTO = {
+      id: row.id,
+      session_id: row.sessionId,
+      mode: row.mode,
+      canvas_json: row.payload,
+      saved_at: row.savedAt.toISOString(),
+    };
+    ok(res, dto);
   }),
 );
 

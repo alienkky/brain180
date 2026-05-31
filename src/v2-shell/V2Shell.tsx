@@ -5,10 +5,11 @@
 // cookie is httpOnly so we cannot read it — we rely on `credentials: include`
 // in api.ts and probe /me on mount to restore sessions across reloads.
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ApiError,
   api,
+  type CanvasJson,
   type LessonDto,
   type ModuleDto,
   type SessionDto,
@@ -16,6 +17,7 @@ import {
   type TutorMessageDto,
   type UserDto,
 } from "./api";
+import { CognitiveMap } from "./CognitiveMap";
 
 type Screen =
   | { name: "login" }
@@ -317,6 +319,8 @@ function LibraryScreen({
   );
 }
 
+type PracticeTab = "chat" | "canvas";
+
 function PracticeScreen({
   lesson,
   onBack,
@@ -330,6 +334,10 @@ function PracticeScreen({
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<PracticeTab>("chat");
+  const [initialCanvas, setInitialCanvas] = useState<CanvasJson | null>(null);
+  const [canvasReady, setCanvasReady] = useState(false);
+  const clientRevision = useRef(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -338,6 +346,9 @@ function PracticeScreen({
     setText(null);
     setSession(null);
     setMessages([]);
+    setInitialCanvas(null);
+    setCanvasReady(false);
+    clientRevision.current = 0;
 
     (async () => {
       try {
@@ -351,8 +362,14 @@ function PracticeScreen({
         if (cancelled) return;
         setText(textRow);
         setSession(sess);
-        const msgs = await api.messages(sess.id);
-        if (!cancelled) setMessages(msgs);
+        const [msgs, artifact] = await Promise.all([
+          api.messages(sess.id),
+          api.getArtifact(sess.id),
+        ]);
+        if (cancelled) return;
+        setMessages(msgs);
+        setInitialCanvas(artifact?.canvas_json ?? null);
+        setCanvasReady(true);
       } catch (e: unknown) {
         if (!cancelled) setError(toMessage(e));
       }
@@ -362,6 +379,15 @@ function PracticeScreen({
       cancelled = true;
     };
   }, [lesson.id, lesson.text_excerpt_id]);
+
+  const onSaveCanvas = useCallback(
+    async (next: CanvasJson) => {
+      if (!session) return;
+      clientRevision.current += 1;
+      await api.putArtifact(session.id, next, clientRevision.current);
+    },
+    [session],
+  );
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -434,74 +460,126 @@ function PracticeScreen({
         </div>
       </section>
       <section className="flex flex-col overflow-hidden bg-brain-surface-soft">
-        <div className="border-b border-brain-border bg-brain-surface px-6 py-3">
-          <div className="font-display text-lg">사고구조 튜터</div>
+        <div className="flex items-center justify-between border-b border-brain-border bg-brain-surface px-6 py-3">
+          <div className="flex gap-1">
+            <TabButton
+              active={tab === "chat"}
+              onClick={() => setTab("chat")}
+              label="사고구조 튜터"
+            />
+            <TabButton
+              active={tab === "canvas"}
+              onClick={() => setTab("canvas")}
+              label="인지 캔버스"
+            />
+          </div>
           <div className="text-xs text-brain-text-muted">
-            {session
-              ? `세션 ${session.id.slice(0, 8)}…`
-              : "세션 시작 중…"}
+            {session ? `세션 ${session.id.slice(0, 8)}…` : "세션 시작 중…"}
           </div>
         </div>
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4">
-          {messages.length === 0 && !error && (
-            <p className="text-sm text-brain-text-muted">
-              본문에 대한 질문을 던지면 튜터가 사고 패턴을 함께 풀어드립니다.
-            </p>
-          )}
-          <ul className="space-y-3">
-            {messages.map((m) => (
-              <li
-                key={m.id}
-                className={
-                  "max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-soft-1 " +
-                  (m.role === "user"
-                    ? "ml-auto bg-brain-accent text-white"
-                    : "mr-auto bg-brain-surface text-brain-text")
-                }
+        {tab === "chat" && (
+          <>
+            <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4">
+              {messages.length === 0 && !error && (
+                <p className="text-sm text-brain-text-muted">
+                  본문에 대한 질문을 던지면 튜터가 사고 패턴을 함께 풀어드립니다.
+                </p>
+              )}
+              <ul className="space-y-3">
+                {messages.map((m) => (
+                  <li
+                    key={m.id}
+                    className={
+                      "max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-soft-1 " +
+                      (m.role === "user"
+                        ? "ml-auto bg-brain-accent text-white"
+                        : "mr-auto bg-brain-surface text-brain-text")
+                    }
+                  >
+                    <div className="whitespace-pre-wrap">{m.content}</div>
+                    {m.model && (
+                      <div className="mt-1 text-[10px] uppercase tracking-wider opacity-60">
+                        {m.model} · in {m.input_tokens} / out {m.output_tokens}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            {error && (
+              <div className="border-t border-brain-danger/40 bg-brain-accent-soft/50 px-6 py-2 text-sm text-brain-danger">
+                {error}
+              </div>
+            )}
+            <form
+              onSubmit={send}
+              className="flex items-end gap-2 border-t border-brain-border bg-brain-surface p-3"
+            >
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    send(e as unknown as React.FormEvent);
+                  }
+                }}
+                rows={2}
+                disabled={!session || sending}
+                placeholder="질문을 입력하세요 — Enter 전송, Shift+Enter 줄바꿈"
+                className="flex-1 resize-none rounded border border-brain-border bg-brain-bg px-3 py-2 text-sm outline-none focus:border-brain-accent disabled:opacity-50"
+              />
+              <button
+                type="submit"
+                disabled={!session || sending || !input.trim()}
+                className="rounded bg-brain-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
               >
-                <div className="whitespace-pre-wrap">{m.content}</div>
-                {m.model && (
-                  <div className="mt-1 text-[10px] uppercase tracking-wider opacity-60">
-                    {m.model} · in {m.input_tokens} / out {m.output_tokens}
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-        {error && (
-          <div className="border-t border-brain-danger/40 bg-brain-accent-soft/50 px-6 py-2 text-sm text-brain-danger">
-            {error}
+                {sending ? "…" : "전송"}
+              </button>
+            </form>
+          </>
+        )}
+        {tab === "canvas" && (
+          <div className="flex-1 overflow-hidden">
+            {canvasReady ? (
+              <CognitiveMap
+                initial={initialCanvas}
+                onSave={onSaveCanvas}
+                disabled={!session}
+              />
+            ) : (
+              <p className="p-6 text-sm text-brain-text-muted">
+                캔버스 불러오는 중…
+              </p>
+            )}
           </div>
         )}
-        <form
-          onSubmit={send}
-          className="flex items-end gap-2 border-t border-brain-border bg-brain-surface p-3"
-        >
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send(e as unknown as React.FormEvent);
-              }
-            }}
-            rows={2}
-            disabled={!session || sending}
-            placeholder="질문을 입력하세요 — Enter 전송, Shift+Enter 줄바꿈"
-            className="flex-1 resize-none rounded border border-brain-border bg-brain-bg px-3 py-2 text-sm outline-none focus:border-brain-accent disabled:opacity-50"
-          />
-          <button
-            type="submit"
-            disabled={!session || sending || !input.trim()}
-            className="rounded bg-brain-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-          >
-            {sending ? "…" : "전송"}
-          </button>
-        </form>
       </section>
     </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={
+        "rounded-full px-3 py-1 font-display text-sm transition " +
+        (active
+          ? "bg-brain-accent text-white"
+          : "text-brain-text-muted hover:text-brain-text")
+      }
+    >
+      {label}
+    </button>
   );
 }
 
