@@ -20,7 +20,8 @@
     "db:migrate:run": "tsx --env-file=.env server/db/migrate.ts",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx --env-file=.env server/db/seed.ts",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "smoke:tutor": "tsx --env-file=.env server/db/smoke-tutor.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
