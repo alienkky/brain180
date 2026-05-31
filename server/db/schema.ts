@@ -197,6 +197,12 @@ export const payments = pgTable(
   }),
 );
 
+export interface AxisWeights {
+  cognition: number;
+  value: number;
+  time: number;
+}
+
 export const modules = pgTable(
   "modules",
   {
@@ -206,12 +212,18 @@ export const modules = pgTable(
     order: integer("order").notNull(),
     isLocked: boolean("is_locked").notNull().default(false),
     description: text("description"),
+    slug: varchar("slug", { length: 80 }).notNull().default(""),
+    field: varchar("field", { length: 40 }).notNull().default("literature"),
+    difficulty: integer("difficulty").notNull().default(3),
+    axisFocus: jsonb("axis_focus").$type<AxisWeights | Record<string, never>>().notNull().default({}),
     createdAt,
     updatedAt,
   },
   (table) => ({
     axisOrderIdx: uniqueIndex("modules_axis_order_idx").on(table.axis, table.order),
     lockedIdx: index("modules_is_locked_idx").on(table.isLocked),
+    slugIdx: uniqueIndex("modules_slug_idx").on(table.slug),
+    difficultyCheck: check("modules_difficulty_check", sql`${table.difficulty} >= 1 AND ${table.difficulty} <= 5`),
   }),
 );
 
@@ -246,11 +258,18 @@ export const lessons = pgTable(
     textSource: text("text_source").notNull(),
     sourceMeta: jsonb("source_meta").$type<Record<string, unknown>>().notNull().default({}),
     order: integer("order").notNull(),
+    objectives: jsonb("objectives").$type<string[]>().notNull().default([]),
+    tutorSystemPromptId: uuid("tutor_system_prompt_id").references(
+      (): AnyPgColumn => tutorSystemPrompts.id,
+      { onDelete: "set null" },
+    ),
+    axisFocus: jsonb("axis_focus").$type<AxisWeights | Record<string, never>>().notNull().default({}),
     createdAt,
     updatedAt,
   },
   (table) => ({
     moduleOrderIdx: uniqueIndex("lessons_module_order_idx").on(table.moduleId, table.order),
+    tutorPromptIdx: index("lessons_tutor_prompt_idx").on(table.tutorSystemPromptId),
   }),
 );
 
@@ -264,10 +283,15 @@ export const textExcerpts = pgTable(
     content: text("content").notNull(),
     highlights: jsonb("highlights").$type<Array<Record<string, unknown>>>().notNull().default([]),
     order: integer("order").notNull().default(0),
+    title: varchar("title", { length: 200 }).notNull().default(""),
+    author: varchar("author", { length: 120 }).notNull().default(""),
+    source: varchar("source", { length: 200 }).notNull().default(""),
+    language: varchar("language", { length: 8 }).notNull().default("ko"),
     createdAt,
   },
   (table) => ({
     lessonOrderIdx: index("text_excerpts_lesson_order_idx").on(table.lessonId, table.order),
+    languageCheck: check("text_excerpts_language_check", sql`${table.language} IN ('ko', 'en')`),
   }),
 );
 
