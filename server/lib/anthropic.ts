@@ -28,10 +28,12 @@ export interface AnthropicResult {
   latencyMs: number;
 }
 
+// Persisted shape per api-contracts §8-2. Plaintext userId is intentionally
+// absent — only the anonymized id (sha256(user_id:ANON_SALT)) crosses this
+// seam, so a writer mistake can never store the raw uuid.
 export interface UsageLogRow {
   provider: "anthropic" | "openai" | "gemini";
   model: string;
-  userId: string;
   anonymizedUserId: string;
   inputTokens: number;
   outputTokens: number;
@@ -125,7 +127,6 @@ export async function callAnthropic(call: AnthropicCall): Promise<AnthropicResul
       void writeUsageLog({
         provider: "anthropic",
         model,
-        userId: call.userId,
         anonymizedUserId,
         inputTokens,
         outputTokens,
@@ -142,7 +143,6 @@ export async function callAnthropic(call: AnthropicCall): Promise<AnthropicResul
         void writeUsageLog({
           provider: "anthropic",
           model,
-          userId: call.userId,
           anonymizedUserId,
           inputTokens: 0,
           outputTokens: 0,

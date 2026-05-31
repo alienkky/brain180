@@ -12,10 +12,14 @@ import { setUsageLogWriter } from "./anthropic.js";
 async function writeUsageLogToDb(row: UsageLogRow): Promise<void> {
   try {
     await db.insert(apiUsageLogs).values({
-      userId: row.userId,
+      provider: row.provider,
       model: row.model,
+      anonymizedUserId: row.anonymizedUserId,
       tokensIn: row.inputTokens,
       tokensOut: row.outputTokens,
+      latencyMs: row.latencyMs,
+      status: row.status,
+      errorCode: row.errorCode,
     });
   } catch (err) {
     console.error("[usage-log] insert failed:", err, { row });

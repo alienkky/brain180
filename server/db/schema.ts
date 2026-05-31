@@ -638,16 +638,31 @@ export const apiUsageLogs = pgTable(
   "api_usage_logs",
   {
     id: id(),
-    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    provider: varchar("provider", { length: 32 }).notNull().default("anthropic"),
     model: varchar("model", { length: 120 }).notNull(),
+    anonymizedUserId: varchar("anonymized_user_id", { length: 128 }),
     tokensIn: integer("tokens_in").notNull().default(0),
     tokensOut: integer("tokens_out").notNull().default(0),
+    latencyMs: integer("latency_ms").notNull().default(0),
+    status: varchar("status", { length: 16 }).notNull().default("ok"),
+    errorCode: varchar("error_code", { length: 64 }),
     costKrw: numeric("cost_krw", { precision: 12, scale: 4 }).notNull().default("0"),
-    ts: timestamp("ts", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    userTsIdx: index("api_usage_logs_user_ts_idx").on(table.userId, table.ts),
-    modelTsIdx: index("api_usage_logs_model_ts_idx").on(table.model, table.ts),
+    anonUserCreatedIdx: index("api_usage_logs_anon_user_created_idx").on(
+      table.anonymizedUserId,
+      table.createdAt,
+    ),
+    providerModelCreatedIdx: index("api_usage_logs_provider_model_created_idx").on(
+      table.provider,
+      table.model,
+      table.createdAt,
+    ),
+    statusCreatedIdx: index("api_usage_logs_status_created_idx").on(
+      table.status,
+      table.createdAt,
+    ),
   }),
 );
 
