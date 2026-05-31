@@ -31,6 +31,7 @@ export interface AnthropicResult {
 export interface UsageLogRow {
   provider: "anthropic" | "openai" | "gemini";
   model: string;
+  userId: string;
   anonymizedUserId: string;
   inputTokens: number;
   outputTokens: number;
@@ -124,6 +125,7 @@ export async function callAnthropic(call: AnthropicCall): Promise<AnthropicResul
       void writeUsageLog({
         provider: "anthropic",
         model,
+        userId: call.userId,
         anonymizedUserId,
         inputTokens,
         outputTokens,
@@ -140,6 +142,7 @@ export async function callAnthropic(call: AnthropicCall): Promise<AnthropicResul
         void writeUsageLog({
           provider: "anthropic",
           model,
+          userId: call.userId,
           anonymizedUserId,
           inputTokens: 0,
           outputTokens: 0,

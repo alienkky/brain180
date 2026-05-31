@@ -1,24 +1,55 @@
-import type { Request, Response, NextFunction } from "express";
+// Lucia v3 session middleware — owner: ALI-67 방연동[MCP].
+// Reads SESSION_COOKIE_NAME (default b180_session), validates via Lucia,
+// attaches req.user / req.sessionId. Refreshes cookie when fresh; blanks on null.
 
-// Lucia v3 session middleware — owner: ALI-62 차곡담[자료] (schema) + ALI-67 방연동[MCP] (wire-up)
-// MVP: pass-through. ALI-62 lands users/sessions schema, then this reads
-// session cookie (b180_session) → validates via Lucia → attaches req.user.
+import type { Request, Response, NextFunction } from "express";
+import { lucia } from "../lib/lucia.js";
 
 declare global {
   namespace Express {
     interface Request {
-      user?: { id: string; email: string; role: "admin" | "user" } | undefined;
+      user?: { id: string; email: string; name: string; role: "student" | "admin" } | undefined;
       sessionId?: string | undefined;
     }
   }
 }
 
-export function sessionMiddleware(
-  _req: Request,
-  _res: Response,
+export async function sessionMiddleware(
+  req: Request,
+  res: Response,
   next: NextFunction,
-): void {
-  next();
+): Promise<void> {
+  const cookieHeader = req.headers.cookie ?? "";
+  const sessionId = lucia.readSessionCookie(cookieHeader);
+
+  if (!sessionId) {
+    next();
+    return;
+  }
+
+  try {
+    const { session, user } = await lucia.validateSession(sessionId);
+
+    if (session && session.fresh) {
+      res.appendHeader("Set-Cookie", lucia.createSessionCookie(session.id).serialize());
+    }
+    if (!session) {
+      res.appendHeader("Set-Cookie", lucia.createBlankSessionCookie().serialize());
+    }
+
+    if (user && session) {
+      req.user = {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      };
+      req.sessionId = session.id;
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
 }
 
 export function requireAuth(

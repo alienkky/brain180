@@ -4,8 +4,11 @@ import { sessionMiddleware } from "./middleware/auth.js";
 import { errorHandler, notFound } from "./middleware/error.js";
 import { mountRoutes } from "./routes/index.js";
 import { closeDb } from "./db/client.js";
+import { installUsageLogWriter } from "./lib/usage-log.js";
 
 const env = loadEnv();
+
+installUsageLogWriter();
 
 const app = express();
 
