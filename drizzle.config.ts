@@ -1,15 +1,12 @@
-import type { Config } from "drizzle-kit";
+import { defineConfig } from "drizzle-kit";
 
-const url = process.env.DATABASE_URL;
-if (!url) {
-  throw new Error("DATABASE_URL is required for drizzle-kit");
-}
-
-export default {
+export default defineConfig({
   schema: "./server/db/schema.ts",
   out: "./server/db/migrations",
   dialect: "postgresql",
-  dbCredentials: { url },
+  dbCredentials: {
+    url: process.env.DATABASE_URL ?? "postgres://brain180:brain180@localhost:5432/brain180",
+  },
   strict: true,
   verbose: true,
-} satisfies Config;
+});
