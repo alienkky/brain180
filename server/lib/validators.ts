@@ -123,6 +123,54 @@ export const RejectUserBody = z.object({
   reason: z.string().max(500).optional(),
 });
 
+const ModuleAxis = z.enum(["cognitive", "value", "time"]);
+const AxisFocus = z
+  .object({
+    cognition: z.number().int().min(0).max(5).optional(),
+    value: z.number().int().min(0).max(5).optional(),
+    time: z.number().int().min(0).max(5).optional(),
+  })
+  .partial()
+  .optional();
+
+const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,79}$/;
+
+export const AdminModuleCreateBody = z.object({
+  title: z.string().min(1).max(200),
+  slug: z.string().min(1).max(80).regex(SLUG_RE, "invalid_slug"),
+  axis: ModuleAxis,
+  field: z.string().min(1).max(40),
+  order: z.number().int().min(0).max(10_000),
+  difficulty: z.number().int().min(1).max(5),
+  description: z.string().max(2000).optional(),
+  axis_focus: AxisFocus,
+});
+
+export const AdminModuleUpdateBody = AdminModuleCreateBody.partial();
+
+export const AdminLessonCreateBody = z.object({
+  module_id: Uuid,
+  title: z.string().min(1).max(200),
+  order: z.number().int().min(0).max(10_000),
+  body: z.string().min(1).max(20_000),
+  author: z.string().max(120).optional(),
+  source: z.string().max(200).optional(),
+  language: z.enum(["ko", "en"]).optional(),
+  objectives: z.array(z.string().min(1).max(200)).max(10).optional(),
+  axis_focus: AxisFocus,
+});
+
+export const AdminLessonUpdateBody = z.object({
+  title: z.string().min(1).max(200).optional(),
+  order: z.number().int().min(0).max(10_000).optional(),
+  body: z.string().min(1).max(20_000).optional(),
+  author: z.string().max(120).optional(),
+  source: z.string().max(200).optional(),
+  language: z.enum(["ko", "en"]).optional(),
+  objectives: z.array(z.string().min(1).max(200)).max(10).optional(),
+  axis_focus: AxisFocus,
+});
+
 // ─── Helpers ─────────────────────────────────────────────────────────
 
 import type { Request, Response } from "express";

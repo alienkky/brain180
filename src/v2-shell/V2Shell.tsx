@@ -9,10 +9,17 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import {
   ApiError,
   api,
+  type AdminLessonCreateInput,
+  type AdminLessonDto,
+  type AdminLessonUpdateInput,
+  type AdminModuleCreateInput,
+  type AdminModuleDto,
+  type AdminModuleUpdateInput,
   type CanvasCite,
   type CanvasJson,
   type CanvasNode,
   type LessonDto,
+  type ModuleAxis,
   type ModuleDto,
   type ProgressEntryDto,
   type SessionDto,
@@ -813,7 +820,60 @@ function PracticeScreen({
   );
 }
 
+type AdminTab = "users" | "modules" | "lessons";
+
 function AdminScreen() {
+  const [tab, setTab] = useState<AdminTab>("users");
+  return (
+    <div className="flex h-full flex-col">
+      <div className="border-b border-brain-border bg-brain-surface px-6 py-3">
+        <div className="mx-auto flex max-w-5xl items-center gap-2">
+          <AdminTabButton active={tab === "users"} onClick={() => setTab("users")}>
+            가입 대기
+          </AdminTabButton>
+          <AdminTabButton active={tab === "modules"} onClick={() => setTab("modules")}>
+            모듈
+          </AdminTabButton>
+          <AdminTabButton active={tab === "lessons"} onClick={() => setTab("lessons")}>
+            레슨
+          </AdminTabButton>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="mx-auto max-w-5xl">
+          {tab === "users" && <AdminUsersPanel />}
+          {tab === "modules" && <AdminModulesPanel />}
+          {tab === "lessons" && <AdminLessonsPanel />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminTabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-full px-3 py-1 text-sm transition ${
+        active
+          ? "bg-brain-accent text-white shadow-soft-1"
+          : "text-brain-text-muted hover:text-brain-text"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function AdminUsersPanel() {
   const [pending, setPending] = useState<UserDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -859,55 +919,622 @@ function AdminScreen() {
   };
 
   return (
-    <div className="h-full overflow-y-auto p-6">
-      <div className="mx-auto max-w-3xl">
-        <h2 className="mb-1 font-display text-2xl">관리자 — 가입 승인 대기</h2>
-        <p className="mb-4 text-sm text-brain-text-muted">
-          승인 시 사용자는 즉시 로그인 가능. 거절 시 사유는 사용자에게 노출되지 않습니다.
-        </p>
+    <>
+      <h2 className="mb-1 font-display text-2xl">관리자 — 가입 승인 대기</h2>
+      <p className="mb-4 text-sm text-brain-text-muted">
+        승인 시 사용자는 즉시 로그인 가능. 거절 시 사유는 사용자에게 노출되지 않습니다.
+      </p>
+      {error && (
+        <div className="mb-4 rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
+          {error}
+        </div>
+      )}
+      {!pending && <p className="text-sm text-brain-text-muted">불러오는 중…</p>}
+      {pending && pending.length === 0 && (
+        <p className="text-sm text-brain-text-muted">대기 중인 사용자가 없습니다.</p>
+      )}
+      <ul className="space-y-3">
+        {pending?.map((u) => (
+          <li
+            key={u.id}
+            className="flex items-center justify-between rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1"
+          >
+            <div>
+              <div className="font-display text-base">{u.name}</div>
+              <div className="text-sm text-brain-text-muted">{u.email}</div>
+              <div className="mt-1 text-xs text-brain-text-soft">
+                역할 {u.role} · 상태 {u.status}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => approve(u)}
+                disabled={busyId === u.id}
+                className="rounded bg-brain-accent px-3 py-1 text-sm text-white hover:opacity-90 disabled:opacity-50"
+              >
+                승인
+              </button>
+              <button
+                onClick={() => reject(u)}
+                disabled={busyId === u.id}
+                className="rounded border border-brain-danger/40 px-3 py-1 text-sm text-brain-danger hover:bg-brain-accent-soft/50 disabled:opacity-50"
+              >
+                거절
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+const AXIS_OPTIONS: { value: ModuleAxis; label: string }[] = [
+  { value: "cognitive", label: "인지" },
+  { value: "value", label: "가치" },
+  { value: "time", label: "시간" },
+];
+
+function AdminModulesPanel() {
+  const [modules, setModules] = useState<AdminModuleDto[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<AdminModuleDto | "new" | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const reload = useCallback(async () => {
+    setError(null);
+    try {
+      const rows = await api.adminModules();
+      setModules(rows);
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    }
+  }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const remove = async (m: AdminModuleDto) => {
+    if (m.lesson_count > 0) {
+      window.alert("레슨이 남아 있어 삭제할 수 없습니다. 먼저 레슨을 지워주세요.");
+      return;
+    }
+    if (!window.confirm(`${m.title} 모듈을 삭제할까요?`)) return;
+    setBusy(true);
+    try {
+      await api.adminDeleteModule(m.id);
+      await reload();
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="font-display text-2xl">모듈</h2>
+        <button
+          onClick={() => setEditing("new")}
+          className="rounded bg-brain-accent px-3 py-1 text-sm text-white hover:opacity-90"
+        >
+          + 새 모듈
+        </button>
+      </div>
+      {error && (
+        <div className="mb-4 rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
+          {error}
+        </div>
+      )}
+      {!modules && <p className="text-sm text-brain-text-muted">불러오는 중…</p>}
+      <ul className="space-y-2">
+        {modules?.map((m) => (
+          <li
+            key={m.id}
+            className="flex items-center justify-between rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1"
+          >
+            <div>
+              <div className="font-display text-base">{m.title}</div>
+              <div className="text-xs text-brain-text-muted">
+                {m.slug} · 축 {m.axis} · 분야 {m.field} · 난이도 {m.difficulty} · 레슨 {m.lesson_count}개
+              </div>
+              {m.description && (
+                <div className="mt-1 text-xs text-brain-text-soft">{m.description}</div>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setEditing(m)}
+                disabled={busy}
+                className="rounded border border-brain-border px-3 py-1 text-sm hover:bg-brain-accent-soft/30 disabled:opacity-50"
+              >
+                수정
+              </button>
+              <button
+                onClick={() => remove(m)}
+                disabled={busy}
+                className="rounded border border-brain-danger/40 px-3 py-1 text-sm text-brain-danger hover:bg-brain-accent-soft/50 disabled:opacity-50"
+              >
+                삭제
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {editing !== null && (
+        <ModuleEditorDialog
+          initial={editing === "new" ? null : editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            void reload();
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function ModuleEditorDialog({
+  initial,
+  onClose,
+  onSaved,
+}: {
+  initial: AdminModuleDto | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [slug, setSlug] = useState(initial?.slug ?? "");
+  const [axis, setAxis] = useState<ModuleAxis>(initial?.axis ?? "cognitive");
+  const [field, setField] = useState(initial?.field ?? "literature");
+  const [order, setOrder] = useState(initial?.order ?? 0);
+  const [difficulty, setDifficulty] = useState(initial?.difficulty ?? 3);
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      if (initial) {
+        const patch: AdminModuleUpdateInput = {
+          title,
+          slug,
+          axis,
+          field,
+          order,
+          difficulty,
+          description: description || undefined,
+        };
+        await api.adminUpdateModule(initial.id, patch);
+      } else {
+        const body: AdminModuleCreateInput = {
+          title,
+          slug,
+          axis,
+          field,
+          order,
+          difficulty,
+          description: description || undefined,
+        };
+        await api.adminCreateModule(body);
+      }
+      onSaved();
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-lg rounded-2xl border border-brain-border bg-brain-surface p-6 shadow-soft-2">
+        <h3 className="mb-4 font-display text-xl">
+          {initial ? "모듈 수정" : "새 모듈"}
+        </h3>
         {error && (
-          <div className="mb-4 rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
+          <div className="mb-3 rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
             {error}
           </div>
         )}
-        {!pending && <p className="text-sm text-brain-text-muted">불러오는 중…</p>}
-        {pending && pending.length === 0 && (
-          <p className="text-sm text-brain-text-muted">대기 중인 사용자가 없습니다.</p>
-        )}
-        <ul className="space-y-3">
-          {pending?.map((u) => (
-            <li
-              key={u.id}
-              className="flex items-center justify-between rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1"
-            >
+        <div className="space-y-3 text-sm">
+          <Field label="제목">
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full rounded border border-brain-border bg-brain-bg px-2 py-1"
+            />
+          </Field>
+          <Field label="slug (URL용)">
+            <input
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              placeholder="newton-principia"
+              className="w-full rounded border border-brain-border bg-brain-bg px-2 py-1"
+            />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="축">
+              <select
+                value={axis}
+                onChange={(e) => setAxis(e.target.value as ModuleAxis)}
+                className="w-full rounded border border-brain-border bg-brain-bg px-2 py-1"
+              >
+                {AXIS_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="분야">
+              <input
+                value={field}
+                onChange={(e) => setField(e.target.value)}
+                className="w-full rounded border border-brain-border bg-brain-bg px-2 py-1"
+              />
+            </Field>
+            <Field label="순서">
+              <input
+                type="number"
+                value={order}
+                onChange={(e) => setOrder(Number(e.target.value))}
+                className="w-full rounded border border-brain-border bg-brain-bg px-2 py-1"
+              />
+            </Field>
+            <Field label="난이도 (1~5)">
+              <input
+                type="number"
+                min={1}
+                max={5}
+                value={difficulty}
+                onChange={(e) => setDifficulty(Number(e.target.value))}
+                className="w-full rounded border border-brain-border bg-brain-bg px-2 py-1"
+              />
+            </Field>
+          </div>
+          <Field label="설명 (선택)">
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              className="w-full rounded border border-brain-border bg-brain-bg px-2 py-1"
+            />
+          </Field>
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="rounded border border-brain-border px-3 py-1 text-sm disabled:opacity-50"
+          >
+            취소
+          </button>
+          <button
+            onClick={() => void submit()}
+            disabled={busy || !title || !slug}
+            className="rounded bg-brain-accent px-3 py-1 text-sm text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {busy ? "저장 중…" : "저장"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminLessonsPanel() {
+  const [modules, setModules] = useState<AdminModuleDto[] | null>(null);
+  const [moduleId, setModuleId] = useState<string>("");
+  const [lessons, setLessons] = useState<AdminLessonDto[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<AdminLessonDto | "new" | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .adminModules()
+      .then((rows) => {
+        if (cancelled) return;
+        setModules(rows);
+        setModuleId((cur) => (cur ? cur : (rows[0]?.id ?? "")));
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(toMessage(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const reload = useCallback(async () => {
+    if (!moduleId) {
+      setLessons([]);
+      return;
+    }
+    setError(null);
+    try {
+      const rows = await api.adminLessons(moduleId);
+      setLessons(rows);
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    }
+  }, [moduleId]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const remove = async (l: AdminLessonDto) => {
+    if (!window.confirm(`${l.title} 레슨을 삭제할까요? (텍스트도 함께 사라집니다)`)) return;
+    setBusy(true);
+    try {
+      await api.adminDeleteLesson(l.id);
+      await reload();
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="font-display text-2xl">레슨</h2>
+        <div className="flex items-center gap-2">
+          <select
+            value={moduleId}
+            onChange={(e) => setModuleId(e.target.value)}
+            className="rounded border border-brain-border bg-brain-bg px-2 py-1 text-sm"
+          >
+            {!modules && <option>불러오는 중…</option>}
+            {modules?.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.title}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={() => setEditing("new")}
+            disabled={!moduleId}
+            className="rounded bg-brain-accent px-3 py-1 text-sm text-white hover:opacity-90 disabled:opacity-50"
+          >
+            + 새 레슨
+          </button>
+        </div>
+      </div>
+      {error && (
+        <div className="mb-4 rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
+          {error}
+        </div>
+      )}
+      {!lessons && moduleId && (
+        <p className="text-sm text-brain-text-muted">불러오는 중…</p>
+      )}
+      {lessons && lessons.length === 0 && (
+        <p className="text-sm text-brain-text-muted">이 모듈에는 레슨이 없습니다.</p>
+      )}
+      <ul className="space-y-2">
+        {lessons?.map((l) => (
+          <li
+            key={l.id}
+            className="rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1"
+          >
+            <div className="flex items-center justify-between">
               <div>
-                <div className="font-display text-base">{u.name}</div>
-                <div className="text-sm text-brain-text-muted">{u.email}</div>
-                <div className="mt-1 text-xs text-brain-text-soft">
-                  역할 {u.role} · 상태 {u.status}
+                <div className="font-display text-base">
+                  #{l.order} · {l.title}
+                </div>
+                <div className="text-xs text-brain-text-muted">
+                  {l.author && <>저자 {l.author} · </>}
+                  {l.source && <>출처 {l.source} · </>}
+                  언어 {l.language} · 본문 {l.body.length}자
                 </div>
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => approve(u)}
-                  disabled={busyId === u.id}
-                  className="rounded bg-brain-accent px-3 py-1 text-sm text-white hover:opacity-90 disabled:opacity-50"
+                  onClick={() => setEditing(l)}
+                  disabled={busy}
+                  className="rounded border border-brain-border px-3 py-1 text-sm hover:bg-brain-accent-soft/30 disabled:opacity-50"
                 >
-                  승인
+                  수정
                 </button>
                 <button
-                  onClick={() => reject(u)}
-                  disabled={busyId === u.id}
+                  onClick={() => remove(l)}
+                  disabled={busy}
                   className="rounded border border-brain-danger/40 px-3 py-1 text-sm text-brain-danger hover:bg-brain-accent-soft/50 disabled:opacity-50"
                 >
-                  거절
+                  삭제
                 </button>
               </div>
-            </li>
-          ))}
-        </ul>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {editing !== null && (
+        <LessonEditorDialog
+          moduleId={moduleId}
+          initial={editing === "new" ? null : editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            void reload();
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function LessonEditorDialog({
+  moduleId,
+  initial,
+  onClose,
+  onSaved,
+}: {
+  moduleId: string;
+  initial: AdminLessonDto | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [order, setOrder] = useState(initial?.order ?? 0);
+  const [body, setBody] = useState(initial?.body ?? "");
+  const [author, setAuthor] = useState(initial?.author ?? "");
+  const [source, setSource] = useState(initial?.source ?? "");
+  const [language, setLanguage] = useState<"ko" | "en">(
+    (initial?.language as "ko" | "en") ?? "ko",
+  );
+  const [objectivesText, setObjectivesText] = useState(
+    initial?.objectives.join("\n") ?? "",
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    const objectives = objectivesText
+      .split("\n")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    try {
+      if (initial) {
+        const patch: AdminLessonUpdateInput = {
+          title,
+          order,
+          body,
+          author: author || undefined,
+          source: source || undefined,
+          language,
+          objectives,
+        };
+        await api.adminUpdateLesson(initial.id, patch);
+      } else {
+        const create: AdminLessonCreateInput = {
+          module_id: moduleId,
+          title,
+          order,
+          body,
+          author: author || undefined,
+          source: source || undefined,
+          language,
+          objectives,
+        };
+        await api.adminCreateLesson(create);
+      }
+      onSaved();
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl border border-brain-border bg-brain-surface p-6 shadow-soft-2">
+        <h3 className="mb-4 font-display text-xl">
+          {initial ? "레슨 수정" : "새 레슨"}
+        </h3>
+        {error && (
+          <div className="mb-3 rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
+            {error}
+          </div>
+        )}
+        <div className="flex-1 space-y-3 overflow-y-auto pr-1 text-sm">
+          <Field label="제목">
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full rounded border border-brain-border bg-brain-bg px-2 py-1"
+            />
+          </Field>
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="순서">
+              <input
+                type="number"
+                value={order}
+                onChange={(e) => setOrder(Number(e.target.value))}
+                className="w-full rounded border border-brain-border bg-brain-bg px-2 py-1"
+              />
+            </Field>
+            <Field label="저자">
+              <input
+                value={author}
+                onChange={(e) => setAuthor(e.target.value)}
+                className="w-full rounded border border-brain-border bg-brain-bg px-2 py-1"
+              />
+            </Field>
+            <Field label="언어">
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value as "ko" | "en")}
+                className="w-full rounded border border-brain-border bg-brain-bg px-2 py-1"
+              >
+                <option value="ko">한국어</option>
+                <option value="en">English</option>
+              </select>
+            </Field>
+          </div>
+          <Field label="출처">
+            <input
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+              className="w-full rounded border border-brain-border bg-brain-bg px-2 py-1"
+            />
+          </Field>
+          <Field label="본문 (학생에게 노출될 텍스트)">
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={10}
+              className="w-full rounded border border-brain-border bg-brain-bg px-2 py-1 font-mono text-xs leading-relaxed"
+            />
+          </Field>
+          <Field label="학습 목표 (한 줄에 하나)">
+            <textarea
+              value={objectivesText}
+              onChange={(e) => setObjectivesText(e.target.value)}
+              rows={3}
+              className="w-full rounded border border-brain-border bg-brain-bg px-2 py-1"
+            />
+          </Field>
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="rounded border border-brain-border px-3 py-1 text-sm disabled:opacity-50"
+          >
+            취소
+          </button>
+          <button
+            onClick={() => void submit()}
+            disabled={busy || !title || !body}
+            className="rounded bg-brain-accent px-3 py-1 text-sm text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {busy ? "저장 중…" : "저장"}
+          </button>
+        </div>
       </div>
     </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-medium text-brain-text-muted">{label}</span>
+      {children}
+    </label>
   );
 }
 

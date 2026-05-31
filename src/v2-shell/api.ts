@@ -118,6 +118,62 @@ export interface TutorMessageDto {
   created_at: string;
 }
 
+export type ModuleAxis = "cognitive" | "value" | "time";
+
+export interface AdminModuleDto {
+  id: string;
+  slug: string;
+  title: string;
+  axis: ModuleAxis;
+  field: string;
+  order: number;
+  difficulty: number;
+  description: string | null;
+  axis_focus: Record<string, unknown>;
+  lesson_count: number;
+}
+
+export interface AdminModuleCreateInput {
+  title: string;
+  slug: string;
+  axis: ModuleAxis;
+  field: string;
+  order: number;
+  difficulty: number;
+  description?: string;
+  axis_focus?: Record<string, number>;
+}
+
+export type AdminModuleUpdateInput = Partial<AdminModuleCreateInput>;
+
+export interface AdminLessonDto {
+  id: string;
+  module_id: string;
+  title: string;
+  order: number;
+  objectives: string[];
+  axis_focus: Record<string, unknown>;
+  text_excerpt_id: string | null;
+  body: string;
+  author: string;
+  source: string;
+  language: string;
+}
+
+export interface AdminLessonCreateInput {
+  module_id: string;
+  title: string;
+  order: number;
+  body: string;
+  author?: string;
+  source?: string;
+  language?: "ko" | "en";
+  objectives?: string[];
+  axis_focus?: Record<string, number>;
+}
+
+export type AdminLessonUpdateInput = Partial<Omit<AdminLessonCreateInput, "module_id">>;
+
 export class ApiError extends Error {
   status: number;
   code: string;
@@ -207,6 +263,35 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ ...(reason ? { reason } : {}) }),
     }),
+  adminModules: () => call<AdminModuleDto[]>("/api/admin/modules"),
+  adminCreateModule: (input: AdminModuleCreateInput) =>
+    call<AdminModuleDto>("/api/admin/modules", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  adminUpdateModule: (moduleId: string, input: AdminModuleUpdateInput) =>
+    call<AdminModuleDto>(`/api/admin/modules/${moduleId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+  adminDeleteModule: (moduleId: string) =>
+    call<void>(`/api/admin/modules/${moduleId}`, { method: "DELETE" }),
+  adminLessons: (moduleId?: string) =>
+    call<AdminLessonDto[]>(
+      moduleId ? `/api/admin/lessons?module_id=${moduleId}` : "/api/admin/lessons",
+    ),
+  adminCreateLesson: (input: AdminLessonCreateInput) =>
+    call<AdminLessonDto>("/api/admin/lessons", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  adminUpdateLesson: (lessonId: string, input: AdminLessonUpdateInput) =>
+    call<AdminLessonDto>(`/api/admin/lessons/${lessonId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+  adminDeleteLesson: (lessonId: string) =>
+    call<void>(`/api/admin/lessons/${lessonId}`, { method: "DELETE" }),
   chat: (
     sessionId: string,
     lessonId: string,
