@@ -94,6 +94,12 @@ export interface ArtifactDto {
   saved_at: string;
 }
 
+export interface ProgressEntryDto {
+  lesson_id: string;
+  session_count: number;
+  last_started_at: string | null;
+}
+
 export interface TutorMessageDto {
   id: string;
   session_id: string;
@@ -165,6 +171,7 @@ export const api = {
   moduleLessons: (moduleId: string) =>
     call<LessonDto[]>(`/api/library/modules/${moduleId}/lessons`),
   text: (textId: string) => call<TextExcerptDto>(`/api/library/texts/${textId}`),
+  progress: () => call<ProgressEntryDto[]>("/api/practice/me/progress"),
   startSession: (lessonId: string, mode?: SessionMode) =>
     call<SessionDto>("/api/practice/sessions", {
       method: "POST",

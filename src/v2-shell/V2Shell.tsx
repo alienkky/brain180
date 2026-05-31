@@ -12,6 +12,7 @@ import {
   type CanvasJson,
   type LessonDto,
   type ModuleDto,
+  type ProgressEntryDto,
   type SessionDto,
   type SessionMode,
   type TextExcerptDto,
@@ -209,18 +210,21 @@ function LibraryScreen({
   const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
   const [lessons, setLessons] = useState<LessonDto[] | null>(null);
   const [loadingLessons, setLoadingLessons] = useState(false);
+  const [progress, setProgress] = useState<Map<string, ProgressEntryDto>>(
+    () => new Map(),
+  );
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    api
-      .modules()
-      .then((rows) => {
+    Promise.all([api.modules(), api.progress()])
+      .then(([modRows, progRows]) => {
         if (cancelled) return;
-        setModules(rows);
-        if (rows[0]) {
-          setActiveModuleId(rows[0].id);
+        setModules(modRows);
+        if (modRows[0]) {
+          setActiveModuleId(modRows[0].id);
         }
+        setProgress(new Map(progRows.map((p) => [p.lesson_id, p])));
       })
       .catch((e: unknown) => !cancelled && setError(toMessage(e)));
     return () => {
@@ -282,6 +286,7 @@ function LibraryScreen({
         </ul>
       </aside>
       <section className="overflow-y-auto p-6">
+        <ProgressSummary progress={progress} />
         <h2 className="mb-4 font-display text-xl">레슨</h2>
         {error && (
           <div className="mb-4 rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
@@ -297,23 +302,29 @@ function LibraryScreen({
           </p>
         )}
         <ul className="space-y-3">
-          {lessons?.map((l) => (
-            <li key={l.id}>
-              <button
-                onClick={() => onPickLesson(l)}
-                className="w-full rounded-xl border border-brain-border bg-brain-surface p-4 text-left shadow-soft-1 transition hover:border-brain-accent hover:shadow-soft-2"
-              >
-                <div className="font-display text-lg">{l.title}</div>
-                {l.objectives.length > 0 && (
-                  <ul className="mt-2 list-disc pl-5 text-sm text-brain-text-muted">
-                    {l.objectives.slice(0, 3).map((o, i) => (
-                      <li key={i}>{o}</li>
-                    ))}
-                  </ul>
-                )}
-              </button>
-            </li>
-          ))}
+          {lessons?.map((l) => {
+            const p = progress.get(l.id);
+            return (
+              <li key={l.id}>
+                <button
+                  onClick={() => onPickLesson(l)}
+                  className="w-full rounded-xl border border-brain-border bg-brain-surface p-4 text-left shadow-soft-1 transition hover:border-brain-accent hover:shadow-soft-2"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="font-display text-lg">{l.title}</div>
+                    {p && <LessonProgressBadge entry={p} />}
+                  </div>
+                  {l.objectives.length > 0 && (
+                    <ul className="mt-2 list-disc pl-5 text-sm text-brain-text-muted">
+                      {l.objectives.slice(0, 3).map((o, i) => (
+                        <li key={i}>{o}</li>
+                      ))}
+                    </ul>
+                  )}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       </section>
     </div>
@@ -643,6 +654,69 @@ function PracticeScreen({
       </section>
     </div>
   );
+}
+
+function ProgressSummary({
+  progress,
+}: {
+  progress: Map<string, ProgressEntryDto>;
+}) {
+  if (progress.size === 0) return null;
+  const lessonsStarted = progress.size;
+  let totalSessions = 0;
+  let lastTs: number | null = null;
+  progress.forEach((p) => {
+    totalSessions += p.session_count;
+    if (p.last_started_at) {
+      const t = Date.parse(p.last_started_at);
+      if (!Number.isNaN(t) && (lastTs === null || t > lastTs)) lastTs = t;
+    }
+  });
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-4 rounded-xl border border-brain-border bg-brain-surface px-4 py-3 text-sm shadow-soft-1">
+      <span className="font-display text-brain-text">학습 진행</span>
+      <span className="text-brain-text-muted">
+        진입한 레슨 <span className="text-brain-text">{lessonsStarted}</span>개
+      </span>
+      <span className="text-brain-text-muted">
+        총 세션 <span className="text-brain-text">{totalSessions}</span>회
+      </span>
+      {lastTs !== null && (
+        <span className="text-brain-text-muted">
+          최근 활동 <span className="text-brain-text">{relativeTime(lastTs)}</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+function LessonProgressBadge({ entry }: { entry: ProgressEntryDto }) {
+  const lastTs = entry.last_started_at ? Date.parse(entry.last_started_at) : null;
+  return (
+    <div className="flex shrink-0 flex-col items-end text-xs text-brain-text-muted">
+      <span className="rounded-full bg-brain-accent-soft px-2 py-0.5 text-brain-accent">
+        {entry.session_count}회
+      </span>
+      {lastTs !== null && !Number.isNaN(lastTs) && (
+        <span className="mt-1">{relativeTime(lastTs)}</span>
+      )}
+    </div>
+  );
+}
+
+function relativeTime(ts: number): string {
+  const diffMs = Date.now() - ts;
+  const sec = Math.round(diffMs / 1000);
+  if (sec < 60) return "방금 전";
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}분 전`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}시간 전`;
+  const day = Math.round(hr / 24);
+  if (day < 30) return `${day}일 전`;
+  const mon = Math.round(day / 30);
+  if (mon < 12) return `${mon}달 전`;
+  return `${Math.round(mon / 12)}년 전`;
 }
 
 function ModePicker({

@@ -19,7 +19,7 @@
 
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { canvasArtifacts, learningSessions, lessons } from "../db/schema.js";
 import { ok, fail } from "../lib/envelope.js";
@@ -91,6 +91,41 @@ async function toSessionDTO(row: {
     submitted_at: row.endedAt ? row.endedAt.toISOString() : null,
   };
 }
+
+// ── GET /api/practice/me/progress ───────────────────────────────────
+//
+// Per-lesson aggregate for the current user. Used by the v2 library shell
+// to draw progress pills next to each lesson card. Intentionally minimal:
+// count + last_started_at. Canvas node counts are a follow-up that needs a
+// per-session latest-artifact join.
+
+interface ProgressEntryDTO {
+  lesson_id: string;
+  session_count: number;
+  last_started_at: string | null;
+}
+
+practiceRouter.get(
+  "/me/progress",
+  userRateLimit,
+  asyncHandler(async (req, res) => {
+    const rows = await db
+      .select({
+        lessonId: learningSessions.lessonId,
+        sessionCount: sql<number>`count(*)::int`,
+        lastStartedAt: sql<Date | null>`max(${learningSessions.startedAt})`,
+      })
+      .from(learningSessions)
+      .where(eq(learningSessions.userId, req.user!.id))
+      .groupBy(learningSessions.lessonId);
+    const dto: ProgressEntryDTO[] = rows.map((r) => ({
+      lesson_id: r.lessonId,
+      session_count: Number(r.sessionCount),
+      last_started_at: r.lastStartedAt ? new Date(r.lastStartedAt).toISOString() : null,
+    }));
+    ok(res, dto);
+  }),
+);
 
 // ── POST /api/practice/sessions ─────────────────────────────────────
 practiceRouter.post(
