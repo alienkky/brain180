@@ -62,6 +62,12 @@ export interface SessionDto {
   submitted_at: string | null;
 }
 
+export interface CanvasCite {
+  start: number;
+  end: number;
+  quote: string;
+}
+
 export interface CanvasNode {
   id: string;
   type: "concept" | "anchor" | "bridge" | "branch";
@@ -69,6 +75,7 @@ export interface CanvasNode {
   x: number;
   y: number;
   axis_tag?: "cognition" | "value" | "time";
+  cite?: CanvasCite;
 }
 
 export interface CanvasEdge {

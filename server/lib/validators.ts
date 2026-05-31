@@ -63,6 +63,12 @@ export const PatchSessionBody = z.object({
 });
 
 // CanvasJSON v1 (free-form mode — MVP)
+export const CanvasCite = z.object({
+  start: z.number().int().min(0),
+  end: z.number().int().min(0),
+  quote: z.string().min(1).max(400),
+});
+
 export const CanvasNode = z.object({
   id: z.string().min(1).max(64),
   type: z.enum(["concept", "anchor", "bridge", "branch"]),
@@ -70,6 +76,7 @@ export const CanvasNode = z.object({
   x: z.number().finite(),
   y: z.number().finite(),
   axis_tag: z.enum(["cognition", "value", "time"]).optional(),
+  cite: CanvasCite.optional(),
 });
 
 export const CanvasEdge = z.object({

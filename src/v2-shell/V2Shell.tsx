@@ -5,11 +5,13 @@
 // cookie is httpOnly so we cannot read it — we rely on `credentials: include`
 // in api.ts and probe /me on mount to restore sessions across reloads.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ApiError,
   api,
+  type CanvasCite,
   type CanvasJson,
+  type CanvasNode,
   type LessonDto,
   type ModuleDto,
   type ProgressEntryDto,
@@ -427,9 +429,13 @@ function PracticeScreen({
   const [revealText, setRevealText] = useState(false);
   const [initialCanvas, setInitialCanvas] = useState<CanvasJson | null>(null);
   const [canvasReady, setCanvasReady] = useState(false);
+  const [textSelection, setTextSelection] = useState<CanvasCite | null>(null);
+  const [pendingCite, setPendingCite] = useState<CanvasCite | null>(null);
+  const [focusCite, setFocusCite] = useState<CanvasCite | null>(null);
   const currentCanvas = useRef<CanvasJson | null>(null);
   const clientRevision = useRef(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const textBodyRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -488,6 +494,61 @@ function PracticeScreen({
   const onCanvasChange = useCallback((next: CanvasJson) => {
     currentCanvas.current = next;
   }, []);
+
+  const onNodeFocus = useCallback((n: CanvasNode) => {
+    if (!n.cite) return;
+    setFocusCite(n.cite);
+    setRevealText(true);
+  }, []);
+
+  // Auto-clear focus highlight after a few seconds so the spotlight is
+  // transient — the student should still be able to read the rest of the
+  // text without a persistent yellow stripe.
+  useEffect(() => {
+    if (!focusCite) return;
+    const t = window.setTimeout(() => setFocusCite(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [focusCite]);
+
+  // Whenever a focused cite changes, scroll its highlighted span into view.
+  useEffect(() => {
+    if (!focusCite || !textBodyRef.current) return;
+    const target = textBodyRef.current.querySelector(
+      "[data-cite-highlight=\"true\"]",
+    );
+    if (target instanceof HTMLElement) {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [focusCite]);
+
+  const captureTextSelection = useCallback(() => {
+    if (!text || !textBodyRef.current) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) {
+      setTextSelection(null);
+      return;
+    }
+    const range = sel.getRangeAt(0);
+    if (!textBodyRef.current.contains(range.commonAncestorContainer)) {
+      setTextSelection(null);
+      return;
+    }
+    const quote = sel.toString().trim();
+    if (!quote) {
+      setTextSelection(null);
+      return;
+    }
+    const start = text.body.indexOf(quote);
+    if (start === -1) {
+      setTextSelection(null);
+      return;
+    }
+    setTextSelection({
+      start,
+      end: start + quote.length,
+      quote: quote.slice(0, 400),
+    });
+  }, [text]);
 
   const sendChat = async (
     message: string,
@@ -604,9 +665,44 @@ function PracticeScreen({
                   </button>
                 </div>
               ) : (
-                <div className="mt-4 whitespace-pre-wrap font-serif text-base leading-relaxed">
-                  {text.body}
-                </div>
+                <>
+                  <div
+                    ref={textBodyRef}
+                    onMouseUp={captureTextSelection}
+                    onKeyUp={captureTextSelection}
+                    className="mt-4 whitespace-pre-wrap font-serif text-base leading-relaxed"
+                  >
+                    {renderTextWithHighlight(text.body, focusCite)}
+                  </div>
+                  {textSelection && (
+                    <div className="sticky bottom-4 mt-4 flex items-center gap-2 rounded-xl border border-brain-accent/60 bg-brain-surface px-4 py-2 text-sm shadow-soft-2">
+                      <span className="flex-1 truncate text-brain-text-muted">
+                        선택: <span className="text-brain-text">{textSelection.quote.slice(0, 50)}</span>
+                        {textSelection.quote.length > 50 ? "…" : ""}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setPendingCite(textSelection);
+                          setTextSelection(null);
+                          setTab("canvas");
+                          window.getSelection()?.removeAllRanges();
+                        }}
+                        className="rounded bg-brain-accent px-3 py-1 text-xs text-white hover:opacity-90"
+                      >
+                        캔버스에 인용 노드 추가
+                      </button>
+                      <button
+                        onClick={() => {
+                          setTextSelection(null);
+                          window.getSelection()?.removeAllRanges();
+                        }}
+                        className="rounded border border-brain-border px-2 py-1 text-xs text-brain-text-muted hover:text-brain-text"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </article>
           )}
@@ -700,6 +796,9 @@ function PracticeScreen({
                 onSave={onSaveCanvas}
                 onChange={onCanvasChange}
                 onAskTutor={onAskTutor}
+                onNodeFocus={onNodeFocus}
+                injectCite={pendingCite}
+                onCiteConsumed={() => setPendingCite(null)}
                 disabled={!session}
               />
             ) : (
@@ -927,6 +1026,28 @@ function TabButton({
     >
       {label}
     </button>
+  );
+}
+
+function renderTextWithHighlight(
+  body: string,
+  cite: CanvasCite | null,
+): ReactNode {
+  if (!cite) return body;
+  const start = Math.max(0, Math.min(cite.start, body.length));
+  const end = Math.max(start, Math.min(cite.end, body.length));
+  if (end <= start) return body;
+  return (
+    <>
+      {body.slice(0, start)}
+      <mark
+        data-cite-highlight="true"
+        className="rounded bg-brain-highlight-soft px-0.5 text-brain-text"
+      >
+        {body.slice(start, end)}
+      </mark>
+      {body.slice(end)}
+    </>
   );
 }
 

@@ -14,6 +14,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
+  CanvasCite,
   CanvasEdge,
   CanvasJson,
   CanvasNode,
@@ -47,6 +48,12 @@ interface Props {
   onSave: (next: CanvasJson) => Promise<void> | void;
   onChange?: (next: CanvasJson) => void;
   onAskTutor?: (snapshot: CanvasJson) => void;
+  onNodeFocus?: (node: CanvasNode) => void;
+  // When this prop transitions from null → cite, the canvas auto-creates an
+  // anchor node carrying that cite and then calls onCiteConsumed so the
+  // parent can clear the slot.
+  injectCite?: CanvasCite | null;
+  onCiteConsumed?: () => void;
   disabled?: boolean;
 }
 
@@ -62,6 +69,9 @@ export function CognitiveMap({
   onSave,
   onChange,
   onAskTutor,
+  onNodeFocus,
+  injectCite,
+  onCiteConsumed,
   disabled,
 }: Props) {
   const [canvas, setCanvas] = useState<CanvasJson>(initial ?? EMPTY);
@@ -83,6 +93,23 @@ export function CognitiveMap({
     setPendingEdge(null);
     isFirstLoad.current = true;
   }, [initial]);
+
+  // Consume a cite injection from the text panel: place an anchor node at
+  // a fresh-ish position so the student doesn't have to find the click
+  // target. Parent is expected to null out the prop after onCiteConsumed.
+  useEffect(() => {
+    if (!injectCite) return;
+    const node: CanvasNode = {
+      id: cryptoRandomId(),
+      type: "anchor",
+      label: injectCite.quote.slice(0, 24),
+      x: 80 + Math.random() * 120,
+      y: 80 + Math.random() * 120,
+      cite: injectCite,
+    };
+    setCanvas((c) => ({ ...c, nodes: [...c.nodes, node] }));
+    onCiteConsumed?.();
+  }, [injectCite, onCiteConsumed]);
 
   // Debounced auto-save. Parent gets a synchronous mirror via onChange so
   // sibling features (tutor hint button) can read the current canvas without
@@ -172,7 +199,11 @@ export function CognitiveMap({
       setSelectedNodeId(null);
       return;
     }
-    setSelectedNodeId(n.id === selectedNodeId ? null : n.id);
+    const next = n.id === selectedNodeId ? null : n.id;
+    setSelectedNodeId(next);
+    // When selecting a cite-bearing node, give the parent a chance to scroll
+    // the text panel to that quote.
+    if (next && n.cite) onNodeFocus?.(n);
   };
 
   const onEdgeClick = (edgeId: string) => {
@@ -351,6 +382,25 @@ export function CognitiveMap({
                 >
                   {n.label.slice(0, 8)}
                 </text>
+                {n.cite && (
+                  <g pointerEvents="none">
+                    <circle
+                      cx={20}
+                      cy={-20}
+                      r={8}
+                      fill="var(--color-brain-accent)"
+                    />
+                    <text
+                      x={20}
+                      y={-17}
+                      textAnchor="middle"
+                      fontSize={10}
+                      fill="white"
+                    >
+                      ¶
+                    </text>
+                  </g>
+                )}
               </g>
             );
           })}
