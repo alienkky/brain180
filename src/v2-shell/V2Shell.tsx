@@ -34,13 +34,20 @@ type Screen =
   | { name: "login" }
   | { name: "library" }
   | { name: "practice"; lesson: LessonDto }
+  | { name: "compare"; left: LessonDto; right: LessonDto }
   | { name: "admin" };
+
+interface ComparePins {
+  left: LessonDto | null;
+  right: LessonDto | null;
+}
 
 export function V2Shell() {
   const [user, setUser] = useState<UserDto | null>(null);
   const [screen, setScreen] = useState<Screen>({ name: "login" });
   const [bootError, setBootError] = useState<string | null>(null);
   const [booting, setBooting] = useState(true);
+  const [comparePins, setComparePins] = useState<ComparePins>({ left: null, right: null });
 
   useEffect(() => {
     let cancelled = false;
@@ -108,11 +115,34 @@ export function V2Shell() {
         {screen.name === "library" && (
           <LibraryScreen
             onPickLesson={(lesson) => setScreen({ name: "practice", lesson })}
+            comparePins={comparePins}
+            onPinCompare={(slot, lesson) =>
+              setComparePins((c) => ({ ...c, [slot]: lesson }))
+            }
+            onClearPin={(slot) =>
+              setComparePins((c) => ({ ...c, [slot]: null }))
+            }
+            onStartCompare={() => {
+              if (comparePins.left && comparePins.right) {
+                setScreen({
+                  name: "compare",
+                  left: comparePins.left,
+                  right: comparePins.right,
+                });
+              }
+            }}
           />
         )}
         {screen.name === "practice" && (
           <PracticeScreen
             lesson={screen.lesson}
+            onBack={() => setScreen({ name: "library" })}
+          />
+        )}
+        {screen.name === "compare" && (
+          <CompareScreen
+            left={screen.left}
+            right={screen.right}
             onBack={() => setScreen({ name: "library" })}
           />
         )}
@@ -270,8 +300,16 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: (u: UserDto) => void }) {
 
 function LibraryScreen({
   onPickLesson,
+  comparePins,
+  onPinCompare,
+  onClearPin,
+  onStartCompare,
 }: {
   onPickLesson: (lesson: LessonDto) => void;
+  comparePins: ComparePins;
+  onPinCompare: (slot: "left" | "right", lesson: LessonDto) => void;
+  onClearPin: (slot: "left" | "right") => void;
+  onStartCompare: () => void;
 }) {
   const [modules, setModules] = useState<ModuleDto[] | null>(null);
   const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
@@ -354,6 +392,11 @@ function LibraryScreen({
       </aside>
       <section className="overflow-y-auto p-6">
         <ProgressSummary progress={progress} />
+        <CompareBar
+          pins={comparePins}
+          onClear={onClearPin}
+          onStart={onStartCompare}
+        />
         <h2 className="mb-4 font-display text-xl">레슨</h2>
         {error && (
           <div className="mb-4 rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
@@ -371,24 +414,39 @@ function LibraryScreen({
         <ul className="space-y-3">
           {lessons?.map((l) => {
             const p = progress.get(l.id);
+            const pinSlot =
+              comparePins.left?.id === l.id
+                ? "left"
+                : comparePins.right?.id === l.id
+                  ? "right"
+                  : null;
             return (
               <li key={l.id}>
-                <button
-                  onClick={() => onPickLesson(l)}
-                  className="w-full rounded-xl border border-brain-border bg-brain-surface p-4 text-left shadow-soft-1 transition hover:border-brain-accent hover:shadow-soft-2"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="font-display text-lg">{l.title}</div>
-                    {p && <LessonProgressBadge entry={p} />}
-                  </div>
-                  {l.objectives.length > 0 && (
-                    <ul className="mt-2 list-disc pl-5 text-sm text-brain-text-muted">
-                      {l.objectives.slice(0, 3).map((o, i) => (
-                        <li key={i}>{o}</li>
-                      ))}
-                    </ul>
-                  )}
-                </button>
+                <div className="group relative rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1 transition hover:border-brain-accent hover:shadow-soft-2">
+                  <button
+                    onClick={() => onPickLesson(l)}
+                    className="block w-full text-left"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="font-display text-lg">{l.title}</div>
+                      {p && <LessonProgressBadge entry={p} />}
+                    </div>
+                    {l.objectives.length > 0 && (
+                      <ul className="mt-2 list-disc pl-5 text-sm text-brain-text-muted">
+                        {l.objectives.slice(0, 3).map((o, i) => (
+                          <li key={i}>{o}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </button>
+                  <ComparePinButtons
+                    lesson={l}
+                    pinSlot={pinSlot}
+                    pins={comparePins}
+                    onPin={onPinCompare}
+                    onClear={onClearPin}
+                  />
+                </div>
               </li>
             );
           })}
@@ -1682,4 +1740,284 @@ function toMessage(e: unknown): string {
   if (e instanceof ApiError) return `${e.message} (${e.code})`;
   if (e instanceof Error) return e.message;
   return String(e);
+}
+
+function CompareBar({
+  pins,
+  onClear,
+  onStart,
+}: {
+  pins: ComparePins;
+  onClear: (slot: "left" | "right") => void;
+  onStart: () => void;
+}) {
+  const hasAny = pins.left || pins.right;
+  if (!hasAny) return null;
+  const ready = pins.left && pins.right;
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-brain-accent/40 bg-brain-accent-soft/40 px-4 py-3 text-sm">
+      <span className="font-display text-brain-text">비교 모드</span>
+      <ComparePinChip
+        label="좌"
+        lesson={pins.left}
+        onClear={() => onClear("left")}
+      />
+      <ComparePinChip
+        label="우"
+        lesson={pins.right}
+        onClear={() => onClear("right")}
+      />
+      <button
+        onClick={onStart}
+        disabled={!ready}
+        className="ml-auto rounded bg-brain-accent px-3 py-1 text-sm text-white hover:opacity-90 disabled:opacity-40"
+      >
+        비교 시작
+      </button>
+    </div>
+  );
+}
+
+function ComparePinChip({
+  label,
+  lesson,
+  onClear,
+}: {
+  label: string;
+  lesson: LessonDto | null;
+  onClear: () => void;
+}) {
+  if (!lesson)
+    return (
+      <span className="rounded-full border border-dashed border-brain-border px-3 py-0.5 text-xs text-brain-text-muted">
+        {label}: 비어 있음
+      </span>
+    );
+  return (
+    <span className="flex items-center gap-1 rounded-full bg-brain-surface px-3 py-0.5 text-xs text-brain-text shadow-soft-1">
+      <span className="text-brain-text-muted">{label}:</span>
+      <span className="max-w-[180px] truncate">{lesson.title}</span>
+      <button
+        onClick={onClear}
+        className="ml-1 text-brain-text-muted hover:text-brain-danger"
+        aria-label="비교 슬롯 비우기"
+      >
+        ×
+      </button>
+    </span>
+  );
+}
+
+function ComparePinButtons({
+  lesson,
+  pinSlot,
+  pins,
+  onPin,
+  onClear,
+}: {
+  lesson: LessonDto;
+  pinSlot: "left" | "right" | null;
+  pins: ComparePins;
+  onPin: (slot: "left" | "right", lesson: LessonDto) => void;
+  onClear: (slot: "left" | "right") => void;
+}) {
+  return (
+    <div className="mt-2 flex justify-end gap-2 text-xs">
+      <PinSlotBtn
+        slot="left"
+        label="좌측 비교"
+        active={pinSlot === "left"}
+        disabled={pins.left !== null && pinSlot !== "left"}
+        onClick={() => (pinSlot === "left" ? onClear("left") : onPin("left", lesson))}
+      />
+      <PinSlotBtn
+        slot="right"
+        label="우측 비교"
+        active={pinSlot === "right"}
+        disabled={pins.right !== null && pinSlot !== "right"}
+        onClick={() =>
+          pinSlot === "right" ? onClear("right") : onPin("right", lesson)
+        }
+      />
+    </div>
+  );
+}
+
+function PinSlotBtn({
+  label,
+  active,
+  disabled,
+  onClick,
+}: {
+  slot: "left" | "right";
+  label: string;
+  active: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={
+        "rounded-full border px-2.5 py-0.5 transition " +
+        (active
+          ? "border-brain-accent bg-brain-accent text-white"
+          : disabled
+            ? "border-brain-border text-brain-text-soft opacity-40"
+            : "border-brain-border text-brain-text-muted hover:border-brain-accent hover:text-brain-text")
+      }
+    >
+      {active ? "비교 해제" : label}
+    </button>
+  );
+}
+
+function CompareScreen({
+  left,
+  right,
+  onBack,
+}: {
+  left: LessonDto;
+  right: LessonDto;
+  onBack: () => void;
+}) {
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between border-b border-brain-border bg-brain-surface px-6 py-3">
+        <button
+          onClick={onBack}
+          className="text-sm text-brain-text-muted hover:text-brain-text"
+        >
+          ← 라이브러리
+        </button>
+        <div className="text-center font-display text-base">
+          비교 모드 — {left.title} <span className="text-brain-text-muted">vs</span>{" "}
+          {right.title}
+        </div>
+        <div className="w-20 text-right text-xs text-brain-text-muted">
+          좌우 캔버스는 각자 자동 저장됩니다
+        </div>
+      </div>
+      <div className="grid flex-1 grid-cols-2 overflow-hidden">
+        <div className="overflow-hidden border-r border-brain-border">
+          <CompareSide lesson={left} side="좌" />
+        </div>
+        <div className="overflow-hidden">
+          <CompareSide lesson={right} side="우" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CompareSide({ lesson, side }: { lesson: LessonDto; side: string }) {
+  const [text, setText] = useState<TextExcerptDto | null>(null);
+  const [session, setSession] = useState<SessionDto | null>(null);
+  const [initialCanvas, setInitialCanvas] = useState<CanvasJson | null>(null);
+  const [canvasReady, setCanvasReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<"text" | "canvas">("canvas");
+  const clientRevision = useRef(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setError(null);
+    setText(null);
+    setSession(null);
+    setInitialCanvas(null);
+    setCanvasReady(false);
+    clientRevision.current = 0;
+    (async () => {
+      try {
+        const textPromise = lesson.text_excerpt_id
+          ? api.text(lesson.text_excerpt_id)
+          : Promise.resolve(null);
+        const [textRow, sess] = await Promise.all([
+          textPromise,
+          api.startSession(lesson.id, "analyze"),
+        ]);
+        if (cancelled) return;
+        setText(textRow);
+        setSession(sess);
+        const artifact = await api.getArtifact(sess.id);
+        if (cancelled) return;
+        setInitialCanvas(artifact?.canvas_json ?? null);
+        setCanvasReady(true);
+      } catch (e: unknown) {
+        if (!cancelled) setError(toMessage(e));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [lesson.id, lesson.text_excerpt_id]);
+
+  const onSaveCanvas = useCallback(
+    async (next: CanvasJson) => {
+      if (!session) return;
+      clientRevision.current += 1;
+      await api.putArtifact(session.id, next, clientRevision.current);
+    },
+    [session],
+  );
+
+  return (
+    <div className="flex h-full flex-col bg-brain-surface-soft">
+      <div className="flex items-center justify-between border-b border-brain-border bg-brain-surface px-4 py-2 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-brain-accent px-2 py-0.5 text-white">{side}</span>
+          <span className="font-display text-sm text-brain-text">{lesson.title}</span>
+        </div>
+        <div className="flex gap-1">
+          <TabButton
+            active={view === "text"}
+            onClick={() => setView("text")}
+            label="본문"
+          />
+          <TabButton
+            active={view === "canvas"}
+            onClick={() => setView("canvas")}
+            label="캔버스"
+          />
+        </div>
+      </div>
+      {error && (
+        <div className="border-b border-brain-danger/40 bg-brain-accent-soft/50 px-4 py-1 text-xs text-brain-danger">
+          {error}
+        </div>
+      )}
+      {view === "text" && (
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          {!text && !error && (
+            <p className="text-xs text-brain-text-muted">본문 불러오는 중…</p>
+          )}
+          {text && (
+            <article className="prose max-w-none">
+              <h3 className="font-display text-base">{text.title}</h3>
+              <p className="text-xs text-brain-text-muted">
+                {text.author} · {text.source}
+              </p>
+              <div className="mt-3 whitespace-pre-wrap font-serif text-sm leading-relaxed">
+                {text.body}
+              </div>
+            </article>
+          )}
+        </div>
+      )}
+      {view === "canvas" && (
+        <div className="flex-1 overflow-hidden">
+          {canvasReady ? (
+            <CognitiveMap
+              initial={initialCanvas}
+              onSave={onSaveCanvas}
+              disabled={!session}
+            />
+          ) : (
+            <p className="p-4 text-xs text-brain-text-muted">캔버스 불러오는 중…</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
