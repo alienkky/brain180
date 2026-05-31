@@ -132,7 +132,7 @@ libraryRouter.get(
   asyncHandler(async (req, res) => {
     const moduleId = req.params.id;
     if (typeof moduleId !== "string" || !UUID_RE.test(moduleId)) {
-      fail(res, 400, "validation_error", { message: "invalid_module_id" });
+      fail(res, 422, "validation_error", { message: "invalid_module_id" });
       return;
     }
 
@@ -173,7 +173,7 @@ libraryRouter.get(
   asyncHandler(async (req, res) => {
     const lessonId = req.params.id;
     if (typeof lessonId !== "string" || !UUID_RE.test(lessonId)) {
-      fail(res, 400, "validation_error", { message: "invalid_lesson_id" });
+      fail(res, 422, "validation_error", { message: "invalid_lesson_id" });
       return;
     }
 
@@ -206,7 +206,7 @@ libraryRouter.get(
   asyncHandler(async (req, res) => {
     const textId = req.params.id;
     if (typeof textId !== "string" || !UUID_RE.test(textId)) {
-      fail(res, 400, "validation_error", { message: "invalid_text_id" });
+      fail(res, 422, "validation_error", { message: "invalid_text_id" });
       return;
     }
 

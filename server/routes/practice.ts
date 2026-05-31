@@ -130,7 +130,7 @@ practiceRouter.get(
   asyncHandler(async (req, res) => {
     const sessionId = req.params.id;
     if (typeof sessionId !== "string" || !UUID_RE.test(sessionId)) {
-      fail(res, 400, "validation_error", { message: "invalid_session_id" });
+      fail(res, 422, "validation_error", { message: "invalid_session_id" });
       return;
     }
 

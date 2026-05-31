@@ -177,7 +177,7 @@ tutorRouter.post(
       return;
     }
     if (session.lessonId !== body.lesson_id) {
-      fail(res, 400, "validation_error", { message: "lesson_mismatch" });
+      fail(res, 422, "validation_error", { message: "lesson_mismatch" });
       return;
     }
 
@@ -311,7 +311,7 @@ tutorRouter.get(
   asyncHandler(async (req, res) => {
     const sessionId = req.params.id;
     if (typeof sessionId !== "string" || !UUID_RE.test(sessionId)) {
-      fail(res, 400, "validation_error", { message: "invalid_session_id" });
+      fail(res, 422, "validation_error", { message: "invalid_session_id" });
       return;
     }
 
@@ -356,7 +356,7 @@ tutorRouter.post(
   asyncHandler(async (req, res) => {
     const messageId = req.params.id;
     if (typeof messageId !== "string" || !UUID_RE.test(messageId)) {
-      fail(res, 400, "validation_error", { message: "invalid_message_id" });
+      fail(res, 422, "validation_error", { message: "invalid_message_id" });
       return;
     }
 

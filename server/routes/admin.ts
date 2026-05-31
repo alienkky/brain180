@@ -60,7 +60,7 @@ adminRouter.post(
   asyncHandler(async (req, res) => {
     const targetId = req.params.id;
     if (typeof targetId !== "string" || !UUID_RE.test(targetId)) {
-      fail(res, 400, "validation_error", { message: "invalid_user_id" });
+      fail(res, 422, "validation_error", { message: "invalid_user_id" });
       return;
     }
 
@@ -91,7 +91,7 @@ adminRouter.post(
   asyncHandler(async (req, res) => {
     const targetId = req.params.id;
     if (typeof targetId !== "string" || !UUID_RE.test(targetId)) {
-      fail(res, 400, "validation_error", { message: "invalid_user_id" });
+      fail(res, 422, "validation_error", { message: "invalid_user_id" });
       return;
     }
 
@@ -128,7 +128,7 @@ adminRouter.post(
   asyncHandler(async (req, res) => {
     const targetId = req.params.id;
     if (typeof targetId !== "string" || !UUID_RE.test(targetId)) {
-      fail(res, 400, "validation_error", { message: "invalid_user_id" });
+      fail(res, 422, "validation_error", { message: "invalid_user_id" });
       return;
     }
 
