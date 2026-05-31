@@ -42,7 +42,7 @@ export interface UsageLogRow {
   errorCode: string | null;
 }
 
-export type UpstreamProvider = "anthropic" | "openai" | "gemini" | "resend" | "toss" | "r2";
+export type UpstreamProvider = "anthropic" | "openai" | "gemini" | "resend" | "toss" | "r2" | "push";
 
 export class UpstreamError extends Error {
   constructor(
