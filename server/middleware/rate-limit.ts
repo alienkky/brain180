@@ -6,6 +6,11 @@
 //   user   — user per minute (60)
 //
 // MVP cut: single-instance Railway only. Production sharding moves to Redis.
+//
+// Response headers (IETF draft-ietf-httpapi-ratelimit-headers):
+//   RateLimit-Limit / RateLimit-Remaining / RateLimit-Reset — set on every
+//   pass-through and on 429. Tutor reports the tightest of minute/day so the
+//   client can surface whichever boundary is closer.
 
 import type { Request, Response, NextFunction } from "express";
 import { fail } from "../lib/envelope.js";
@@ -41,7 +46,19 @@ interface LimitSpec {
   perDay?: number;
 }
 
-function check(key: string, spec: LimitSpec): { ok: true } | { ok: false; retryAfterSec: number } {
+interface LimitStatus {
+  limit: number;
+  remaining: number;
+  resetSec: number;
+}
+
+interface CheckResult {
+  ok: boolean;
+  status: LimitStatus;
+  retryAfterSec: number;
+}
+
+function check(key: string, spec: LimitSpec): CheckResult {
   const now = Date.now();
   const b = bucket(key);
   b.minute = prune(b.minute, MIN_MS, now);
@@ -49,18 +66,48 @@ function check(key: string, spec: LimitSpec): { ok: true } | { ok: false; retryA
     b.day = prune(b.day, DAY_MS, now);
   }
 
+  const minuteRemaining = spec.perMinute - b.minute.length;
+  const minuteOldest = b.minute[0];
+  const minuteResetSec = minuteOldest
+    ? Math.max(1, Math.ceil((MIN_MS - (now - minuteOldest)) / 1000))
+    : Math.ceil(MIN_MS / 1000);
+
+  let status: LimitStatus = {
+    limit: spec.perMinute,
+    remaining: Math.max(0, minuteRemaining),
+    resetSec: minuteResetSec,
+  };
+
+  if (spec.perDay !== undefined) {
+    const dayRemaining = spec.perDay - b.day.length;
+    const dayOldest = b.day[0];
+    const dayResetSec = dayOldest
+      ? Math.max(1, Math.ceil((DAY_MS - (now - dayOldest)) / 1000))
+      : Math.ceil(DAY_MS / 1000);
+    if (dayRemaining < status.remaining) {
+      status = { limit: spec.perDay, remaining: Math.max(0, dayRemaining), resetSec: dayResetSec };
+    }
+  }
+
   if (b.minute.length >= spec.perMinute) {
-    const oldest = b.minute[0]!;
-    return { ok: false, retryAfterSec: Math.ceil((MIN_MS - (now - oldest)) / 1000) };
+    return { ok: false, status, retryAfterSec: minuteResetSec };
   }
   if (spec.perDay !== undefined && b.day.length >= spec.perDay) {
-    const oldest = b.day[0]!;
-    return { ok: false, retryAfterSec: Math.ceil((DAY_MS - (now - oldest)) / 1000) };
+    return { ok: false, status, retryAfterSec: status.resetSec };
   }
 
   b.minute.push(now);
   if (spec.perDay !== undefined) b.day.push(now);
-  return { ok: true };
+  // Decrement remaining now that this request is admitted so headers reflect
+  // post-admission state (matches what clients expect for "tokens left").
+  status = { ...status, remaining: Math.max(0, status.remaining - 1) };
+  return { ok: true, status, retryAfterSec: 0 };
+}
+
+function applyHeaders(res: Response, status: LimitStatus): void {
+  res.setHeader("RateLimit-Limit", String(status.limit));
+  res.setHeader("RateLimit-Remaining", String(status.remaining));
+  res.setHeader("RateLimit-Reset", String(status.resetSec));
 }
 
 function send429(res: Response, retryAfterSec: number): void {
@@ -78,6 +125,7 @@ function userKey(req: Request): string | null {
 
 export function authRateLimit(req: Request, res: Response, next: NextFunction): void {
   const r = check(`auth:${ipKey(req)}`, { perMinute: 20 });
+  applyHeaders(res, r.status);
   if (r.ok) return next();
   send429(res, r.retryAfterSec);
 }
@@ -89,6 +137,7 @@ export function tutorRateLimit(req: Request, res: Response, next: NextFunction):
     return;
   }
   const r = check(`tutor:${uk}`, { perMinute: 30, perDay: 200 });
+  applyHeaders(res, r.status);
   if (r.ok) return next();
   send429(res, r.retryAfterSec);
 }
@@ -100,6 +149,7 @@ export function userRateLimit(req: Request, res: Response, next: NextFunction): 
     return;
   }
   const r = check(`user:${uk}`, { perMinute: 60 });
+  applyHeaders(res, r.status);
   if (r.ok) return next();
   send429(res, r.retryAfterSec);
 }
