@@ -1,6 +1,7 @@
 import express from "express";
 import { loadEnv } from "./lib/env.js";
 import { sessionMiddleware } from "./middleware/auth.js";
+import { corsMiddleware } from "./middleware/cors.js";
 import { errorHandler, notFound } from "./middleware/error.js";
 import { mountRoutes } from "./routes/index.js";
 import { closeDb } from "./db/client.js";
@@ -13,6 +14,9 @@ installUsageLogWriter();
 const app = express();
 
 app.disable("x-powered-by");
+// CORS runs before json parsing so OPTIONS preflights short-circuit fast
+// and never touch the body parser.
+app.use(corsMiddleware);
 app.use(express.json({ limit: "1mb" }));
 app.use(sessionMiddleware);
 app.use(mountRoutes());
