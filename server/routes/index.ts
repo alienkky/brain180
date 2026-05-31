@@ -5,6 +5,7 @@ import { libraryRouter } from "./library.js";
 import { practiceRouter } from "./practice.js";
 import { tutorRouter } from "./tutor.js";
 import { adminRouter } from "./admin.js";
+import { billingRouter } from "./billing.js";
 import { webhookRouter } from "./webhooks.js";
 
 export function mountRoutes(): Router {
@@ -15,6 +16,7 @@ export function mountRoutes(): Router {
   r.use("/api/practice", practiceRouter);
   r.use("/api/tutor", tutorRouter);
   r.use("/api/admin", adminRouter);
+  r.use("/api/billing", billingRouter);
   r.use("/webhooks", webhookRouter);
   return r;
 }

@@ -174,6 +174,41 @@ export interface AdminLessonCreateInput {
 
 export type AdminLessonUpdateInput = Partial<Omit<AdminLessonCreateInput, "module_id">>;
 
+export type PlanName = "free" | "standard" | "premium";
+
+export interface PlanDto {
+  name: PlanName;
+  title: string;
+  price_krw: number;
+  features: Record<string, unknown>;
+}
+
+export interface SubscriptionDto {
+  id: string;
+  plan_name: PlanName | null;
+  status: "trialing" | "active" | "past_due" | "canceled" | "expired";
+  started_at: string;
+  ends_at: string | null;
+}
+
+export interface CheckoutPayload {
+  order_id: string;
+  amount: number;
+  plan_name: PlanName;
+  order_name: string;
+  client_key: string;
+  customer_email: string;
+  success_url: string;
+  fail_url: string;
+}
+
+export interface ConfirmResult {
+  payment_id: string;
+  subscription_id: string | null;
+  plan_name: PlanName;
+  ends_at: string;
+}
+
 export class ApiError extends Error {
   status: number;
   code: string;
@@ -305,6 +340,23 @@ export const api = {
         lesson_id: lessonId,
         message,
         ...(canvasSnapshot ? { canvas_snapshot: canvasSnapshot } : {}),
+      }),
+    }),
+  billingPlans: () => call<PlanDto[]>("/api/billing/plans"),
+  billingMeSubscription: () =>
+    call<SubscriptionDto | null>("/api/billing/me/subscription"),
+  billingCheckout: (planName: Exclude<PlanName, "free">) =>
+    call<CheckoutPayload>("/api/billing/checkout", {
+      method: "POST",
+      body: JSON.stringify({ plan_name: planName }),
+    }),
+  billingConfirm: (paymentKey: string, orderId: string, amount: number) =>
+    call<ConfirmResult>("/api/billing/confirm", {
+      method: "POST",
+      body: JSON.stringify({
+        payment_key: paymentKey,
+        order_id: orderId,
+        amount,
       }),
     }),
 };

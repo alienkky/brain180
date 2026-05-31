@@ -17,7 +17,16 @@ app.disable("x-powered-by");
 // CORS runs before json parsing so OPTIONS preflights short-circuit fast
 // and never touch the body parser.
 app.use(corsMiddleware);
-app.use(express.json({ limit: "1mb" }));
+// Stash raw body on the request so /webhooks/toss can HMAC-verify before trusting
+// the parsed JSON. Cheap copy; only fires for routes that send a body.
+app.use(
+  express.json({
+    limit: "1mb",
+    verify: (req, _res, buf) => {
+      (req as { rawBody?: Buffer }).rawBody = Buffer.from(buf);
+    },
+  }),
+);
 app.use(sessionMiddleware);
 app.use(mountRoutes());
 app.use(notFound);

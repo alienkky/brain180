@@ -18,12 +18,16 @@ import {
   type CanvasCite,
   type CanvasJson,
   type CanvasNode,
+  type CheckoutPayload,
   type LessonDto,
   type ModuleAxis,
   type ModuleDto,
+  type PlanDto,
+  type PlanName,
   type ProgressEntryDto,
   type SessionDto,
   type SessionMode,
+  type SubscriptionDto,
   type TextExcerptDto,
   type TutorMessageDto,
   type UserDto,
@@ -35,7 +39,8 @@ type Screen =
   | { name: "library" }
   | { name: "practice"; lesson: LessonDto }
   | { name: "compare"; left: LessonDto; right: LessonDto }
-  | { name: "admin" };
+  | { name: "admin" }
+  | { name: "subscription"; flash?: string | null };
 
 interface ComparePins {
   left: LessonDto | null;
@@ -53,10 +58,13 @@ export function V2Shell() {
     let cancelled = false;
     api
       .me()
-      .then((u) => {
+      .then(async (u) => {
         if (cancelled) return;
         setUser(u);
-        setScreen({ name: "library" });
+        const flash = await consumeTossReturnUrl();
+        setScreen(
+          flash ? { name: "subscription", flash } : { name: "library" },
+        );
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -103,6 +111,7 @@ export function V2Shell() {
         onLogout={onLogout}
         onGoLibrary={() => setScreen({ name: "library" })}
         onGoAdmin={() => setScreen({ name: "admin" })}
+        onGoSubscription={() => setScreen({ name: "subscription" })}
         activeScreen={screen.name}
       />
       {bootError && (
@@ -147,6 +156,9 @@ export function V2Shell() {
           />
         )}
         {screen.name === "admin" && <AdminScreen />}
+        {screen.name === "subscription" && (
+          <SubscriptionScreen flash={screen.flash ?? null} />
+        )}
       </main>
     </div>
   );
@@ -157,12 +169,14 @@ function Header({
   onLogout,
   onGoLibrary,
   onGoAdmin,
+  onGoSubscription,
   activeScreen,
 }: {
   user: UserDto | null;
   onLogout: () => void;
   onGoLibrary: () => void;
   onGoAdmin: () => void;
+  onGoSubscription: () => void;
   activeScreen: Screen["name"];
 }) {
   return (
@@ -178,6 +192,11 @@ function Header({
               active={activeScreen === "library" || activeScreen === "practice"}
               onClick={onGoLibrary}
               label="라이브러리"
+            />
+            <HeaderNavButton
+              active={activeScreen === "subscription"}
+              onClick={onGoSubscription}
+              label="구독"
             />
             {user.role === "admin" && (
               <HeaderNavButton
@@ -2020,4 +2039,280 @@ function CompareSide({ lesson, side }: { lesson: LessonDto; side: string }) {
       )}
     </div>
   );
+}
+
+// ─── Subscription (Toss Path B) ─────────────────────────────────────
+
+interface TossPaymentsClient {
+  requestPayment: (
+    method: string,
+    payload: {
+      amount: number;
+      orderId: string;
+      orderName: string;
+      customerEmail?: string;
+      successUrl: string;
+      failUrl: string;
+    },
+  ) => Promise<void>;
+}
+
+declare global {
+  interface Window {
+    TossPayments?: (clientKey: string) => TossPaymentsClient;
+  }
+}
+
+const TOSS_SDK_URL = "https://js.tosspayments.com/v1/payment";
+
+function loadTossSdk(): Promise<void> {
+  if (typeof window === "undefined") return Promise.reject(new Error("no_window"));
+  if (window.TossPayments) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>(
+      `script[src="${TOSS_SDK_URL}"]`,
+    );
+    if (existing) {
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("error", () => reject(new Error("toss_sdk_load_failed")), {
+        once: true,
+      });
+      return;
+    }
+    const s = document.createElement("script");
+    s.src = TOSS_SDK_URL;
+    s.async = true;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("toss_sdk_load_failed"));
+    document.head.appendChild(s);
+  });
+}
+
+// Detects /billing/success?paymentKey=…&orderId=…&amount=… and /billing/fail.
+// On success: calls /api/billing/confirm and returns a flash message.
+// Always resets pathname back to "/" so reloads don't re-trigger.
+async function consumeTossReturnUrl(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  const path = window.location.pathname;
+  if (path !== "/billing/success" && path !== "/billing/fail") return null;
+  const qs = new URLSearchParams(window.location.search);
+  try {
+    if (path === "/billing/fail") {
+      const code = qs.get("code") ?? "unknown";
+      const msg = qs.get("message") ?? "결제가 취소되었거나 실패했습니다.";
+      return `결제 실패 (${code}): ${msg}`;
+    }
+    const paymentKey = qs.get("paymentKey");
+    const orderId = qs.get("orderId");
+    const amount = Number(qs.get("amount") ?? "0");
+    if (!paymentKey || !orderId || !Number.isFinite(amount) || amount <= 0) {
+      return "결제 정보가 불완전해 확인을 건너뛰었습니다.";
+    }
+    const result = await api.billingConfirm(paymentKey, orderId, amount);
+    return `${result.plan_name.toUpperCase()} 구독 활성화 완료 — ${new Date(
+      result.ends_at,
+    ).toLocaleDateString("ko-KR")}까지`;
+  } catch (e: unknown) {
+    return `결제 확인 실패: ${toMessage(e)}`;
+  } finally {
+    window.history.replaceState({}, "", "/");
+  }
+}
+
+function SubscriptionScreen({ flash }: { flash: string | null }) {
+  const [plans, setPlans] = useState<PlanDto[] | null>(null);
+  const [current, setCurrent] = useState<SubscriptionDto | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(flash);
+  const [busy, setBusy] = useState<PlanName | null>(null);
+
+  const refresh = useCallback(() => {
+    let cancelled = false;
+    Promise.all([api.billingPlans(), api.billingMeSubscription()])
+      .then(([p, s]) => {
+        if (cancelled) return;
+        setPlans(p);
+        setCurrent(s);
+      })
+      .catch((e: unknown) => !cancelled && setError(toMessage(e)));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    return refresh();
+  }, [refresh]);
+
+  const onCheckout = async (planName: Exclude<PlanName, "free">) => {
+    setError(null);
+    setBusy(planName);
+    try {
+      const payload: CheckoutPayload = await api.billingCheckout(planName);
+      await loadTossSdk();
+      if (!window.TossPayments) throw new Error("toss_sdk_unavailable");
+      const toss = window.TossPayments(payload.client_key);
+      await toss.requestPayment("카드", {
+        amount: payload.amount,
+        orderId: payload.order_id,
+        orderName: payload.order_name,
+        customerEmail: payload.customer_email,
+        successUrl: payload.success_url,
+        failUrl: payload.fail_url,
+      });
+    } catch (e: unknown) {
+      const msg = toMessage(e);
+      if (e instanceof ApiError && e.status === 503) {
+        setError(
+          "결제 모듈은 아직 활성화되지 않았습니다 (TOSS 키 등록 후 사용 가능).",
+        );
+      } else {
+        setError(msg);
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-6 overflow-y-auto p-6">
+      <div>
+        <h2 className="font-display text-2xl">구독</h2>
+        <p className="mt-1 text-sm text-brain-text-muted">
+          무료 체험으로 시작하고, 더 깊은 학습이 필요할 때 구독을 활성화하세요.
+        </p>
+      </div>
+
+      {notice && (
+        <div className="rounded border border-brain-accent/40 bg-brain-accent-soft/40 px-4 py-3 text-sm text-brain-text">
+          <div className="flex items-start justify-between gap-3">
+            <span>{notice}</span>
+            <button
+              className="text-xs text-brain-text-muted hover:text-brain-text"
+              onClick={() => setNotice(null)}
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
+          {error}
+        </div>
+      )}
+
+      {current && (
+        <div className="rounded-2xl border border-brain-border bg-brain-surface p-5 shadow-soft-1">
+          <div className="text-xs text-brain-text-muted">현재 구독</div>
+          <div className="mt-1 flex items-center gap-3">
+            <span className="font-display text-lg">
+              {(current.plan_name ?? "free").toUpperCase()}
+            </span>
+            <span className="rounded-full bg-brain-accent-soft px-2 py-0.5 text-xs text-brain-accent">
+              {current.status}
+            </span>
+          </div>
+          <div className="mt-2 text-xs text-brain-text-muted">
+            {new Date(current.started_at).toLocaleDateString("ko-KR")} 시작
+            {current.ends_at && (
+              <>
+                {" "}· {new Date(current.ends_at).toLocaleDateString("ko-KR")} 만료
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-3">
+        {plans?.map((p) => (
+          <PlanCard
+            key={p.name}
+            plan={p}
+            busy={busy === p.name}
+            onCheckout={
+              p.name === "free"
+                ? null
+                : () => void onCheckout(p.name as Exclude<PlanName, "free">)
+            }
+          />
+        ))}
+        {!plans && (
+          <p className="text-sm text-brain-text-muted">요금제 불러오는 중…</p>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-dashed border-brain-border bg-brain-surface-soft p-4 text-xs text-brain-text-muted">
+        결제는 Toss Payments 키-인 방식 (Path B) 으로 처리됩니다. 카드 정보는 Toss
+        결제창에서만 입력되며 Brain180 서버에는 저장되지 않습니다. 결제 완료 후 자동으로
+        구독이 활성화되고, 영수증은 가입 이메일로 발송됩니다.
+      </div>
+    </div>
+  );
+}
+
+function PlanCard({
+  plan,
+  busy,
+  onCheckout,
+}: {
+  plan: PlanDto;
+  busy: boolean;
+  onCheckout: (() => void) | null;
+}) {
+  const featureRows = Object.entries(plan.features).map(([k, v]) => ({
+    key: k,
+    label: featureLabel(k, v),
+  }));
+  return (
+    <div className="flex h-full flex-col rounded-2xl border border-brain-border bg-brain-surface p-5 shadow-soft-1">
+      <div className="font-display text-lg">{plan.title}</div>
+      <div className="mt-1 text-2xl font-semibold">
+        {plan.price_krw === 0 ? "무료" : `₩ ${plan.price_krw.toLocaleString("ko-KR")}`}
+        {plan.price_krw > 0 && (
+          <span className="ml-1 text-xs text-brain-text-muted">/월</span>
+        )}
+      </div>
+      <ul className="mt-4 flex-1 space-y-1 text-xs text-brain-text-muted">
+        {featureRows.map((f) => (
+          <li key={f.key}>· {f.label}</li>
+        ))}
+      </ul>
+      <button
+        onClick={() => onCheckout?.()}
+        disabled={!onCheckout || busy}
+        className={
+          "mt-5 rounded px-3 py-2 text-sm font-medium transition " +
+          (!onCheckout
+            ? "cursor-default bg-brain-surface-soft text-brain-text-muted"
+            : busy
+              ? "bg-brain-accent/70 text-white"
+              : "bg-brain-accent text-white hover:opacity-90")
+        }
+      >
+        {!onCheckout ? "기본 제공" : busy ? "결제창 여는 중…" : "결제하기"}
+      </button>
+    </div>
+  );
+}
+
+function featureLabel(key: string, value: unknown): string {
+  const labels: Record<string, string> = {
+    lessons_per_month: "월간 레슨",
+    tutor_chat: "튜터 채팅",
+    canvas_history: "캔버스 보관 일수",
+    compare_mode: "비교 모드",
+    export_pdf: "PDF 내보내기",
+  };
+  const label = labels[key] ?? key;
+  const v =
+    typeof value === "boolean"
+      ? value
+        ? "포함"
+        : "미포함"
+      : typeof value === "number"
+        ? `${value}`
+        : String(value);
+  return `${label}: ${v}`;
 }
