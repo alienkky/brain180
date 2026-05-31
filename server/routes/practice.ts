@@ -52,6 +52,7 @@ export interface LearningSessionDTO {
   id: string;
   user_id: string;
   lesson_id: string;
+  mode: "analyze" | "reverse" | "practice";
   status: "draft" | "submitted" | "reviewed";
   artifact_id: string | null;
   self_evaluation: null;
@@ -73,6 +74,7 @@ async function toSessionDTO(row: {
   id: string;
   userId: string;
   lessonId: string;
+  mode: "analyze" | "reverse" | "practice";
   startedAt: Date;
   endedAt: Date | null;
 }): Promise<LearningSessionDTO> {
@@ -81,6 +83,7 @@ async function toSessionDTO(row: {
     id: row.id,
     user_id: row.userId,
     lesson_id: row.lessonId,
+    mode: row.mode,
     status: row.endedAt ? "submitted" : "draft",
     artifact_id: artifactId,
     self_evaluation: null,
@@ -112,12 +115,13 @@ practiceRouter.post(
       .values({
         userId: req.user!.id,
         lessonId: body.lesson_id,
-        mode: "analyze",
+        mode: body.mode ?? "analyze",
       })
       .returning({
         id: learningSessions.id,
         userId: learningSessions.userId,
         lessonId: learningSessions.lessonId,
+        mode: learningSessions.mode,
         startedAt: learningSessions.startedAt,
         endedAt: learningSessions.endedAt,
       });
@@ -143,6 +147,7 @@ practiceRouter.get(
         id: learningSessions.id,
         userId: learningSessions.userId,
         lessonId: learningSessions.lessonId,
+        mode: learningSessions.mode,
         startedAt: learningSessions.startedAt,
         endedAt: learningSessions.endedAt,
       })

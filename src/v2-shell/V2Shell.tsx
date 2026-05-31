@@ -13,6 +13,7 @@ import {
   type LessonDto,
   type ModuleDto,
   type SessionDto,
+  type SessionMode,
   type TextExcerptDto,
   type TutorMessageDto,
   type UserDto,
@@ -321,6 +322,24 @@ function LibraryScreen({
 
 type PracticeTab = "chat" | "canvas";
 
+const MODE_OPTIONS: { value: SessionMode; label: string; hint: string }[] = [
+  {
+    value: "analyze",
+    label: "분석",
+    hint: "본문 → 캔버스: 텍스트에서 사고 구조를 추출",
+  },
+  {
+    value: "reverse",
+    label: "역해석",
+    hint: "캔버스 → 본문: 그래프를 먼저 본 뒤 본문을 추측",
+  },
+  {
+    value: "practice",
+    label: "연습",
+    hint: "자유 그리기: 본문은 참고, 캔버스 중심 코칭",
+  },
+];
+
 function PracticeScreen({
   lesson,
   onBack,
@@ -335,6 +354,8 @@ function PracticeScreen({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<PracticeTab>("chat");
+  const [mode, setMode] = useState<SessionMode>("analyze");
+  const [revealText, setRevealText] = useState(false);
   const [initialCanvas, setInitialCanvas] = useState<CanvasJson | null>(null);
   const [canvasReady, setCanvasReady] = useState(false);
   const currentCanvas = useRef<CanvasJson | null>(null);
@@ -351,6 +372,9 @@ function PracticeScreen({
     setCanvasReady(false);
     currentCanvas.current = null;
     clientRevision.current = 0;
+    // Reverse mode: text starts hidden so student must reconstruct from the
+    // canvas; analyze/practice show text up front.
+    setRevealText(mode !== "reverse");
 
     (async () => {
       try {
@@ -359,7 +383,7 @@ function PracticeScreen({
           : Promise.resolve(null);
         const [textRow, sess] = await Promise.all([
           textPromise,
-          api.startSession(lesson.id),
+          api.startSession(lesson.id, mode),
         ]);
         if (cancelled) return;
         setText(textRow);
@@ -381,7 +405,7 @@ function PracticeScreen({
     return () => {
       cancelled = true;
     };
-  }, [lesson.id, lesson.text_excerpt_id]);
+  }, [lesson.id, lesson.text_excerpt_id, mode]);
 
   const onSaveCanvas = useCallback(
     async (next: CanvasJson) => {
@@ -483,7 +507,7 @@ function PracticeScreen({
             ← 레슨 선택
           </button>
           <div className="font-display text-lg">{lesson.title}</div>
-          <span className="w-20" />
+          <ModePicker active={mode} onPick={setMode} disabled={sending} />
         </div>
         <div className="flex-1 overflow-y-auto px-8 py-6">
           {!text && !error && (
@@ -495,9 +519,26 @@ function PracticeScreen({
               <p className="text-sm text-brain-text-muted">
                 {text.author} · {text.source}
               </p>
-              <div className="mt-4 whitespace-pre-wrap font-serif text-base leading-relaxed">
-                {text.body}
-              </div>
+              {mode === "reverse" && !revealText ? (
+                <div className="mt-6 rounded-xl border border-dashed border-brain-border bg-brain-surface-soft p-6 text-center">
+                  <p className="text-sm text-brain-text-muted">
+                    역해석 모드 — 본문이 숨겨져 있습니다.
+                  </p>
+                  <p className="mt-1 text-xs text-brain-text-soft">
+                    우측 캔버스를 먼저 그려보고, 본문이 어떤 구조였을지 추측해 보세요.
+                  </p>
+                  <button
+                    onClick={() => setRevealText(true)}
+                    className="mt-4 rounded border border-brain-accent/60 px-3 py-1 text-sm text-brain-accent hover:bg-brain-accent-soft/50"
+                  >
+                    본문 펼치기
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-4 whitespace-pre-wrap font-serif text-base leading-relaxed">
+                  {text.body}
+                </div>
+              )}
             </article>
           )}
         </div>
@@ -600,6 +641,37 @@ function PracticeScreen({
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function ModePicker({
+  active,
+  onPick,
+  disabled,
+}: {
+  active: SessionMode;
+  onPick: (m: SessionMode) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-1" title="학습 모드 변경 시 새 세션이 시작됩니다">
+      {MODE_OPTIONS.map((m) => (
+        <button
+          key={m.value}
+          onClick={() => !disabled && active !== m.value && onPick(m.value)}
+          disabled={disabled}
+          title={m.hint}
+          className={
+            "rounded-full px-3 py-1 text-xs transition " +
+            (m.value === active
+              ? "bg-brain-accent text-white"
+              : "border border-brain-border text-brain-text-muted hover:border-brain-accent hover:text-brain-text")
+          }
+        >
+          {m.label}
+        </button>
+      ))}
     </div>
   );
 }

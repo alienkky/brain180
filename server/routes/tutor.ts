@@ -49,6 +49,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // Surfaces missing ALI-66 artifact in logs without blocking the route.
 const FALLBACK_PROMPT = [
   "당신은 Brain180의 사고구조 튜터입니다.",
+  "현재 학습 모드: {{mode_label}}",
+  "{{mode_guidance}}",
   "학생이 텍스트 '{{lesson_title}}'의 사고구조를 추출하도록 돕습니다.",
   "원문: {{text_body}}",
   "축 가중치: {{axis_focus}}",
@@ -56,6 +58,24 @@ const FALLBACK_PROMPT = [
   "현재 인지 캔버스 상태:",
   "{{canvas_state}}",
 ].join("\n");
+
+const MODE_LABEL: Record<string, string> = {
+  analyze: "분석 모드",
+  reverse: "역해석 모드",
+  practice: "연습 모드",
+};
+
+const MODE_GUIDANCE: Record<string, string> = {
+  analyze:
+    "학생이 본문을 읽고 그 뒤에 숨은 *사고 구조*를 추출하도록 돕습니다. " +
+    "내용 요약이 아니라 *저자가 어떻게 생각했는지* 의 패턴을 짚어 주세요.",
+  reverse:
+    "학생은 *캔버스를 먼저 본 뒤* 원문을 재구성/추측합니다. 본문을 직접 인용하지 말고, " +
+    "캔버스의 노드와 관계만으로 학생이 본문의 구조를 *역으로* 떠올릴 수 있도록 질문을 던지세요.",
+  practice:
+    "학생은 자신만의 사고 구조를 자유롭게 시각화 중입니다. 본문은 참고만, " +
+    "학생의 *현재 캔버스* 자체에 대해 패턴을 코칭해 주세요.",
+};
 
 const CANVAS_STATE_EMPTY = "(아직 비어 있음 — 학생이 첫 노드를 놓기 전입니다)";
 
@@ -211,6 +231,7 @@ tutorRouter.post(
         id: learningSessions.id,
         userId: learningSessions.userId,
         lessonId: learningSessions.lessonId,
+        mode: learningSessions.mode,
         endedAt: learningSessions.endedAt,
       })
       .from(learningSessions)
@@ -266,12 +287,16 @@ tutorRouter.post(
       id: lesson.id,
       tutorSystemPromptId: lesson.tutorSystemPromptId,
     });
+    const mode = session.mode;
     const systemMessage = substitute(prompt.content, {
       lesson_title: lesson.title,
       text_body: textBody,
       axis_focus: JSON.stringify(lesson.axisFocus ?? {}),
       user_name: userName,
       canvas_state: formatCanvasState(body.canvas_snapshot),
+      mode: mode,
+      mode_label: MODE_LABEL[mode] ?? mode,
+      mode_guidance: MODE_GUIDANCE[mode] ?? "",
     });
 
     // Conversation history (chronological), excluding system rows.

@@ -49,10 +49,13 @@ export interface TextExcerptDto {
   language: string;
 }
 
+export type SessionMode = "analyze" | "reverse" | "practice";
+
 export interface SessionDto {
   id: string;
   user_id: string;
   lesson_id: string;
+  mode: SessionMode;
   status: "draft" | "submitted" | "reviewed";
   artifact_id: string | null;
   started_at: string;
@@ -162,10 +165,13 @@ export const api = {
   moduleLessons: (moduleId: string) =>
     call<LessonDto[]>(`/api/library/modules/${moduleId}/lessons`),
   text: (textId: string) => call<TextExcerptDto>(`/api/library/texts/${textId}`),
-  startSession: (lessonId: string) =>
+  startSession: (lessonId: string, mode?: SessionMode) =>
     call<SessionDto>("/api/practice/sessions", {
       method: "POST",
-      body: JSON.stringify({ lesson_id: lessonId }),
+      body: JSON.stringify({
+        lesson_id: lessonId,
+        ...(mode ? { mode } : {}),
+      }),
     }),
   messages: (sessionId: string) =>
     call<TutorMessageDto[]>(`/api/tutor/sessions/${sessionId}/messages`),

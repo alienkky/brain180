@@ -51,8 +51,11 @@ export const ChangePasswordBody = z.object({
 
 // ─── Practice ────────────────────────────────────────────────────────
 
+export const SessionMode = z.enum(["analyze", "reverse", "practice"]);
+
 export const StartSessionBody = z.object({
   lesson_id: Uuid,
+  mode: SessionMode.optional(),
 });
 
 export const PatchSessionBody = z.object({
