@@ -24,10 +24,15 @@ import { db } from "../db/client.js";
 import { canvasArtifacts, learningSessions, lessons } from "../db/schema.js";
 import { ok, fail } from "../lib/envelope.js";
 import { parseBody, StartSessionBody } from "../lib/validators.js";
-import { requireAuth } from "../middleware/auth.js";
+import {
+  requireApprovedUser,
+  requireAuth,
+  requirePasswordFresh,
+} from "../middleware/auth.js";
 import { userRateLimit } from "../middleware/rate-limit.js";
 
 export const practiceRouter = Router();
+practiceRouter.use(requireAuth, requirePasswordFresh, requireApprovedUser);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -83,7 +88,6 @@ async function toSessionDTO(row: {
 // ── POST /api/practice/sessions ─────────────────────────────────────
 practiceRouter.post(
   "/sessions",
-  requireAuth,
   userRateLimit,
   asyncHandler(async (req, res) => {
     const body = parseBody(StartSessionBody, req, res);
@@ -122,7 +126,6 @@ practiceRouter.post(
 // ── GET /api/practice/sessions/:id ──────────────────────────────────
 practiceRouter.get(
   "/sessions/:id",
-  requireAuth,
   userRateLimit,
   asyncHandler(async (req, res) => {
     const sessionId = req.params.id;

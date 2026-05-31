@@ -10,10 +10,15 @@ import { eq, asc, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { lessons, modules, textExcerpts } from "../db/schema.js";
 import { ok, fail } from "../lib/envelope.js";
-import { requireAuth } from "../middleware/auth.js";
+import {
+  requireApprovedUser,
+  requireAuth,
+  requirePasswordFresh,
+} from "../middleware/auth.js";
 import { userRateLimit } from "../middleware/rate-limit.js";
 
 export const libraryRouter = Router();
+libraryRouter.use(requireAuth, requirePasswordFresh, requireApprovedUser);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -91,7 +96,6 @@ async function lessonToDTO(row: {
 // ── GET /api/library/modules ────────────────────────────────────────
 libraryRouter.get(
   "/modules",
-  requireAuth,
   userRateLimit,
   asyncHandler(async (_req, res) => {
     const rows = await db
@@ -124,7 +128,6 @@ libraryRouter.get(
 // ── GET /api/library/modules/:id/lessons ────────────────────────────
 libraryRouter.get(
   "/modules/:id/lessons",
-  requireAuth,
   userRateLimit,
   asyncHandler(async (req, res) => {
     const moduleId = req.params.id;
@@ -166,7 +169,6 @@ libraryRouter.get(
 // ── GET /api/library/lessons/:id ────────────────────────────────────
 libraryRouter.get(
   "/lessons/:id",
-  requireAuth,
   userRateLimit,
   asyncHandler(async (req, res) => {
     const lessonId = req.params.id;
@@ -200,7 +202,6 @@ libraryRouter.get(
 // ── GET /api/library/texts/:id ──────────────────────────────────────
 libraryRouter.get(
   "/texts/:id",
-  requireAuth,
   userRateLimit,
   asyncHandler(async (req, res) => {
     const textId = req.params.id;

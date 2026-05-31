@@ -29,10 +29,15 @@ import {
 import { ok, fail } from "../lib/envelope.js";
 import { callAnthropic, UpstreamError } from "../lib/anthropic.js";
 import { parseBody, TutorChatBody, RateMessageBody } from "../lib/validators.js";
-import { requireAuth } from "../middleware/auth.js";
+import {
+  requireApprovedUser,
+  requireAuth,
+  requirePasswordFresh,
+} from "../middleware/auth.js";
 import { tutorRateLimit, userRateLimit } from "../middleware/rate-limit.js";
 
 export const tutorRouter = Router();
+tutorRouter.use(requireAuth, requirePasswordFresh, requireApprovedUser);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -139,7 +144,6 @@ async function resolveSystemPrompt(lessonRow: {
 // ── POST /api/tutor/chat ────────────────────────────────────────────
 tutorRouter.post(
   "/chat",
-  requireAuth,
   tutorRateLimit,
   asyncHandler(async (req, res) => {
     const body = parseBody(TutorChatBody, req, res);
@@ -303,7 +307,6 @@ tutorRouter.post(
 // ── GET /api/tutor/sessions/:id/messages ────────────────────────────
 tutorRouter.get(
   "/sessions/:id/messages",
-  requireAuth,
   userRateLimit,
   asyncHandler(async (req, res) => {
     const sessionId = req.params.id;
@@ -349,7 +352,6 @@ tutorRouter.get(
 // ── POST /api/tutor/messages/:id/rate ───────────────────────────────
 tutorRouter.post(
   "/messages/:id/rate",
-  requireAuth,
   userRateLimit,
   asyncHandler(async (req, res) => {
     const messageId = req.params.id;

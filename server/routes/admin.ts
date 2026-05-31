@@ -3,12 +3,15 @@
 // MVP scope: list pending / approve / reject. Suspend + audit + content
 // management stay 503 mvp_cut.
 
+import { randomBytes } from "node:crypto";
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
 import { and, eq, isNull, asc } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { users } from "../db/schema.js";
 import { ok, fail } from "../lib/envelope.js";
+import { hashPassword } from "../lib/password.js";
+import { lucia } from "../lib/lucia.js";
 import { parseBody, RejectUserBody } from "../lib/validators.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { userRateLimit } from "../middleware/rate-limit.js";
@@ -112,6 +115,44 @@ adminRouter.post(
       return;
     }
     ok(res, toUserDTO(row));
+  }),
+);
+
+// ── POST /api/admin/users/:id/reset-password ────────────────────────
+// Generates a 16-byte url-safe temp password, hashes argon2id, sets
+// mustChangePassword=true, invalidates target's existing sessions.
+// Returns the plaintext temp password ONCE in the response — admin
+// must deliver it out-of-band (no email yet under MVP).
+adminRouter.post(
+  "/users/:id/reset-password",
+  asyncHandler(async (req, res) => {
+    const targetId = req.params.id;
+    if (typeof targetId !== "string" || !UUID_RE.test(targetId)) {
+      fail(res, 400, "validation_error", { message: "invalid_user_id" });
+      return;
+    }
+
+    const existing = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.id, targetId), isNull(users.deletedAt)))
+      .limit(1);
+    if (existing.length === 0) {
+      fail(res, 404, "not_found");
+      return;
+    }
+
+    const tempPassword = randomBytes(16).toString("base64url");
+    const passwordHash = await hashPassword(tempPassword);
+
+    await db
+      .update(users)
+      .set({ passwordHash, mustChangePassword: true })
+      .where(eq(users.id, targetId));
+
+    await lucia.invalidateUserSessions(targetId);
+
+    ok(res, { user_id: targetId, temp_password: tempPassword });
   }),
 );
 

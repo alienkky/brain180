@@ -158,6 +158,11 @@ authRouter.post(
       return;
     }
 
+    if (row.status === "rejected" || row.status === "suspended") {
+      fail(res, 403, "account_blocked", { message: row.status });
+      return;
+    }
+
     await db
       .update(users)
       .set({ lastLoginAt: new Date() })
@@ -242,7 +247,10 @@ authRouter.post(
     }
 
     const newHash = await hashPassword(body.new_password);
-    await db.update(users).set({ passwordHash: newHash }).where(eq(users.id, row.id));
+    await db
+      .update(users)
+      .set({ passwordHash: newHash, mustChangePassword: false })
+      .where(eq(users.id, row.id));
 
     // Invalidate every existing session (including the one in this request)
     // then issue a brand-new session cookie for the active client so the

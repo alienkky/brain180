@@ -16,6 +16,8 @@ export interface AppDatabaseUserAttributes {
   email: string;
   name: string;
   role: "student" | "admin";
+  status: "pending_approval" | "approved" | "rejected" | "suspended";
+  mustChangePassword: boolean;
 }
 
 declare module "lucia" {
@@ -38,6 +40,8 @@ const drizzleAdapter: Adapter = {
         email: users.email,
         name: users.name,
         role: users.role,
+        status: users.status,
+        mustChangePassword: users.mustChangePassword,
       })
       .from(sessions)
       .innerJoin(users, eq(users.id, sessions.userId))
@@ -59,6 +63,8 @@ const drizzleAdapter: Adapter = {
         email: row.email,
         name: row.name,
         role: row.role,
+        status: row.status,
+        mustChangePassword: row.mustChangePassword,
       },
     };
     return [session, user];
@@ -130,6 +136,8 @@ export const lucia = new Lucia(drizzleAdapter, {
     email: attr.email,
     name: attr.name,
     role: attr.role,
+    status: attr.status,
+    mustChangePassword: attr.mustChangePassword,
   }),
 });
 
