@@ -24,7 +24,8 @@ import { CognitiveMap } from "./CognitiveMap";
 type Screen =
   | { name: "login" }
   | { name: "library" }
-  | { name: "practice"; lesson: LessonDto };
+  | { name: "practice"; lesson: LessonDto }
+  | { name: "admin" };
 
 export function V2Shell() {
   const [user, setUser] = useState<UserDto | null>(null);
@@ -81,7 +82,13 @@ export function V2Shell() {
 
   return (
     <div className="flex h-full flex-col bg-brain-bg text-brain-text">
-      <Header user={user} onLogout={onLogout} />
+      <Header
+        user={user}
+        onLogout={onLogout}
+        onGoLibrary={() => setScreen({ name: "library" })}
+        onGoAdmin={() => setScreen({ name: "admin" })}
+        activeScreen={screen.name}
+      />
       {bootError && (
         <div className="border-b border-brain-border bg-brain-highlight-soft px-6 py-2 text-sm text-brain-text">
           {bootError}
@@ -100,12 +107,25 @@ export function V2Shell() {
             onBack={() => setScreen({ name: "library" })}
           />
         )}
+        {screen.name === "admin" && <AdminScreen />}
       </main>
     </div>
   );
 }
 
-function Header({ user, onLogout }: { user: UserDto | null; onLogout: () => void }) {
+function Header({
+  user,
+  onLogout,
+  onGoLibrary,
+  onGoAdmin,
+  activeScreen,
+}: {
+  user: UserDto | null;
+  onLogout: () => void;
+  onGoLibrary: () => void;
+  onGoAdmin: () => void;
+  activeScreen: Screen["name"];
+}) {
   return (
     <header className="flex items-center justify-between border-b border-brain-border bg-brain-surface px-6 py-3 shadow-soft-1">
       <div>
@@ -114,6 +134,20 @@ function Header({ user, onLogout }: { user: UserDto | null; onLogout: () => void
       </div>
       {user && (
         <div className="flex items-center gap-4 text-sm">
+          <nav className="flex items-center gap-1">
+            <HeaderNavButton
+              active={activeScreen === "library" || activeScreen === "practice"}
+              onClick={onGoLibrary}
+              label="라이브러리"
+            />
+            {user.role === "admin" && (
+              <HeaderNavButton
+                active={activeScreen === "admin"}
+                onClick={onGoAdmin}
+                label="관리자"
+              />
+            )}
+          </nav>
           <span className="text-brain-text-muted">
             {user.name}{" "}
             <span className="text-brain-text-soft">· {user.role}</span>
@@ -127,6 +161,30 @@ function Header({ user, onLogout }: { user: UserDto | null; onLogout: () => void
         </div>
       )}
     </header>
+  );
+}
+
+function HeaderNavButton({
+  active,
+  onClick,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={
+        "rounded-full px-3 py-1 text-xs transition " +
+        (active
+          ? "bg-brain-accent text-white"
+          : "text-brain-text-muted hover:text-brain-text")
+      }
+    >
+      {label}
+    </button>
   );
 }
 
@@ -652,6 +710,104 @@ function PracticeScreen({
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function AdminScreen() {
+  const [pending, setPending] = useState<UserDto[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
+    setError(null);
+    try {
+      const rows = await api.adminPending();
+      setPending(rows);
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    }
+  }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const approve = async (u: UserDto) => {
+    setBusyId(u.id);
+    try {
+      await api.adminApprove(u.id);
+      await reload();
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const reject = async (u: UserDto) => {
+    const reason = window.prompt(`${u.email} 거절 사유 (선택)`) ?? undefined;
+    if (reason === null) return;
+    setBusyId(u.id);
+    try {
+      await api.adminReject(u.id, reason || undefined);
+      await reload();
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <div className="h-full overflow-y-auto p-6">
+      <div className="mx-auto max-w-3xl">
+        <h2 className="mb-1 font-display text-2xl">관리자 — 가입 승인 대기</h2>
+        <p className="mb-4 text-sm text-brain-text-muted">
+          승인 시 사용자는 즉시 로그인 가능. 거절 시 사유는 사용자에게 노출되지 않습니다.
+        </p>
+        {error && (
+          <div className="mb-4 rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
+            {error}
+          </div>
+        )}
+        {!pending && <p className="text-sm text-brain-text-muted">불러오는 중…</p>}
+        {pending && pending.length === 0 && (
+          <p className="text-sm text-brain-text-muted">대기 중인 사용자가 없습니다.</p>
+        )}
+        <ul className="space-y-3">
+          {pending?.map((u) => (
+            <li
+              key={u.id}
+              className="flex items-center justify-between rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1"
+            >
+              <div>
+                <div className="font-display text-base">{u.name}</div>
+                <div className="text-sm text-brain-text-muted">{u.email}</div>
+                <div className="mt-1 text-xs text-brain-text-soft">
+                  역할 {u.role} · 상태 {u.status}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => approve(u)}
+                  disabled={busyId === u.id}
+                  className="rounded bg-brain-accent px-3 py-1 text-sm text-white hover:opacity-90 disabled:opacity-50"
+                >
+                  승인
+                </button>
+                <button
+                  onClick={() => reject(u)}
+                  disabled={busyId === u.id}
+                  className="rounded border border-brain-danger/40 px-3 py-1 text-sm text-brain-danger hover:bg-brain-accent-soft/50 disabled:opacity-50"
+                >
+                  거절
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }

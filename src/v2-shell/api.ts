@@ -192,6 +192,14 @@ export const api = {
         client_revision: clientRevision,
       }),
     }),
+  adminPending: () => call<UserDto[]>("/api/admin/users/pending"),
+  adminApprove: (userId: string) =>
+    call<UserDto>(`/api/admin/users/${userId}/approve`, { method: "POST" }),
+  adminReject: (userId: string, reason?: string) =>
+    call<UserDto>(`/api/admin/users/${userId}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ ...(reason ? { reason } : {}) }),
+    }),
   chat: (
     sessionId: string,
     lessonId: string,
