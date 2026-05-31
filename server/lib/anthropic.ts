@@ -39,9 +39,11 @@ export interface UsageLogRow {
   errorCode: string | null;
 }
 
+export type UpstreamProvider = "anthropic" | "openai" | "gemini" | "resend" | "toss" | "r2";
+
 export class UpstreamError extends Error {
   constructor(
-    public readonly provider: "anthropic",
+    public readonly provider: UpstreamProvider,
     public readonly code: string,
     message: string,
     public readonly retryable: boolean,
