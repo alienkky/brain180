@@ -8,6 +8,7 @@ import { db } from "../db/client.js";
 import { apiUsageLogs } from "../db/schema.js";
 import type { UsageLogRow } from "./anthropic.js";
 import { setUsageLogWriter } from "./anthropic.js";
+import { setKimiUsageLogWriter } from "./kimi.js";
 
 async function writeUsageLogToDb(row: UsageLogRow): Promise<void> {
   try {
@@ -28,4 +29,5 @@ async function writeUsageLogToDb(row: UsageLogRow): Promise<void> {
 
 export function installUsageLogWriter(): void {
   setUsageLogWriter(writeUsageLogToDb);
+  setKimiUsageLogWriter(writeUsageLogToDb);
 }

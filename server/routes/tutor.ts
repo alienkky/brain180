@@ -1,4 +1,4 @@
-// Owner: ALI-66 남말씨[글말] (system prompts) + ALI-67 방연동[MCP] (Anthropic wrapper).
+// Owner: ALI-66 남말씨[글말] (system prompts) + ALI-67 방연동[MCP] (LLM wrappers).
 // Wires §4 Tutor per api-contracts.md.
 //
 // Prompt source of truth:
@@ -9,9 +9,13 @@
 // Variable substitution per §4-6: {{lesson_title}} / {{text_body}} /
 // {{axis_focus}} / {{user_name}}.
 //
+// LLM provider chosen by env.AI_PROVIDER ("kimi" | "anthropic"). Dispatcher
+// lives in server/lib/llm.ts and falls back to whichever provider has a key
+// configured.
+//
 // Side effects:
 //   - 2 tutor_messages rows per /chat (user + assistant)
-//   - 1 api_usage_log via callAnthropic seam (anonymized user_id)
+//   - 1 api_usage_log via callTutorLLM seam (anonymized user_id)
 //   - tutor_ratings upsert (1 per user per message) via /rate
 
 import { Router } from "express";
@@ -27,7 +31,8 @@ import {
   tutorSystemPrompts,
 } from "../db/schema.js";
 import { ok, fail } from "../lib/envelope.js";
-import { callAnthropic, UpstreamError } from "../lib/anthropic.js";
+import { UpstreamError } from "../lib/anthropic.js";
+import { callTutorLLM, resolveTutorProvider } from "../lib/llm.js";
 import { parseBody, TutorChatBody, RateMessageBody } from "../lib/validators.js";
 import {
   requireApprovedUser,
@@ -250,7 +255,7 @@ tutorRouter.post(
 
     let result;
     try {
-      result = await callAnthropic({
+      result = await callTutorLLM({
         userId,
         system: systemMessage,
         messages,
@@ -258,7 +263,7 @@ tutorRouter.post(
     } catch (err) {
       if (err instanceof UpstreamError) {
         fail(res, 502, "upstream_error", {
-          message: `anthropic_${err.code}`,
+          message: `${resolveTutorProvider()}_${err.code}`,
         });
         return;
       }

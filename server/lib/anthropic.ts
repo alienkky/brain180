@@ -32,7 +32,7 @@ export interface AnthropicResult {
 // absent — only the anonymized id (sha256(user_id:ANON_SALT)) crosses this
 // seam, so a writer mistake can never store the raw uuid.
 export interface UsageLogRow {
-  provider: "anthropic" | "openai" | "gemini";
+  provider: "anthropic" | "openai" | "gemini" | "kimi";
   model: string;
   anonymizedUserId: string;
   inputTokens: number;
@@ -42,7 +42,7 @@ export interface UsageLogRow {
   errorCode: string | null;
 }
 
-export type UpstreamProvider = "anthropic" | "openai" | "gemini" | "resend" | "toss" | "r2" | "push";
+export type UpstreamProvider = "anthropic" | "openai" | "gemini" | "kimi" | "resend" | "toss" | "r2" | "push";
 
 export class UpstreamError extends Error {
   constructor(

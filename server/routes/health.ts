@@ -17,7 +17,9 @@ healthRouter.get("/healthz", (_req, res) => {
 healthRouter.get("/readyz", async (_req, res) => {
   const env = loadEnv();
   const features = {
-    anthropic: true,
+    tutor_provider: env.AI_PROVIDER,
+    anthropic: hasFeature("anthropic"),
+    kimi: hasFeature("kimi"),
     openai: hasFeature("openai"),
     gemini: hasFeature("gemini"),
     resend: hasFeature("resend"),
