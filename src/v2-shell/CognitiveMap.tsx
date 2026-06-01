@@ -23,11 +23,38 @@ import type {
 export type NodeType = CanvasNode["type"];
 export type Relation = CanvasEdge["relation"];
 
-const NODE_TYPES: { value: NodeType; label: string; color: string }[] = [
-  { value: "concept", label: "개념", color: "var(--color-brain-node-root)" },
-  { value: "anchor", label: "정박", color: "var(--color-brain-node-anchor)" },
-  { value: "bridge", label: "연결", color: "var(--color-brain-node-bridge)" },
-  { value: "branch", label: "분기", color: "var(--color-brain-node-branch)" },
+// v1 의 도메인 라벨 복원. "concept" 는 v2 스키마 호환을 위해 그대로 유지하되
+// 사용자 노출 라벨은 v1 의 "핵심/기둥/다리/가지" 4종 + 짧은 설명.
+const NODE_TYPES: {
+  value: NodeType;
+  label: string;
+  desc: string;
+  color: string;
+}[] = [
+  {
+    value: "concept",
+    label: "핵심",
+    desc: "텍스트의 중심 사상",
+    color: "var(--color-brain-node-root)",
+  },
+  {
+    value: "anchor",
+    label: "기둥",
+    desc: "핵심을 지탱하는 주요 개념",
+    color: "var(--color-brain-node-anchor)",
+  },
+  {
+    value: "bridge",
+    label: "다리",
+    desc: "개념 간 논리적 연결",
+    color: "var(--color-brain-node-bridge)",
+  },
+  {
+    value: "branch",
+    label: "가지",
+    desc: "파생/부수적 개념",
+    color: "var(--color-brain-node-branch)",
+  },
 ];
 
 const RELATIONS: { value: Relation; label: string }[] = [
@@ -236,6 +263,48 @@ export function CognitiveMap({
     setSelectedNodeId(null);
   };
 
+  // 더블클릭으로 라벨 즉시 수정. v1 PracticeToolbar 의 "노드 편집" 흐름 대체.
+  const onNodeDoubleClick = (e: React.MouseEvent, n: CanvasNode) => {
+    if (disabled) return;
+    e.stopPropagation();
+    const next = window.prompt("라벨을 수정하세요", n.label);
+    if (next === null) return;
+    const trimmed = next.trim();
+    if (!trimmed) return;
+    setCanvas((c) => ({
+      ...c,
+      nodes: c.nodes.map((m) =>
+        m.id === n.id ? { ...m, label: trimmed.slice(0, 120) } : m,
+      ),
+    }));
+  };
+
+  // 선택된 노드의 type 변경 — v1 toolbar 의 "역할 다시 고르기" 와 동등.
+  const reassignSelectedType = (type: NodeType) => {
+    if (!selectedNodeId) return;
+    setCanvas((c) => ({
+      ...c,
+      nodes: c.nodes.map((n) =>
+        n.id === selectedNodeId ? { ...n, type } : n,
+      ),
+    }));
+  };
+
+  const clearCanvas = () => {
+    if (!window.confirm("캔버스를 비울까요? 모든 노드와 엣지가 삭제됩니다.")) {
+      return;
+    }
+    setCanvas((c) => ({ ...c, nodes: [], edges: [] }));
+    setSelectedNodeId(null);
+    setPendingEdge(null);
+    setPaletteType(null);
+  };
+
+  const selectedNode = useMemo(
+    () => canvas.nodes.find((n) => n.id === selectedNodeId) ?? null,
+    [canvas.nodes, selectedNodeId],
+  );
+
   const nodeIndex = useMemo(() => {
     const m = new Map<string, CanvasNode>();
     canvas.nodes.forEach((n) => m.set(n.id, n));
@@ -244,53 +313,95 @@ export function CognitiveMap({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b border-brain-border bg-brain-surface px-3 py-2">
-        <span className="mr-2 text-xs font-medium uppercase tracking-wider text-brain-text-muted">
-          노드 추가
-        </span>
-        {NODE_TYPES.map((t) => (
-          <button
-            key={t.value}
-            onClick={() =>
-              setPaletteType(paletteType === t.value ? null : t.value)
-            }
-            disabled={disabled}
-            className={
-              "rounded-full border px-3 py-1 text-xs transition " +
-              (paletteType === t.value
-                ? "border-brain-accent bg-brain-accent text-white"
-                : "border-brain-border bg-brain-bg text-brain-text hover:border-brain-accent")
-            }
-            style={
-              paletteType === t.value
-                ? undefined
-                : { borderLeftColor: t.color, borderLeftWidth: 4 }
-            }
-          >
-            {t.label}
-          </button>
-        ))}
-        <div className="ml-auto flex items-center gap-2 text-xs text-brain-text-muted">
-          {onAskTutor && (
-            <button
-              onClick={() => onAskTutor(canvas)}
-              disabled={disabled}
-              className="rounded border border-brain-accent/60 px-2 py-1 text-brain-accent hover:bg-brain-accent-soft/50 disabled:opacity-50"
-              title="현재 캔버스 스냅샷을 튜터에게 보내 다음 노드를 제안받습니다"
-            >
-              튜터에게 패턴 제안
-            </button>
-          )}
-          {selectedNodeId && (
-            <button
-              onClick={deleteSelected}
-              className="rounded border border-brain-danger/40 px-2 py-1 text-brain-danger hover:bg-brain-accent-soft/50"
-            >
-              선택 노드 삭제
-            </button>
-          )}
-          <SaveBadge state={saveState} />
+      <div className="flex flex-col gap-2 border-b border-brain-border bg-brain-surface px-3 py-2">
+        <div className="flex items-center gap-2">
+          <span className="mr-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-brain-text-soft">
+            {selectedNode ? "역할 다시" : "노드 만들기"}
+          </span>
+          {NODE_TYPES.map((t) => {
+            const active = selectedNode
+              ? selectedNode.type === t.value
+              : paletteType === t.value;
+            return (
+              <button
+                key={t.value}
+                onClick={() => {
+                  if (selectedNode) {
+                    reassignSelectedType(t.value);
+                  } else {
+                    setPaletteType(paletteType === t.value ? null : t.value);
+                  }
+                }}
+                disabled={disabled}
+                title={t.desc}
+                className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[12px] transition disabled:opacity-50"
+                style={{
+                  borderColor: active ? t.color : "var(--color-brain-border)",
+                  background: active
+                    ? `${t.color}14`
+                    : "var(--color-brain-bg)",
+                  color: active ? t.color : "var(--color-brain-text)",
+                  fontWeight: active ? 600 : 500,
+                }}
+              >
+                <span
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ background: t.color }}
+                />
+                {t.label}
+              </button>
+            );
+          })}
+          <div className="ml-auto flex items-center gap-2 text-xs text-brain-text-muted">
+            {onAskTutor && (
+              <button
+                onClick={() => onAskTutor(canvas)}
+                disabled={disabled}
+                className="rounded border border-brain-accent/60 px-2 py-1 text-brain-accent hover:bg-brain-accent-soft/50 disabled:opacity-50"
+                title="현재 캔버스 스냅샷을 튜터에게 보내 다음 노드를 제안받습니다"
+              >
+                튜터에게 패턴 제안
+              </button>
+            )}
+            {selectedNodeId && (
+              <button
+                onClick={deleteSelected}
+                className="rounded border border-brain-danger/40 px-2 py-1 text-brain-danger hover:bg-brain-accent-soft/50"
+              >
+                선택 삭제
+              </button>
+            )}
+            {canvas.nodes.length > 0 && (
+              <button
+                onClick={clearCanvas}
+                disabled={disabled}
+                className="rounded border border-brain-border px-2 py-1 hover:border-brain-danger hover:text-brain-danger disabled:opacity-50"
+                title="모든 노드와 엣지를 삭제합니다"
+              >
+                비우기
+              </button>
+            )}
+            <SaveBadge state={saveState} />
+          </div>
         </div>
+        {paletteType && !selectedNode && (
+          <p className="text-[11px] text-brain-text-muted">
+            <strong style={{ color: "var(--color-brain-text)" }}>
+              {NODE_TYPES.find((t) => t.value === paletteType)?.label}
+            </strong>
+            {" — "}
+            {NODE_TYPES.find((t) => t.value === paletteType)?.desc}
+            {" · 빈 공간 클릭으로 노드 생성, 노드 더블클릭으로 라벨 수정."}
+          </p>
+        )}
+        {selectedNode && (
+          <p className="text-[11px] text-brain-text-muted">
+            <strong style={{ color: "var(--color-brain-text)" }}>
+              {selectedNode.label}
+            </strong>
+            {" — 역할 버튼을 다시 누르면 type 이 바뀝니다. 더블클릭으로 라벨 수정. 다른 노드 클릭 시 엣지 생성."}
+          </p>
+        )}
       </div>
       <div className="relative flex-1 overflow-hidden bg-brain-bg">
         <svg
@@ -365,6 +476,7 @@ export function CognitiveMap({
                 transform={`translate(${n.x},${n.y})`}
                 onMouseDown={(e) => onNodeMouseDown(e, n)}
                 onClick={(e) => onNodeClick(e, n)}
+                onDoubleClick={(e) => onNodeDoubleClick(e, n)}
                 style={{ cursor: "grab" }}
               >
                 <circle

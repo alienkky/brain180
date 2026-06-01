@@ -33,6 +33,7 @@ import {
   type UserDto,
 } from "./api";
 import { CognitiveMap } from "./CognitiveMap";
+import { EvaluationPanel } from "./EvaluationPanel";
 
 type Screen =
   | { name: "login" }
@@ -475,7 +476,7 @@ function LibraryScreen({
   );
 }
 
-type PracticeTab = "chat" | "canvas";
+type PracticeTab = "chat" | "canvas" | "eval";
 
 const MODE_OPTIONS: { value: SessionMode; label: string; hint: string }[] = [
   {
@@ -513,6 +514,9 @@ function PracticeScreen({
   const [revealText, setRevealText] = useState(false);
   const [initialCanvas, setInitialCanvas] = useState<CanvasJson | null>(null);
   const [canvasReady, setCanvasReady] = useState(false);
+  // 자기평가 패널이 실시간으로 다시 계산되도록 캔버스 상태를 거울처럼 들고 있는다.
+  // 평가 결과는 useMemo 가 캐싱하므로 매 변경마다 재렌더 비용은 미미.
+  const [liveCanvas, setLiveCanvas] = useState<CanvasJson | null>(null);
   const [textSelection, setTextSelection] = useState<CanvasCite | null>(null);
   const [pendingCite, setPendingCite] = useState<CanvasCite | null>(null);
   const [focusCite, setFocusCite] = useState<CanvasCite | null>(null);
@@ -530,6 +534,7 @@ function PracticeScreen({
     setInitialCanvas(null);
     setCanvasReady(false);
     currentCanvas.current = null;
+    setLiveCanvas(null);
     clientRevision.current = 0;
     // Reverse mode: text starts hidden so student must reconstruct from the
     // canvas; analyze/practice show text up front.
@@ -555,6 +560,7 @@ function PracticeScreen({
         setMessages(msgs);
         setInitialCanvas(artifact?.canvas_json ?? null);
         currentCanvas.current = artifact?.canvas_json ?? null;
+        setLiveCanvas(artifact?.canvas_json ?? null);
         setCanvasReady(true);
       } catch (e: unknown) {
         if (!cancelled) setError(toMessage(e));
@@ -577,6 +583,7 @@ function PracticeScreen({
 
   const onCanvasChange = useCallback((next: CanvasJson) => {
     currentCanvas.current = next;
+    setLiveCanvas(next);
   }, []);
 
   const onNodeFocus = useCallback((n: CanvasNode) => {
@@ -805,6 +812,11 @@ function PracticeScreen({
               onClick={() => setTab("canvas")}
               label="인지 캔버스"
             />
+            <TabButton
+              active={tab === "eval"}
+              onClick={() => setTab("eval")}
+              label="자기평가"
+            />
           </div>
           <div className="text-xs text-brain-text-muted">
             {session ? `세션 ${session.id.slice(0, 8)}…` : "세션 시작 중…"}
@@ -890,6 +902,14 @@ function PracticeScreen({
                 캔버스 불러오는 중…
               </p>
             )}
+          </div>
+        )}
+        {tab === "eval" && (
+          <div className="flex-1 overflow-hidden">
+            <EvaluationPanel
+              canvas={liveCanvas ?? initialCanvas}
+              onAskTutor={onAskTutor}
+            />
           </div>
         )}
       </section>
