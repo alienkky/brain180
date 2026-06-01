@@ -252,17 +252,27 @@ function HeaderNavButton({
 }
 
 function LoginScreen({ onLoggedIn }: { onLoggedIn: (u: UserDto) => void }) {
-  const [email, setEmail] = useState("kky710@gmail.com");
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (mode === "register" && password !== confirm) {
+      setError("비밀번호가 일치하지 않습니다.");
+      return;
+    }
     setSubmitting(true);
     try {
-      const data = await api.login(email, password);
+      const data =
+        mode === "login"
+          ? await api.login(email, password)
+          : await api.register(email, password, name);
       onLoggedIn(data.user);
     } catch (e: unknown) {
       setError(toMessage(e));
@@ -278,11 +288,62 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: (u: UserDto) => void }) {
         className="w-full max-w-sm space-y-4 rounded-2xl border border-brain-border bg-brain-surface p-8 shadow-soft-2"
       >
         <div>
-          <h1 className="font-display text-2xl">로그인</h1>
+          <h1 className="font-display text-2xl">
+            {mode === "login" ? "로그인" : "회원가입"}
+          </h1>
           <p className="mt-1 text-sm text-brain-text-muted">
-            Brain180 v2 에 접속하려면 인증이 필요합니다.
+            {mode === "login"
+              ? "Brain180 에 다시 오신 것을 환영합니다."
+              : "이메일과 이름만으로 바로 학습을 시작할 수 있습니다."}
           </p>
         </div>
+        <div className="flex gap-1 rounded-lg border border-brain-border bg-brain-bg p-1">
+          <button
+            type="button"
+            onClick={() => {
+              setMode("login");
+              setError(null);
+            }}
+            className={
+              "flex-1 rounded-md px-3 py-1.5 text-sm transition " +
+              (mode === "login"
+                ? "bg-brain-accent text-white"
+                : "text-brain-text-muted hover:text-brain-text")
+            }
+          >
+            로그인
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode("register");
+              setError(null);
+            }}
+            className={
+              "flex-1 rounded-md px-3 py-1.5 text-sm transition " +
+              (mode === "register"
+                ? "bg-brain-accent text-white"
+                : "text-brain-text-muted hover:text-brain-text")
+            }
+          >
+            가입
+          </button>
+        </div>
+        {mode === "register" && (
+          <label className="block text-sm">
+            <span className="text-brain-text-muted">이름</span>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoComplete="name"
+              minLength={1}
+              maxLength={40}
+              required
+              className="mt-1 w-full rounded border border-brain-border bg-brain-bg px-3 py-2 outline-none focus:border-brain-accent"
+            />
+          </label>
+        )}
         <label className="block text-sm">
           <span className="text-brain-text-muted">이메일</span>
           <input
@@ -300,11 +361,32 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: (u: UserDto) => void }) {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
+            autoComplete={
+              mode === "login" ? "current-password" : "new-password"
+            }
+            minLength={mode === "register" ? 8 : 1}
             required
             className="mt-1 w-full rounded border border-brain-border bg-brain-bg px-3 py-2 outline-none focus:border-brain-accent"
           />
+          {mode === "register" && (
+            <p className="mt-1 text-[11px] text-brain-text-soft">
+              8자 이상. 대/소문자·숫자·특수문자 섞기 권장.
+            </p>
+          )}
         </label>
+        {mode === "register" && (
+          <label className="block text-sm">
+            <span className="text-brain-text-muted">비밀번호 확인</span>
+            <input
+              type="password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              autoComplete="new-password"
+              required
+              className="mt-1 w-full rounded border border-brain-border bg-brain-bg px-3 py-2 outline-none focus:border-brain-accent"
+            />
+          </label>
+        )}
         {error && (
           <div className="rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
             {error}
@@ -315,7 +397,11 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: (u: UserDto) => void }) {
           disabled={submitting}
           className="w-full rounded bg-brain-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
-          {submitting ? "확인 중…" : "로그인"}
+          {submitting
+            ? "확인 중…"
+            : mode === "login"
+              ? "로그인"
+              : "가입하고 시작"}
         </button>
       </form>
     </div>
@@ -379,40 +465,20 @@ function LibraryScreen({
   return (
     <div className="grid h-full grid-cols-[280px_1fr] gap-0">
       <aside className="overflow-y-auto border-r border-brain-border bg-brain-surface-soft p-4">
-        <h2 className="mb-3 font-display text-lg">모듈</h2>
+        <h2 className="mb-3 font-display text-lg">분야</h2>
         {!modules && <p className="text-sm text-brain-text-muted">불러오는 중…</p>}
         {modules && modules.length === 0 && (
           <p className="text-sm text-brain-text-muted">
-            아직 시드된 모듈이 없습니다.
+            아직 등록된 작품이 없습니다.
           </p>
         )}
-        <ul className="space-y-1">
-          {modules?.map((m) => (
-            <li key={m.id}>
-              <button
-                onClick={() => setActiveModuleId(m.id)}
-                className={
-                  "w-full rounded px-3 py-2 text-left text-sm transition " +
-                  (m.id === activeModuleId
-                    ? "bg-brain-accent text-white"
-                    : "text-brain-text hover:bg-brain-surface")
-                }
-              >
-                <div className="font-medium">{m.title}</div>
-                <div
-                  className={
-                    "text-xs " +
-                    (m.id === activeModuleId
-                      ? "text-white/80"
-                      : "text-brain-text-muted")
-                  }
-                >
-                  {m.field} · {m.lesson_count}개 레슨
-                </div>
-              </button>
-            </li>
-          ))}
-        </ul>
+        {modules && (
+          <ModulesByField
+            modules={modules}
+            activeModuleId={activeModuleId}
+            onPick={setActiveModuleId}
+          />
+        )}
       </aside>
       <section className="overflow-y-auto p-6">
         <ProgressSummary progress={progress} />
@@ -432,7 +498,7 @@ function LibraryScreen({
         )}
         {!loadingLessons && lessons && lessons.length === 0 && (
           <p className="text-sm text-brain-text-muted">
-            이 모듈에는 레슨이 없습니다.
+            이 작품에는 장이 없습니다.
           </p>
         )}
         <ul className="space-y-3">
@@ -1618,6 +1684,102 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <span className="mb-1 block text-xs font-medium text-brain-text-muted">{label}</span>
       {children}
     </label>
+  );
+}
+
+// 분야 (modules.field) 의 enum 값 → 한국어 라벨. CLAUDE.md 의 분야 매트릭스와
+// 정렬. 백엔드 컬럼은 그대로 두고 라벨만 한국화한다.
+const FIELD_LABEL: Record<string, string> = {
+  literature: "문학",
+  philosophy: "철학",
+  science: "과학·수학",
+  art: "예술·음악",
+  "eastern-classics": "동양 고전",
+  economics: "경제·사회",
+};
+
+const FIELD_ORDER = [
+  "science",
+  "philosophy",
+  "literature",
+  "art",
+  "economics",
+  "eastern-classics",
+];
+
+function ModulesByField({
+  modules,
+  activeModuleId,
+  onPick,
+}: {
+  modules: ModuleDto[];
+  activeModuleId: string | null;
+  onPick: (id: string) => void;
+}) {
+  const grouped = new Map<string, ModuleDto[]>();
+  for (const m of modules) {
+    const list = grouped.get(m.field) ?? [];
+    list.push(m);
+    grouped.set(m.field, list);
+  }
+  // 알려진 순서로 먼저, 모르는 분야는 뒤에.
+  const fields = [
+    ...FIELD_ORDER.filter((f) => grouped.has(f)),
+    ...Array.from(grouped.keys()).filter((f) => !FIELD_ORDER.includes(f)),
+  ];
+  return (
+    <div className="space-y-4">
+      {fields.map((field) => {
+        const list = grouped.get(field) ?? [];
+        const label = FIELD_LABEL[field] ?? field;
+        return (
+          <section key={field}>
+            <h3
+              className="mb-1.5 text-[10px] uppercase tracking-[0.18em]"
+              style={{
+                color: "var(--color-brain-text-soft)",
+                fontWeight: 600,
+              }}
+            >
+              {label}{" "}
+              <span
+                className="ml-1 text-[10px] normal-case"
+                style={{ color: "var(--color-brain-text-soft)" }}
+              >
+                ({list.length})
+              </span>
+            </h3>
+            <ul className="space-y-1">
+              {list.map((m) => (
+                <li key={m.id}>
+                  <button
+                    onClick={() => onPick(m.id)}
+                    className={
+                      "w-full rounded px-3 py-2 text-left text-sm transition " +
+                      (m.id === activeModuleId
+                        ? "bg-brain-accent text-white"
+                        : "text-brain-text hover:bg-brain-surface")
+                    }
+                  >
+                    <div className="font-medium">{m.title}</div>
+                    <div
+                      className={
+                        "text-xs " +
+                        (m.id === activeModuleId
+                          ? "text-white/80"
+                          : "text-brain-text-muted")
+                      }
+                    >
+                      {m.lesson_count}장
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+    </div>
   );
 }
 

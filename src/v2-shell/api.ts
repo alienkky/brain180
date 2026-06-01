@@ -279,6 +279,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
+  register: (email: string, password: string, name: string) =>
+    call<LoginData>("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ email, password, name }),
+    }),
   me: () => call<UserDto>("/api/auth/me"),
   logout: () => call<{ ok: true }>("/api/auth/logout", { method: "POST" }),
   modules: () => call<ModuleDto[]>("/api/library/modules"),
