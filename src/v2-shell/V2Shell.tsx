@@ -34,6 +34,7 @@ import {
 } from "./api";
 import { CognitiveMap } from "./CognitiveMap";
 import { EvaluationPanel } from "./EvaluationPanel";
+import { PatternPanel } from "./PatternPanel";
 import { TextInteractive } from "./TextInteractive";
 import type { CircledPhrase } from "./TextInteractive";
 
@@ -478,7 +479,7 @@ function LibraryScreen({
   );
 }
 
-type PracticeTab = "chat" | "canvas" | "eval";
+type PracticeTab = "chat" | "canvas" | "eval" | "pattern";
 
 const MODE_OPTIONS: { value: SessionMode; label: string; hint: string }[] = [
   {
@@ -783,6 +784,11 @@ function PracticeScreen({
               onClick={() => setTab("eval")}
               label="자기평가"
             />
+            <TabButton
+              active={tab === "pattern"}
+              onClick={() => setTab("pattern")}
+              label="패턴"
+            />
           </div>
           <div className="text-xs text-brain-text-muted">
             {session ? `세션 ${session.id.slice(0, 8)}…` : "세션 시작 중…"}
@@ -876,6 +882,11 @@ function PracticeScreen({
               canvas={liveCanvas ?? initialCanvas}
               onAskTutor={onAskTutor}
             />
+          </div>
+        )}
+        {tab === "pattern" && (
+          <div className="flex-1 overflow-hidden">
+            <PatternPanel canvas={liveCanvas ?? initialCanvas} />
           </div>
         )}
       </section>
