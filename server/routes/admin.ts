@@ -6,9 +6,17 @@
 import { randomBytes } from "node:crypto";
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
-import { and, eq, isNull, asc, sql } from "drizzle-orm";
+import { and, eq, isNull, asc, desc, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { lessons, modules, textExcerpts, users } from "../db/schema.js";
+import {
+  learningSessions,
+  lessons,
+  modules,
+  textExcerpts,
+  tutorMessages,
+  tutorRatings,
+  users,
+} from "../db/schema.js";
 import { ok, fail } from "../lib/envelope.js";
 import { hashPassword } from "../lib/password.js";
 import { lucia } from "../lib/lucia.js";
@@ -47,6 +55,117 @@ const baseUserSelect = {
   mustChangePassword: users.mustChangePassword,
   createdAt: users.createdAt,
 } as const;
+
+adminRouter.get(
+  "/tutor/ratings",
+  asyncHandler(async (req, res) => {
+    const rawLimit = Number(req.query.limit ?? 50);
+    const limit = Number.isFinite(rawLimit)
+      ? Math.min(Math.max(Math.trunc(rawLimit), 1), 200)
+      : 50;
+
+    const recentRows = await db
+      .select({
+        id: tutorRatings.id,
+        messageId: tutorRatings.messageId,
+        userId: tutorRatings.userId,
+        userName: users.name,
+        rating: tutorRatings.stars,
+        feedback: tutorRatings.comment,
+        createdAt: tutorRatings.createdAt,
+        messageContent: tutorMessages.content,
+        model: tutorMessages.model,
+        promptVersion: tutorMessages.promptVersion,
+        tokensIn: tutorMessages.tokensIn,
+        tokensOut: tutorMessages.tokensOut,
+        sessionId: tutorMessages.sessionId,
+        lessonId: learningSessions.lessonId,
+      })
+      .from(tutorRatings)
+      .innerJoin(tutorMessages, eq(tutorMessages.id, tutorRatings.messageId))
+      .innerJoin(learningSessions, eq(learningSessions.id, tutorMessages.sessionId))
+      .innerJoin(users, eq(users.id, tutorRatings.userId))
+      .orderBy(desc(tutorRatings.createdAt))
+      .limit(limit);
+
+    const totalRows = await db
+      .select({
+        count: sql<number>`count(*)::int`,
+        average: sql<number | null>`avg(${tutorRatings.stars})::float`,
+      })
+      .from(tutorRatings);
+
+    const modelRows = await db
+      .select({
+        key: sql<string>`coalesce(${tutorMessages.model}, 'unknown')`,
+        count: sql<number>`count(*)::int`,
+        average: sql<number>`avg(${tutorRatings.stars})::float`,
+      })
+      .from(tutorRatings)
+      .innerJoin(tutorMessages, eq(tutorMessages.id, tutorRatings.messageId))
+      .groupBy(sql`coalesce(${tutorMessages.model}, 'unknown')`)
+      .orderBy(sql`avg(${tutorRatings.stars}) desc`);
+
+    const promptRows = await db
+      .select({
+        key: sql<string>`coalesce(${tutorMessages.promptVersion}, 'unknown')`,
+        count: sql<number>`count(*)::int`,
+        average: sql<number>`avg(${tutorRatings.stars})::float`,
+      })
+      .from(tutorRatings)
+      .innerJoin(tutorMessages, eq(tutorMessages.id, tutorRatings.messageId))
+      .groupBy(sql`coalesce(${tutorMessages.promptVersion}, 'unknown')`)
+      .orderBy(sql`avg(${tutorRatings.stars}) desc`);
+
+    const distributionRows = await db
+      .select({
+        rating: tutorRatings.stars,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(tutorRatings)
+      .groupBy(tutorRatings.stars)
+      .orderBy(asc(tutorRatings.stars));
+
+    const distribution = [1, 2, 3, 4, 5].map((rating) => ({
+      rating,
+      count: Number(distributionRows.find((r) => r.rating === rating)?.count ?? 0),
+    }));
+
+    ok(res, {
+      recent: recentRows.map((r) => ({
+        id: r.id,
+        message_id: r.messageId,
+        user_id: r.userId,
+        user_name: r.userName,
+        rating: r.rating,
+        feedback: r.feedback,
+        created_at: r.createdAt.toISOString(),
+        message_content: r.messageContent,
+        model: r.model,
+        prompt_version: r.promptVersion,
+        input_tokens: r.tokensIn,
+        output_tokens: r.tokensOut,
+        session_id: r.sessionId,
+        lesson_id: r.lessonId,
+      })),
+      summary: {
+        count: Number(totalRows[0]?.count ?? 0),
+        average: totalRows[0]?.average == null ? null : Number(totalRows[0].average),
+        by_model: modelRows.map((r) => ({
+          key: r.key,
+          count: Number(r.count),
+          average: Number(r.average),
+        })),
+        by_prompt_version: promptRows.map((r) => ({
+          key: r.key,
+          count: Number(r.count),
+          average: Number(r.average),
+        })),
+        distribution,
+      },
+    });
+  }),
+);
 
 // ── GET /api/admin/users/pending ────────────────────────────────────
 adminRouter.get(

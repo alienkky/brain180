@@ -114,10 +114,12 @@ export const TutorChatBody = z.object({
   canvas_snapshot: CanvasJson.optional(),
 });
 
-export const RateMessageBody = z.object({
+export const RateTutorBody = z.object({
   rating: z.number().int().min(1).max(5),
-  feedback: z.string().max(500).optional(),
+  feedback: z.string().trim().max(500).optional(),
 });
+
+export const RateMessageBody = RateTutorBody;
 
 // ─── Lesson Feedback (v1 FeedbackPanel 부활) ─────────────────────────
 

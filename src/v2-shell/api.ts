@@ -131,7 +131,21 @@ export interface TutorMessageDto {
   model: string | null;
   input_tokens: number;
   output_tokens: number;
+  my_rating: TutorRatingDto | null;
   created_at: string;
+}
+
+export interface TutorRatingDto {
+  id: string;
+  message_id: string;
+  rating: number;
+  feedback: string | null;
+  created_at: string;
+}
+
+export interface RateTutorInput {
+  rating: number;
+  feedback?: string;
 }
 
 export type ModuleAxis = "cognitive" | "value" | "time";
@@ -189,6 +203,40 @@ export interface AdminLessonCreateInput {
 }
 
 export type AdminLessonUpdateInput = Partial<Omit<AdminLessonCreateInput, "module_id">>;
+
+export interface AdminTutorRatingRecentDto {
+  id: string;
+  message_id: string;
+  user_id: string;
+  user_name: string;
+  rating: number;
+  feedback: string | null;
+  created_at: string;
+  message_content: string;
+  model: string | null;
+  prompt_version: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  session_id: string;
+  lesson_id: string;
+}
+
+export interface AdminTutorRatingAggregateDto {
+  key: string;
+  count: number;
+  average: number;
+}
+
+export interface AdminTutorRatingsDto {
+  recent: AdminTutorRatingRecentDto[];
+  summary: {
+    count: number;
+    average: number | null;
+    by_model: AdminTutorRatingAggregateDto[];
+    by_prompt_version: AdminTutorRatingAggregateDto[];
+    distribution: { rating: number; count: number }[];
+  };
+}
 
 export type PlanName = "free" | "standard" | "premium";
 
@@ -313,6 +361,11 @@ export const api = {
     }),
   messages: (sessionId: string) =>
     call<TutorMessageDto[]>(`/api/tutor/sessions/${sessionId}/messages`),
+  rateTutorMessage: (messageId: string, input: RateTutorInput) =>
+    call<TutorRatingDto>(`/api/tutor/messages/${messageId}/rate`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
   getArtifact: (sessionId: string) =>
     call<ArtifactDto | null>(`/api/practice/sessions/${sessionId}/artifact`),
   putArtifact: (sessionId: string, canvas: CanvasJson, clientRevision: number) =>
@@ -360,6 +413,8 @@ export const api = {
     }),
   adminDeleteLesson: (lessonId: string) =>
     call<void>(`/api/admin/lessons/${lessonId}`, { method: "DELETE" }),
+  adminTutorRatings: (limit = 50) =>
+    call<AdminTutorRatingsDto>(`/api/admin/tutor/ratings?limit=${limit}`),
   chat: (
     sessionId: string,
     lessonId: string,
