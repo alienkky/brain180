@@ -13,6 +13,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { users } from "../db/schema.js";
 import { lucia } from "../lib/lucia.js";
+import { loadEnv } from "../lib/env.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
 import { ok, fail } from "../lib/envelope.js";
 import { parseBody, RegisterBody, LoginBody, ChangePasswordBody } from "../lib/validators.js";
@@ -95,12 +96,20 @@ authRouter.post(
     }
 
     const passwordHash = await hashPassword(body.password);
+    // Beta-open default: env.AUTO_APPROVE_STUDENTS="true" lets the new student
+    // skip the pending_approval queue and start learning immediately. Flip to
+    // "false" to force admin approval (e.g. paid B2B course).
+    const autoApprove = loadEnv().AUTO_APPROVE_STUDENTS === "true";
+    const approvedFields = autoApprove
+      ? { status: "approved" as const, approvedAt: new Date() }
+      : {};
     const inserted = await db
       .insert(users)
       .values({
         email,
         name: body.name,
         passwordHash,
+        ...approvedFields,
       })
       .returning({
         id: users.id,

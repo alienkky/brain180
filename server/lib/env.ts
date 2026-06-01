@@ -17,6 +17,11 @@ const Schema = z.object({
   // "false" only for CI smoke tests where the DB is preloaded.
   AUTO_BOOTSTRAP: z.enum(["true", "false"]).default("true"),
 
+  // Beta-open mode: /api/auth/register marks the new student as approved
+  // immediately so they can use the app without admin intervention. Flip to
+  // "false" when manual approval is required (e.g. paid B2B course).
+  AUTO_APPROVE_STUDENTS: z.enum(["true", "false"]).default("true"),
+
   // Tutor LLM provider selection. Defaults to "kimi" because v1 brain180 already
   // ran on Moonshot/Kimi and our local-dev path reuses that key. Switch via env.
   AI_PROVIDER: z.enum(["anthropic", "kimi"]).default("kimi"),
