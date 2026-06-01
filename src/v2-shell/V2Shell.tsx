@@ -259,7 +259,7 @@ function friendlyAuthError(e: unknown): string {
   if (e instanceof ApiError) {
     switch (e.code) {
       case "weak_password":
-        return "비밀번호가 정책을 충족하지 못합니다 — 12자 이상 + 영문 / 숫자 / 특수문자 중 2종 이상.";
+        return "비밀번호가 정책을 충족하지 못합니다 — 8자 이상 + 영문 / 숫자 / 특수문자 중 2종 이상.";
       case "email_taken":
         return "이미 사용 중인 이메일입니다. 로그인 탭으로 진행하세요.";
       case "invalid_credentials":
@@ -391,13 +391,13 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: (u: UserDto) => void }) {
             autoComplete={
               mode === "login" ? "current-password" : "new-password"
             }
-            minLength={mode === "register" ? 12 : 1}
+            minLength={mode === "register" ? 8 : 1}
             required
             className="mt-1 w-full rounded border border-brain-border bg-brain-bg px-3 py-2 outline-none focus:border-brain-accent"
           />
           {mode === "register" && (
             <p className="mt-1 text-[11px] text-brain-text-soft">
-              12자 이상. 영문 / 숫자 / 특수문자 중 *2종 이상* 섞기.
+              8자 이상. 영문 / 숫자 / 특수문자 중 *2종 이상* 섞기.
             </p>
           )}
         </label>

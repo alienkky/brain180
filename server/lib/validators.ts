@@ -11,9 +11,11 @@ export const Iso = z.string().datetime({ offset: true });
 
 export const Email = z.string().email().max(254);
 
+// Beta open: 8자 + 2종 (영문/숫자/특수문자 중 2종 이상). 일반 학생 진입
+// 마찰을 낮추기 위해 12자에서 8자로 완화. 결제 도입 시점에서 12자로 회귀 검토.
 export const Password = z
   .string()
-  .min(12, "weak_password")
+  .min(8, "weak_password")
   .max(128, "weak_password")
   .refine((s) => {
     let cats = 0;
