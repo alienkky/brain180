@@ -38,6 +38,7 @@ import { FeedbackPanel } from "./FeedbackPanel";
 import { PatternPanel } from "./PatternPanel";
 import { TextInteractive } from "./TextInteractive";
 import type { CircledPhrase } from "./TextInteractive";
+import { TutorBubble } from "./TutorBubble";
 
 type Screen =
   | { name: "login" }
@@ -573,7 +574,7 @@ function LibraryScreen({
   );
 }
 
-type PracticeTab = "chat" | "canvas" | "eval" | "pattern" | "feedback";
+type PracticeTab = "canvas" | "eval" | "pattern" | "feedback";
 
 const MODE_OPTIONS: { value: SessionMode; label: string; hint: string }[] = [
   {
@@ -606,7 +607,9 @@ function PracticeScreen({
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<PracticeTab>("chat");
+  const [tab, setTab] = useState<PracticeTab>("canvas");
+  // 튜터 버블 열림 상태 — v1 의 floating ChatPanel 패턴 복원.
+  const [tutorOpen, setTutorOpen] = useState(false);
   const [mode, setMode] = useState<SessionMode>("analyze");
   const [revealText, setRevealText] = useState(false);
   const [initialCanvas, setInitialCanvas] = useState<CanvasJson | null>(null);
@@ -620,7 +623,6 @@ function PracticeScreen({
   const [focusCite, setFocusCite] = useState<CanvasCite | null>(null);
   const currentCanvas = useRef<CanvasJson | null>(null);
   const clientRevision = useRef(0);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
   const textBodyRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -743,7 +745,7 @@ function PracticeScreen({
         snapshot.nodes.length === 0
           ? "현재 캔버스는 비어 있습니다. 이 본문에서 첫 번째로 추출해야 할 핵심 개념 노드를 한 개 제안해 주시고, 그 이유를 짧게 설명해 주세요."
           : "현재 인지 캔버스 상태를 함께 첨부했습니다. 다음으로 추가하면 좋을 노드 1~2개와 그 노드들을 기존 노드와 어떻게 연결하면 좋을지(관계 유형 포함)를 제안해 주세요. 학생이 직접 그릴 수 있도록 *이유와 방향*만 알려주시고 정답을 단정하지는 마세요.";
-      setTab("chat");
+      setTutorOpen(true);
       setSending(true);
       try {
         await sendChat(message, snapshot);
@@ -758,13 +760,6 @@ function PracticeScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [session, lesson.id, sending],
   );
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
-    });
-  }, [messages.length]);
 
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -862,11 +857,6 @@ function PracticeScreen({
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brain-border bg-brain-surface px-4 py-3 md:px-6">
           <div className="flex flex-wrap gap-1">
             <TabButton
-              active={tab === "chat"}
-              onClick={() => setTab("chat")}
-              label="사고구조 튜터"
-            />
-            <TabButton
               active={tab === "canvas"}
               onClick={() => setTab("canvas")}
               label="인지 캔버스"
@@ -891,68 +881,6 @@ function PracticeScreen({
             {session ? `세션 ${session.id.slice(0, 8)}…` : "세션 시작 중…"}
           </div>
         </div>
-        {tab === "chat" && (
-          <>
-            <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4">
-              {messages.length === 0 && !error && (
-                <p className="text-sm text-brain-text-muted">
-                  본문에 대한 질문을 던지면 튜터가 사고 패턴을 함께 풀어드립니다.
-                </p>
-              )}
-              <ul className="space-y-3">
-                {messages.map((m) => (
-                  <li
-                    key={m.id}
-                    className={
-                      "max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-soft-1 " +
-                      (m.role === "user"
-                        ? "ml-auto bg-brain-accent text-white"
-                        : "mr-auto bg-brain-surface text-brain-text")
-                    }
-                  >
-                    <div className="whitespace-pre-wrap">{m.content}</div>
-                    {m.model && (
-                      <div className="mt-1 text-[10px] uppercase tracking-wider opacity-60">
-                        {m.model} · in {m.input_tokens} / out {m.output_tokens}
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            {error && (
-              <div className="border-t border-brain-danger/40 bg-brain-accent-soft/50 px-6 py-2 text-sm text-brain-danger">
-                {error}
-              </div>
-            )}
-            <form
-              onSubmit={send}
-              className="flex items-end gap-2 border-t border-brain-border bg-brain-surface p-3"
-            >
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    send(e as unknown as React.FormEvent);
-                  }
-                }}
-                rows={2}
-                disabled={!session || sending}
-                placeholder="질문을 입력하세요 — Enter 전송, Shift+Enter 줄바꿈"
-                className="flex-1 resize-none rounded border border-brain-border bg-brain-bg px-3 py-2 text-sm outline-none focus:border-brain-accent disabled:opacity-50"
-              />
-              <button
-                type="submit"
-                disabled={!session || sending || !input.trim()}
-                className="rounded bg-brain-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-              >
-                {sending ? "…" : "전송"}
-              </button>
-            </form>
-          </>
-        )}
         {tab === "canvas" && (
           <div className="flex-1 overflow-hidden">
             {canvasReady ? (
@@ -992,6 +920,19 @@ function PracticeScreen({
           </div>
         )}
       </section>
+      <TutorBubble
+        open={tutorOpen}
+        onToggle={() => setTutorOpen((v) => !v)}
+        session={session}
+        messages={messages}
+        error={error}
+        sending={sending}
+        input={input}
+        onInputChange={setInput}
+        onSend={send}
+        onAskTutor={onAskTutor}
+        liveCanvas={liveCanvas}
+      />
     </div>
   );
 }
