@@ -249,7 +249,12 @@ practiceRouter.get(
   "/sessions/:id/artifact",
   userRateLimit,
   asyncHandler(async (req, res) => {
-    const owned = await ensureOwnedSession(req, res, req.params.id ?? "");
+    const rawId = req.params.id;
+    const owned = await ensureOwnedSession(
+      req,
+      res,
+      typeof rawId === "string" ? rawId : "",
+    );
     if (!owned) return;
     const rows = await db
       .select({
@@ -283,7 +288,12 @@ practiceRouter.put(
   "/sessions/:id/artifact",
   userRateLimit,
   asyncHandler(async (req, res) => {
-    const owned = await ensureOwnedSession(req, res, req.params.id ?? "");
+    const rawId = req.params.id;
+    const owned = await ensureOwnedSession(
+      req,
+      res,
+      typeof rawId === "string" ? rawId : "",
+    );
     if (!owned) return;
     const body = parseBody(PutArtifactBody, req, res);
     if (!body) return;
