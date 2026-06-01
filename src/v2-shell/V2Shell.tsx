@@ -597,24 +597,21 @@ function PracticeScreen({
     setRevealText(true);
   }, []);
 
-  // Auto-clear focus highlight after a few seconds so the spotlight is
-  // transient — the student should still be able to read the rest of the
-  // text without a persistent yellow stripe.
-  useEffect(() => {
-    if (!focusCite) return;
-    const t = window.setTimeout(() => setFocusCite(null), 4000);
-    return () => window.clearTimeout(t);
-  }, [focusCite]);
-
-  // Whenever a focused cite changes, scroll its highlighted span into view.
+  // 직전 동작은 4s 자동 fade 였지만, 학습자가 본문을 *읽으며* 캔버스 노드를
+  // 비교하는 흐름을 자르는 부작용이 있었음. 이제는 *명시적* 해제 (다른 노드
+  // 클릭 / 본문 클릭) 까지 하이라이트 유지.
   useEffect(() => {
     if (!focusCite || !textBodyRef.current) return;
-    const target = textBodyRef.current.querySelector(
-      "[data-cite-highlight=\"true\"]",
-    );
-    if (target instanceof HTMLElement) {
-      target.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
+    // 다음 페인트 직후 스크롤 — DOM 이 cite span 을 실제로 그렸는지 확인 후.
+    const r = window.requestAnimationFrame(() => {
+      const target = textBodyRef.current?.querySelector(
+        "[data-cite-highlight=\"true\"]",
+      );
+      if (target instanceof HTMLElement) {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    });
+    return () => window.cancelAnimationFrame(r);
   }, [focusCite]);
 
   const sendChat = async (
@@ -759,6 +756,7 @@ function PracticeScreen({
                       setTab("canvas");
                     }}
                     focusCite={focusCite}
+                    onClearFocus={() => setFocusCite(null)}
                   />
                 </div>
               )}

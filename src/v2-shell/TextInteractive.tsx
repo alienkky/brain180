@@ -89,6 +89,7 @@ interface Props {
   onRemovePhrase: (id: string) => void;
   onSendToCanvas: (cite: CanvasCite) => void;
   focusCite: CanvasCite | null;
+  onClearFocus?: () => void;
   connectives?: string[];
 }
 
@@ -101,6 +102,7 @@ export function TextInteractive({
   onRemovePhrase,
   onSendToCanvas,
   focusCite,
+  onClearFocus,
   connectives,
 }: Props) {
   const [rangeAnchor, setRangeAnchor] = useState<string | null>(null);
@@ -362,12 +364,23 @@ export function TextInteractive({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-brain-border bg-brain-surface px-6 py-3 text-[11px] text-brain-text-muted">
-        탭 = 동그라미 · 더블탭 = 캔버스 노드 · Shift+클릭 = 범위 확장 · 꾹 누르기 = 묶기 모드
-        {rangeAnchor && (
-          <span className="ml-2 rounded bg-brain-accent-soft px-2 py-0.5 text-brain-accent">
-            묶기 모드: 마지막 단어를 클릭하세요
-          </span>
+      <div className="flex items-center justify-between border-b border-brain-border bg-brain-surface px-6 py-3 text-[11px] text-brain-text-muted">
+        <span>
+          탭 = 동그라미 · 더블탭 = 캔버스 노드 · Shift+클릭 = 범위 확장 · 꾹 누르기 = 묶기 모드
+          {rangeAnchor && (
+            <span className="ml-2 rounded bg-brain-accent-soft px-2 py-0.5 text-brain-accent">
+              묶기 모드: 마지막 단어를 클릭하세요
+            </span>
+          )}
+        </span>
+        {focusCite && onClearFocus && (
+          <button
+            onClick={onClearFocus}
+            className="rounded border border-brain-accent/40 px-2 py-0.5 text-brain-accent hover:bg-brain-accent-soft/50"
+            title="캔버스 노드에서 비춰진 본문 강조 해제"
+          >
+            강조 해제
+          </button>
         )}
       </div>
       <div
@@ -407,15 +420,18 @@ export function TextInteractive({
                     border: `1.5px solid var(--color-brain-accent)`,
                     borderRadius: "9999px",
                     backgroundColor: focused
-                      ? "rgba(184,92,63,0.20)"
+                      ? "rgba(184,92,63,0.30)"
                       : "rgba(184,92,63,0.08)",
+                    boxShadow: focused
+                      ? "0 0 0 3px rgba(184,92,63,0.30), 0 2px 8px rgba(184,92,63,0.25)"
+                      : undefined,
                     padding: "1px 10px",
                     margin: "0 2px",
                     verticalAlign: "middle",
                     color: "var(--color-brain-accent)",
                     cursor: "grab",
-                    transition: "all 0.15s ease",
-                    fontWeight: 500,
+                    transition: "all 0.2s ease",
+                    fontWeight: focused ? 600 : 500,
                     userSelect: "none",
                     lineHeight: 1.6,
                   }}
@@ -491,10 +507,15 @@ export function TextInteractive({
                           ? "2px solid var(--color-brain-accent)"
                           : undefined,
                         backgroundColor: inFocus
-                          ? "rgba(198,138,61,0.35)"
+                          ? "rgba(198,138,61,0.55)"
+                          : undefined,
+                        boxShadow: inFocus
+                          ? "0 0 0 1px rgba(198,138,61,0.7)"
                           : undefined,
                         borderRadius: isAnchor || inFocus ? "3px" : undefined,
                         padding: "0 1px",
+                        fontWeight: inFocus ? 600 : undefined,
+                        transition: "all 0.2s ease",
                       }}
                     >
                       {w.text}
