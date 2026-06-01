@@ -1,0 +1,390 @@
+// Owner: 연다리 [통합설계].
+// Minimal fetch wrapper for the v2 browser shell. Uses Vite's /api proxy
+// (vite.config.ts) so cookies are same-origin against the Express server
+// running on :3001. All calls include credentials so Lucia's session
+// cookie round-trips automatically.
+
+export interface UserDto {
+  id: string;
+  email: string;
+  name: string;
+  role: "user" | "admin";
+  status: "pending_approval" | "approved" | "rejected" | "suspended";
+  must_change_password: boolean;
+}
+
+export interface LoginData {
+  user: UserDto;
+  session_expires_at: string;
+}
+
+export interface ModuleDto {
+  id: string;
+  slug: string;
+  title: string;
+  field: string;
+  difficulty: number;
+  axis_focus: Record<string, unknown>;
+  lesson_count: number;
+}
+
+export interface LessonDto {
+  id: string;
+  module_id: string;
+  order: number;
+  title: string;
+  text_excerpt_id: string | null;
+  tutor_system_prompt_id: string | null;
+  objectives: string[];
+  axis_focus: Record<string, unknown>;
+}
+
+export interface TextExcerptDto {
+  id: string;
+  lesson_id: string;
+  title: string;
+  author: string;
+  source: string;
+  body: string;
+  language: string;
+}
+
+export interface LessonFeedbackDto {
+  id: string;
+  lesson_id: string;
+  display_name: string;
+  content: string;
+  rating: number;
+  created_at: string;
+  is_mine: boolean;
+}
+
+export interface LessonFeedbackInput {
+  display_name?: string;
+  content: string;
+  rating?: number;
+}
+
+export type SessionMode = "analyze" | "reverse" | "practice";
+
+export interface SessionDto {
+  id: string;
+  user_id: string;
+  lesson_id: string;
+  mode: SessionMode;
+  status: "draft" | "submitted" | "reviewed";
+  artifact_id: string | null;
+  started_at: string;
+  submitted_at: string | null;
+}
+
+export interface CanvasCite {
+  start: number;
+  end: number;
+  quote: string;
+}
+
+export interface CanvasNode {
+  id: string;
+  type: "concept" | "anchor" | "bridge" | "branch";
+  label: string;
+  x: number;
+  y: number;
+  axis_tag?: "cognition" | "value" | "time";
+  cite?: CanvasCite;
+}
+
+export interface CanvasEdge {
+  id: string;
+  from: string;
+  to: string;
+  relation: "causes" | "supports" | "contrasts" | "transforms" | "contains";
+  temporal_order?: number;
+}
+
+export interface CanvasJson {
+  version: 1;
+  viewport: { x: number; y: number; zoom: number };
+  nodes: CanvasNode[];
+  edges: CanvasEdge[];
+}
+
+export interface ArtifactDto {
+  id: string;
+  session_id: string;
+  mode: "free" | "constrained" | "guided";
+  canvas_json: CanvasJson;
+  saved_at: string;
+}
+
+export interface ProgressEntryDto {
+  lesson_id: string;
+  session_count: number;
+  last_started_at: string | null;
+}
+
+export interface TutorMessageDto {
+  id: string;
+  session_id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  model: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  created_at: string;
+}
+
+export type ModuleAxis = "cognitive" | "value" | "time";
+
+export interface AdminModuleDto {
+  id: string;
+  slug: string;
+  title: string;
+  axis: ModuleAxis;
+  field: string;
+  order: number;
+  difficulty: number;
+  description: string | null;
+  axis_focus: Record<string, unknown>;
+  lesson_count: number;
+}
+
+export interface AdminModuleCreateInput {
+  title: string;
+  slug: string;
+  axis: ModuleAxis;
+  field: string;
+  order: number;
+  difficulty: number;
+  description?: string;
+  axis_focus?: Record<string, number>;
+}
+
+export type AdminModuleUpdateInput = Partial<AdminModuleCreateInput>;
+
+export interface AdminLessonDto {
+  id: string;
+  module_id: string;
+  title: string;
+  order: number;
+  objectives: string[];
+  axis_focus: Record<string, unknown>;
+  text_excerpt_id: string | null;
+  body: string;
+  author: string;
+  source: string;
+  language: string;
+}
+
+export interface AdminLessonCreateInput {
+  module_id: string;
+  title: string;
+  order: number;
+  body: string;
+  author?: string;
+  source?: string;
+  language?: "ko" | "en";
+  objectives?: string[];
+  axis_focus?: Record<string, number>;
+}
+
+export type AdminLessonUpdateInput = Partial<Omit<AdminLessonCreateInput, "module_id">>;
+
+export type PlanName = "free" | "standard" | "premium";
+
+export interface PlanDto {
+  name: PlanName;
+  title: string;
+  price_krw: number;
+  features: Record<string, unknown>;
+}
+
+export interface SubscriptionDto {
+  id: string;
+  plan_name: PlanName | null;
+  status: "trialing" | "active" | "past_due" | "canceled" | "expired";
+  started_at: string;
+  ends_at: string | null;
+}
+
+export interface CheckoutPayload {
+  order_id: string;
+  amount: number;
+  plan_name: PlanName;
+  order_name: string;
+  client_key: string;
+  customer_email: string;
+  success_url: string;
+  fail_url: string;
+}
+
+export interface ConfirmResult {
+  payment_id: string;
+  subscription_id: string | null;
+  plan_name: PlanName;
+  ends_at: string;
+}
+
+export class ApiError extends Error {
+  status: number;
+  code: string;
+  constructor(message: string, status: number, code: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+interface Envelope<T> {
+  data?: T;
+  error?: string;
+  message?: string;
+  details?: unknown;
+}
+
+async function call<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers ?? {});
+  if (init?.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  const res = await fetch(path, {
+    ...init,
+    headers,
+    credentials: "include",
+  });
+  let body: Envelope<T> | T | undefined;
+  try {
+    body = (await res.json()) as Envelope<T> | T;
+  } catch {
+    body = undefined;
+  }
+  if (!res.ok) {
+    const env = body as Envelope<T> | undefined;
+    throw new ApiError(
+      env?.message ?? env?.error ?? `HTTP ${res.status}`,
+      res.status,
+      env?.error ?? "unknown",
+    );
+  }
+  if (body && typeof body === "object" && "data" in body && body.data !== undefined) {
+    return body.data as T;
+  }
+  return body as T;
+}
+
+export const api = {
+  login: (email: string, password: string) =>
+    call<LoginData>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+  me: () => call<UserDto>("/api/auth/me"),
+  logout: () => call<{ ok: true }>("/api/auth/logout", { method: "POST" }),
+  modules: () => call<ModuleDto[]>("/api/library/modules"),
+  moduleLessons: (moduleId: string) =>
+    call<LessonDto[]>(`/api/library/modules/${moduleId}/lessons`),
+  text: (textId: string) => call<TextExcerptDto>(`/api/library/texts/${textId}`),
+  lessonFeedback: (lessonId: string) =>
+    call<LessonFeedbackDto[]>(`/api/library/lessons/${lessonId}/feedback`),
+  addLessonFeedback: (lessonId: string, body: LessonFeedbackInput) =>
+    call<LessonFeedbackDto>(`/api/library/lessons/${lessonId}/feedback`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  deleteLessonFeedback: (lessonId: string, feedbackId: string) =>
+    call<{ id: string }>(
+      `/api/library/lessons/${lessonId}/feedback/${feedbackId}`,
+      { method: "DELETE" },
+    ),
+  progress: () => call<ProgressEntryDto[]>("/api/practice/me/progress"),
+  startSession: (lessonId: string, mode?: SessionMode) =>
+    call<SessionDto>("/api/practice/sessions", {
+      method: "POST",
+      body: JSON.stringify({
+        lesson_id: lessonId,
+        ...(mode ? { mode } : {}),
+      }),
+    }),
+  messages: (sessionId: string) =>
+    call<TutorMessageDto[]>(`/api/tutor/sessions/${sessionId}/messages`),
+  getArtifact: (sessionId: string) =>
+    call<ArtifactDto | null>(`/api/practice/sessions/${sessionId}/artifact`),
+  putArtifact: (sessionId: string, canvas: CanvasJson, clientRevision: number) =>
+    call<ArtifactDto>(`/api/practice/sessions/${sessionId}/artifact`, {
+      method: "PUT",
+      body: JSON.stringify({
+        canvas_json: canvas,
+        client_revision: clientRevision,
+      }),
+    }),
+  adminPending: () => call<UserDto[]>("/api/admin/users/pending"),
+  adminApprove: (userId: string) =>
+    call<UserDto>(`/api/admin/users/${userId}/approve`, { method: "POST" }),
+  adminReject: (userId: string, reason?: string) =>
+    call<UserDto>(`/api/admin/users/${userId}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ ...(reason ? { reason } : {}) }),
+    }),
+  adminModules: () => call<AdminModuleDto[]>("/api/admin/modules"),
+  adminCreateModule: (input: AdminModuleCreateInput) =>
+    call<AdminModuleDto>("/api/admin/modules", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  adminUpdateModule: (moduleId: string, input: AdminModuleUpdateInput) =>
+    call<AdminModuleDto>(`/api/admin/modules/${moduleId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+  adminDeleteModule: (moduleId: string) =>
+    call<void>(`/api/admin/modules/${moduleId}`, { method: "DELETE" }),
+  adminLessons: (moduleId?: string) =>
+    call<AdminLessonDto[]>(
+      moduleId ? `/api/admin/lessons?module_id=${moduleId}` : "/api/admin/lessons",
+    ),
+  adminCreateLesson: (input: AdminLessonCreateInput) =>
+    call<AdminLessonDto>("/api/admin/lessons", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  adminUpdateLesson: (lessonId: string, input: AdminLessonUpdateInput) =>
+    call<AdminLessonDto>(`/api/admin/lessons/${lessonId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+  adminDeleteLesson: (lessonId: string) =>
+    call<void>(`/api/admin/lessons/${lessonId}`, { method: "DELETE" }),
+  chat: (
+    sessionId: string,
+    lessonId: string,
+    message: string,
+    canvasSnapshot?: CanvasJson | null,
+  ) =>
+    call<TutorMessageDto>("/api/tutor/chat", {
+      method: "POST",
+      body: JSON.stringify({
+        session_id: sessionId,
+        lesson_id: lessonId,
+        message,
+        ...(canvasSnapshot ? { canvas_snapshot: canvasSnapshot } : {}),
+      }),
+    }),
+  billingPlans: () => call<PlanDto[]>("/api/billing/plans"),
+  billingMeSubscription: () =>
+    call<SubscriptionDto | null>("/api/billing/me/subscription"),
+  billingCheckout: (planName: Exclude<PlanName, "free">) =>
+    call<CheckoutPayload>("/api/billing/checkout", {
+      method: "POST",
+      body: JSON.stringify({ plan_name: planName }),
+    }),
+  billingConfirm: (paymentKey: string, orderId: string, amount: number) =>
+    call<ConfirmResult>("/api/billing/confirm", {
+      method: "POST",
+      body: JSON.stringify({
+        payment_key: paymentKey,
+        order_id: orderId,
+        amount,
+      }),
+    }),
+};

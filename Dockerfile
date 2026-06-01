@@ -1,5 +1,5 @@
 # ────────────────────────────────────────────────────────────────────
-# Build stage: compile the Vite static site
+# Build stage: compile both the Vite SPA bundle and the Express server
 # ────────────────────────────────────────────────────────────────────
 FROM node:22-alpine AS build
 
@@ -9,12 +9,15 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
-# Copy source and build (cache bust: 2026-05-23)
+# Copy source and build (cache bust: 2026-06-01)
 COPY . .
+# Frontend: tsc -b runs the project references (app + node), vite emits dist/
 RUN npx tsc -b && npx vite build
+# Backend: tsc -p tsconfig.server.json emits dist-server/ (NodeNext modules)
+RUN npx tsc -p tsconfig.server.json
 
 # ────────────────────────────────────────────────────────────────────
-# Runtime stage: Express server serves dist/ + /api/chat proxy
+# Runtime stage: Express v2 server serves /api/* + /webhooks/* + SPA
 # ────────────────────────────────────────────────────────────────────
 FROM node:22-alpine AS runtime
 
@@ -23,11 +26,15 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund --omit=dev
 
-COPY server.js ./
+# Server JS lives in dist-server/, Vite SPA in dist/. server/index.ts resolves
+# dist/ relative to its own location, so dist-server/ + dist/ must be siblings.
+COPY --from=build /app/dist-server ./dist-server
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/seeds ./seeds
 
-# Railway injects $PORT; default to 3000 for local docker run
+# Railway injects $PORT; default to 3000 for local docker run.
+ENV NODE_ENV=production
 ENV PORT=3000
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["node", "dist-server/index.js"]

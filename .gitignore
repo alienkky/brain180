@@ -32,3 +32,6 @@ run_inspection.py
 # Railway local state
 .railway/
 data/
+.env
+dist-server/
+reply.md
