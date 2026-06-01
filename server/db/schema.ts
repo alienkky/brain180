@@ -666,5 +666,32 @@ export const apiUsageLogs = pgTable(
   }),
 );
 
+export const lessonFeedback = pgTable(
+  "lesson_feedback",
+  {
+    id: id(),
+    lessonId: uuid("lesson_id")
+      .notNull()
+      .references(() => lessons.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    displayName: varchar("display_name", { length: 80 }).notNull().default(""),
+    content: text("content").notNull(),
+    rating: integer("rating").notNull().default(0),
+    createdAt,
+  },
+  (table) => ({
+    lessonCreatedIdx: index("lesson_feedback_lesson_created_idx").on(
+      table.lessonId,
+      table.createdAt,
+    ),
+    ratingCheck: check(
+      "lesson_feedback_rating_check",
+      sql`${table.rating} >= 0 AND ${table.rating} <= 5`,
+    ),
+  }),
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;

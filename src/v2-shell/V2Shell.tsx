@@ -34,6 +34,10 @@ import {
 } from "./api";
 import { CognitiveMap } from "./CognitiveMap";
 import { EvaluationPanel } from "./EvaluationPanel";
+import { FeedbackPanel } from "./FeedbackPanel";
+import { PatternPanel } from "./PatternPanel";
+import { TextInteractive } from "./TextInteractive";
+import type { CircledPhrase } from "./TextInteractive";
 
 type Screen =
   | { name: "login" }
@@ -476,7 +480,7 @@ function LibraryScreen({
   );
 }
 
-type PracticeTab = "chat" | "canvas" | "eval";
+type PracticeTab = "chat" | "canvas" | "eval" | "pattern" | "feedback";
 
 const MODE_OPTIONS: { value: SessionMode; label: string; hint: string }[] = [
   {
@@ -517,7 +521,8 @@ function PracticeScreen({
   // 자기평가 패널이 실시간으로 다시 계산되도록 캔버스 상태를 거울처럼 들고 있는다.
   // 평가 결과는 useMemo 가 캐싱하므로 매 변경마다 재렌더 비용은 미미.
   const [liveCanvas, setLiveCanvas] = useState<CanvasJson | null>(null);
-  const [textSelection, setTextSelection] = useState<CanvasCite | null>(null);
+  // v1 PracticeTextLayer 의 circledPhrases — 세션 메모리만으로 유지.
+  const [phrases, setPhrases] = useState<CircledPhrase[]>([]);
   const [pendingCite, setPendingCite] = useState<CanvasCite | null>(null);
   const [focusCite, setFocusCite] = useState<CanvasCite | null>(null);
   const currentCanvas = useRef<CanvasJson | null>(null);
@@ -535,6 +540,7 @@ function PracticeScreen({
     setCanvasReady(false);
     currentCanvas.current = null;
     setLiveCanvas(null);
+    setPhrases([]);
     clientRevision.current = 0;
     // Reverse mode: text starts hidden so student must reconstruct from the
     // canvas; analyze/practice show text up front.
@@ -592,54 +598,22 @@ function PracticeScreen({
     setRevealText(true);
   }, []);
 
-  // Auto-clear focus highlight after a few seconds so the spotlight is
-  // transient — the student should still be able to read the rest of the
-  // text without a persistent yellow stripe.
-  useEffect(() => {
-    if (!focusCite) return;
-    const t = window.setTimeout(() => setFocusCite(null), 4000);
-    return () => window.clearTimeout(t);
-  }, [focusCite]);
-
-  // Whenever a focused cite changes, scroll its highlighted span into view.
+  // 직전 동작은 4s 자동 fade 였지만, 학습자가 본문을 *읽으며* 캔버스 노드를
+  // 비교하는 흐름을 자르는 부작용이 있었음. 이제는 *명시적* 해제 (다른 노드
+  // 클릭 / 본문 클릭) 까지 하이라이트 유지.
   useEffect(() => {
     if (!focusCite || !textBodyRef.current) return;
-    const target = textBodyRef.current.querySelector(
-      "[data-cite-highlight=\"true\"]",
-    );
-    if (target instanceof HTMLElement) {
-      target.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  }, [focusCite]);
-
-  const captureTextSelection = useCallback(() => {
-    if (!text || !textBodyRef.current) return;
-    const sel = window.getSelection();
-    if (!sel || sel.isCollapsed) {
-      setTextSelection(null);
-      return;
-    }
-    const range = sel.getRangeAt(0);
-    if (!textBodyRef.current.contains(range.commonAncestorContainer)) {
-      setTextSelection(null);
-      return;
-    }
-    const quote = sel.toString().trim();
-    if (!quote) {
-      setTextSelection(null);
-      return;
-    }
-    const start = text.body.indexOf(quote);
-    if (start === -1) {
-      setTextSelection(null);
-      return;
-    }
-    setTextSelection({
-      start,
-      end: start + quote.length,
-      quote: quote.slice(0, 400),
+    // 다음 페인트 직후 스크롤 — DOM 이 cite span 을 실제로 그렸는지 확인 후.
+    const r = window.requestAnimationFrame(() => {
+      const target = textBodyRef.current?.querySelector(
+        "[data-cite-highlight=\"true\"]",
+      );
+      if (target instanceof HTMLElement) {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
     });
-  }, [text]);
+    return () => window.cancelAnimationFrame(r);
+  }, [focusCite]);
 
   const sendChat = async (
     message: string,
@@ -718,19 +692,19 @@ function PracticeScreen({
   };
 
   return (
-    <div className="grid h-full grid-cols-[1fr_1fr] gap-0">
-      <section className="flex flex-col overflow-hidden border-r border-brain-border">
-        <div className="flex items-center justify-between border-b border-brain-border bg-brain-surface px-6 py-3">
+    <div className="flex h-full flex-col md:grid md:grid-cols-[1fr_1fr] md:gap-0">
+      <section className="flex h-1/2 min-h-0 flex-col overflow-hidden border-b border-brain-border md:h-auto md:border-b-0 md:border-r">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brain-border bg-brain-surface px-4 py-3 md:px-6">
           <button
             onClick={onBack}
             className="text-sm text-brain-text-muted hover:text-brain-text"
           >
             ← 레슨 선택
           </button>
-          <div className="font-display text-lg">{lesson.title}</div>
+          <div className="font-display text-base md:text-lg">{lesson.title}</div>
           <ModePicker active={mode} onPick={setMode} disabled={sending} />
         </div>
-        <div className="flex-1 overflow-y-auto px-8 py-6">
+        <div className="flex-1 overflow-y-auto px-4 py-4 md:px-8 md:py-6">
           {!text && !error && (
             <p className="text-sm text-brain-text-muted">본문 불러오는 중…</p>
           )}
@@ -756,52 +730,44 @@ function PracticeScreen({
                   </button>
                 </div>
               ) : (
-                <>
-                  <div
-                    ref={textBodyRef}
-                    onMouseUp={captureTextSelection}
-                    onKeyUp={captureTextSelection}
-                    className="mt-4 whitespace-pre-wrap font-serif text-base leading-relaxed"
-                  >
-                    {renderTextWithHighlight(text.body, focusCite)}
-                  </div>
-                  {textSelection && (
-                    <div className="sticky bottom-4 mt-4 flex items-center gap-2 rounded-xl border border-brain-accent/60 bg-brain-surface px-4 py-2 text-sm shadow-soft-2">
-                      <span className="flex-1 truncate text-brain-text-muted">
-                        선택: <span className="text-brain-text">{textSelection.quote.slice(0, 50)}</span>
-                        {textSelection.quote.length > 50 ? "…" : ""}
-                      </span>
-                      <button
-                        onClick={() => {
-                          setPendingCite(textSelection);
-                          setTextSelection(null);
-                          setTab("canvas");
-                          window.getSelection()?.removeAllRanges();
-                        }}
-                        className="rounded bg-brain-accent px-3 py-1 text-xs text-white hover:opacity-90"
-                      >
-                        캔버스에 인용 노드 추가
-                      </button>
-                      <button
-                        onClick={() => {
-                          setTextSelection(null);
-                          window.getSelection()?.removeAllRanges();
-                        }}
-                        className="rounded border border-brain-border px-2 py-1 text-xs text-brain-text-muted hover:text-brain-text"
-                      >
-                        취소
-                      </button>
-                    </div>
-                  )}
-                </>
+                <div ref={textBodyRef} className="-mx-8 mt-4 h-full">
+                  <TextInteractive
+                    body={text.body}
+                    phrases={phrases}
+                    onAddPhrase={(p) =>
+                      setPhrases((curr) => {
+                        // 동일 구간 중복 방지 — 글자 구간이 같으면 무시
+                        if (
+                          curr.some(
+                            (x) =>
+                              x.charStart === p.charStart &&
+                              x.charEnd === p.charEnd,
+                          )
+                        ) {
+                          return curr;
+                        }
+                        return [...curr, p];
+                      })
+                    }
+                    onRemovePhrase={(id) =>
+                      setPhrases((curr) => curr.filter((p) => p.id !== id))
+                    }
+                    onSendToCanvas={(cite) => {
+                      setPendingCite(cite);
+                      setTab("canvas");
+                    }}
+                    focusCite={focusCite}
+                    onClearFocus={() => setFocusCite(null)}
+                  />
+                </div>
               )}
             </article>
           )}
         </div>
       </section>
-      <section className="flex flex-col overflow-hidden bg-brain-surface-soft">
-        <div className="flex items-center justify-between border-b border-brain-border bg-brain-surface px-6 py-3">
-          <div className="flex gap-1">
+      <section className="flex h-1/2 min-h-0 flex-col overflow-hidden bg-brain-surface-soft md:h-auto">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brain-border bg-brain-surface px-4 py-3 md:px-6">
+          <div className="flex flex-wrap gap-1">
             <TabButton
               active={tab === "chat"}
               onClick={() => setTab("chat")}
@@ -816,6 +782,16 @@ function PracticeScreen({
               active={tab === "eval"}
               onClick={() => setTab("eval")}
               label="자기평가"
+            />
+            <TabButton
+              active={tab === "pattern"}
+              onClick={() => setTab("pattern")}
+              label="패턴"
+            />
+            <TabButton
+              active={tab === "feedback"}
+              onClick={() => setTab("feedback")}
+              label="피드백"
             />
           </div>
           <div className="text-xs text-brain-text-muted">
@@ -910,6 +886,16 @@ function PracticeScreen({
               canvas={liveCanvas ?? initialCanvas}
               onAskTutor={onAskTutor}
             />
+          </div>
+        )}
+        {tab === "pattern" && (
+          <div className="flex-1 overflow-hidden">
+            <PatternPanel canvas={liveCanvas ?? initialCanvas} />
+          </div>
+        )}
+        {tab === "feedback" && (
+          <div className="flex-1 overflow-hidden">
+            <FeedbackPanel lessonId={lesson.id} />
           </div>
         )}
       </section>
@@ -1750,28 +1736,6 @@ function TabButton({
     >
       {label}
     </button>
-  );
-}
-
-function renderTextWithHighlight(
-  body: string,
-  cite: CanvasCite | null,
-): ReactNode {
-  if (!cite) return body;
-  const start = Math.max(0, Math.min(cite.start, body.length));
-  const end = Math.max(start, Math.min(cite.end, body.length));
-  if (end <= start) return body;
-  return (
-    <>
-      {body.slice(0, start)}
-      <mark
-        data-cite-highlight="true"
-        className="rounded bg-brain-highlight-soft px-0.5 text-brain-text"
-      >
-        {body.slice(start, end)}
-      </mark>
-      {body.slice(end)}
-    </>
   );
 }
 

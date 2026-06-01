@@ -6,10 +6,17 @@
 
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
-import { eq, asc, sql } from "drizzle-orm";
+import { eq, asc, desc, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { lessons, modules, textExcerpts } from "../db/schema.js";
+import {
+  lessonFeedback,
+  lessons,
+  modules,
+  textExcerpts,
+  users,
+} from "../db/schema.js";
 import { ok, fail } from "../lib/envelope.js";
+import { parseBody, LessonFeedbackBody } from "../lib/validators.js";
 import {
   requireApprovedUser,
   requireAuth,
@@ -239,5 +246,150 @@ libraryRouter.get(
       language: row.language,
     };
     ok(res, dto);
+  }),
+);
+
+// ── Lesson Feedback (v1 FeedbackPanel 부활) ─────────────────────────
+//
+// 익명 옵션: 클라이언트가 `display_name` 을 빈 문자열로 보내면 "익명".
+// 그렇지 않으면 user.name 또는 사용자가 입력한 표시명을 그대로 저장.
+// 평점은 0–5 (0 = 미평가).
+
+interface LessonFeedbackDTO {
+  id: string;
+  lesson_id: string;
+  display_name: string;
+  content: string;
+  rating: number;
+  created_at: string;
+  // 본인이 작성한 글에만 true — 클라이언트가 *삭제* UI 분기에 사용 가능.
+  is_mine: boolean;
+}
+
+libraryRouter.get(
+  "/lessons/:id/feedback",
+  userRateLimit,
+  asyncHandler(async (req, res) => {
+    const lessonId = req.params.id;
+    if (typeof lessonId !== "string" || !UUID_RE.test(lessonId)) {
+      fail(res, 422, "validation_error", { message: "invalid_lesson_id" });
+      return;
+    }
+    const rows = await db
+      .select({
+        id: lessonFeedback.id,
+        lessonId: lessonFeedback.lessonId,
+        userId: lessonFeedback.userId,
+        displayName: lessonFeedback.displayName,
+        content: lessonFeedback.content,
+        rating: lessonFeedback.rating,
+        createdAt: lessonFeedback.createdAt,
+      })
+      .from(lessonFeedback)
+      .where(eq(lessonFeedback.lessonId, lessonId))
+      .orderBy(desc(lessonFeedback.createdAt))
+      .limit(100);
+    const dto: LessonFeedbackDTO[] = rows.map((r) => ({
+      id: r.id,
+      lesson_id: r.lessonId,
+      display_name: r.displayName || "익명",
+      content: r.content,
+      rating: r.rating,
+      created_at: r.createdAt.toISOString(),
+      is_mine: r.userId === req.user!.id,
+    }));
+    ok(res, dto);
+  }),
+);
+
+libraryRouter.post(
+  "/lessons/:id/feedback",
+  userRateLimit,
+  asyncHandler(async (req, res) => {
+    const lessonId = req.params.id;
+    if (typeof lessonId !== "string" || !UUID_RE.test(lessonId)) {
+      fail(res, 422, "validation_error", { message: "invalid_lesson_id" });
+      return;
+    }
+    const body = parseBody(LessonFeedbackBody, req, res);
+    if (!body) return;
+
+    const lessonRow = await db
+      .select({ id: lessons.id })
+      .from(lessons)
+      .where(eq(lessons.id, lessonId))
+      .limit(1);
+    if (lessonRow.length === 0) {
+      fail(res, 404, "not_found", { message: "lesson_not_found" });
+      return;
+    }
+
+    // displayName 빈 문자열이면 user.name 채워서 저장 — 표시 시 "익명" 으로 fallback.
+    const userRow = await db
+      .select({ name: users.name })
+      .from(users)
+      .where(eq(users.id, req.user!.id))
+      .limit(1);
+    const fallbackName = userRow[0]?.name ?? "";
+
+    const inserted = await db
+      .insert(lessonFeedback)
+      .values({
+        lessonId,
+        userId: req.user!.id,
+        displayName: body.display_name || fallbackName,
+        content: body.content,
+        rating: body.rating,
+      })
+      .returning({
+        id: lessonFeedback.id,
+        lessonId: lessonFeedback.lessonId,
+        displayName: lessonFeedback.displayName,
+        content: lessonFeedback.content,
+        rating: lessonFeedback.rating,
+        createdAt: lessonFeedback.createdAt,
+      });
+    const row = inserted[0]!;
+    const dto: LessonFeedbackDTO = {
+      id: row.id,
+      lesson_id: row.lessonId,
+      display_name: row.displayName || "익명",
+      content: row.content,
+      rating: row.rating,
+      created_at: row.createdAt.toISOString(),
+      is_mine: true,
+    };
+    ok(res, dto);
+  }),
+);
+
+libraryRouter.delete(
+  "/lessons/:lessonId/feedback/:feedbackId",
+  userRateLimit,
+  asyncHandler(async (req, res) => {
+    const feedbackId = req.params.feedbackId;
+    if (typeof feedbackId !== "string" || !UUID_RE.test(feedbackId)) {
+      fail(res, 422, "validation_error", { message: "invalid_feedback_id" });
+      return;
+    }
+    const rows = await db
+      .select({
+        id: lessonFeedback.id,
+        userId: lessonFeedback.userId,
+      })
+      .from(lessonFeedback)
+      .where(eq(lessonFeedback.id, feedbackId))
+      .limit(1);
+    const row = rows[0];
+    if (!row) {
+      fail(res, 404, "not_found");
+      return;
+    }
+    if (row.userId !== req.user!.id && req.user!.role !== "admin") {
+      fail(res, 403, "forbidden");
+      return;
+    }
+    await db.delete(lessonFeedback).where(eq(lessonFeedback.id, feedbackId));
+    ok(res, { id: feedbackId });
   }),
 );
