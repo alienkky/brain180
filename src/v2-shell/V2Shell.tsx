@@ -251,6 +251,33 @@ function HeaderNavButton({
   );
 }
 
+// 로그인/가입 폼에서만 쓰는 친절 에러 매퍼. 서버는 envelope.code (예:
+// "weak_password", "email_taken", "invalid_credentials") 만 던지므로
+// 사용자에게 보일 한국어를 여기서 합성. toMessage() 는 기술 디버그용이라
+// 그대로 둔다.
+function friendlyAuthError(e: unknown): string {
+  if (e instanceof ApiError) {
+    switch (e.code) {
+      case "weak_password":
+        return "비밀번호가 정책을 충족하지 못합니다 — 12자 이상 + 영문 / 숫자 / 특수문자 중 2종 이상.";
+      case "email_taken":
+        return "이미 사용 중인 이메일입니다. 로그인 탭으로 진행하세요.";
+      case "invalid_credentials":
+        return "이메일 또는 비밀번호가 일치하지 않습니다.";
+      case "validation_error":
+        return "입력값을 확인해주세요 (이메일 형식, 비밀번호 길이 등).";
+      case "account_blocked":
+        return "이 계정은 차단/거절 상태입니다. 관리자에게 문의하세요.";
+      case "rate_limited":
+        return "잠시 후 다시 시도해 주세요. (요청이 너무 잦습니다)";
+      default:
+        return `${e.message || "오류가 발생했습니다"} (${e.code})`;
+    }
+  }
+  if (e instanceof Error) return e.message;
+  return String(e);
+}
+
 function LoginScreen({ onLoggedIn }: { onLoggedIn: (u: UserDto) => void }) {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
@@ -275,7 +302,7 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: (u: UserDto) => void }) {
           : await api.register(email, password, name);
       onLoggedIn(data.user);
     } catch (e: unknown) {
-      setError(toMessage(e));
+      setError(friendlyAuthError(e));
     } finally {
       setSubmitting(false);
     }
@@ -364,13 +391,13 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: (u: UserDto) => void }) {
             autoComplete={
               mode === "login" ? "current-password" : "new-password"
             }
-            minLength={mode === "register" ? 8 : 1}
+            minLength={mode === "register" ? 12 : 1}
             required
             className="mt-1 w-full rounded border border-brain-border bg-brain-bg px-3 py-2 outline-none focus:border-brain-accent"
           />
           {mode === "register" && (
             <p className="mt-1 text-[11px] text-brain-text-soft">
-              8자 이상. 대/소문자·숫자·특수문자 섞기 권장.
+              12자 이상. 영문 / 숫자 / 특수문자 중 *2종 이상* 섞기.
             </p>
           )}
         </label>
