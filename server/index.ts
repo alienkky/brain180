@@ -2,17 +2,63 @@ import express from "express";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { loadEnv } from "./lib/env.js";
 import { sessionMiddleware } from "./middleware/auth.js";
 import { corsMiddleware } from "./middleware/cors.js";
 import { errorHandler, notFound } from "./middleware/error.js";
 import { mountRoutes } from "./routes/index.js";
-import { closeDb } from "./db/client.js";
+import { closeDb, db } from "./db/client.js";
 import { installUsageLogWriter } from "./lib/usage-log.js";
+import {
+  attachTutorPromptToLessons,
+  seedActiveTutorPrompt,
+  seedAdmin,
+  seedLibraryContent,
+} from "./db/seed.js";
 
 const env = loadEnv();
 
 installUsageLogWriter();
+
+// Auto-bootstrap on Railway: apply migrations + seed admin/content idempotently
+// before serving traffic. Disable via AUTO_BOOTSTRAP=false (e.g. CI smoke). Any
+// failure aborts startup so health checks fail loud instead of serving a half-
+// initialised DB. Idempotent: re-running on existing data is a noop.
+async function bootstrapDb(): Promise<void> {
+  if (env.AUTO_BOOTSTRAP === "false") {
+    console.log("[bootstrap] skipped (AUTO_BOOTSTRAP=false)");
+    return;
+  }
+  const here = dirname(fileURLToPath(import.meta.url));
+  // dist-server/index.js → ../server/db/migrations (copied alongside in Dockerfile)
+  // dev (tsx server/index.ts) → ./db/migrations relative to server/
+  const candidates = [
+    resolve(here, "..", "server", "db", "migrations"),
+    resolve(here, "db", "migrations"),
+    resolve(process.cwd(), "server", "db", "migrations"),
+  ];
+  const migrationsFolder = candidates.find(existsSync);
+  if (!migrationsFolder) {
+    throw new Error(
+      `[bootstrap] migrations folder not found. Tried: ${candidates.join(", ")}`,
+    );
+  }
+  console.log(`[bootstrap] migrate from ${migrationsFolder}`);
+  await migrate(db, { migrationsFolder });
+
+  console.log("[bootstrap] seed admin + tutor prompt + library content");
+  const admin = await seedAdmin();
+  console.log(`[bootstrap] admin ${admin.outcome} id=${admin.userId}`);
+  const prompt = await seedActiveTutorPrompt();
+  console.log(`[bootstrap] tutor_prompt ${prompt.outcome} id=${prompt.id}`);
+  const library = await seedLibraryContent();
+  console.log(
+    `[bootstrap] library modules+=${library.modulesCreated} lessons+=${library.lessonsCreated} excerpts+=${library.textExcerptsCreated}`,
+  );
+  const attached = await attachTutorPromptToLessons(prompt.id);
+  console.log(`[bootstrap] tutor_prompt attached to ${attached} lessons`);
+}
 
 const app = express();
 
@@ -49,11 +95,19 @@ if (existsSync(distDir)) {
 app.use(notFound);
 app.use(errorHandler);
 
-const server = app.listen(env.PORT, () => {
-  console.log(
-    `[brain180 v2] listening on :${env.PORT} (env=${env.NODE_ENV})`,
-  );
-});
+const server = await bootstrapDb()
+  .then(() =>
+    app.listen(env.PORT, () => {
+      console.log(
+        `[brain180 v2] listening on :${env.PORT} (env=${env.NODE_ENV})`,
+      );
+    }),
+  )
+  .catch((err) => {
+    console.error("[brain180 v2] bootstrap failed — aborting startup");
+    console.error(err);
+    process.exit(1);
+  });
 
 async function shutdown(signal: string): Promise<void> {
   console.log(`[brain180 v2] ${signal} received, draining`);

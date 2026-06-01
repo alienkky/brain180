@@ -31,6 +31,8 @@ RUN npm ci --no-audit --no-fund --omit=dev
 COPY --from=build /app/dist-server ./dist-server
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/seeds ./seeds
+# Auto-bootstrap on container start needs raw migration SQL + drizzle journal.
+COPY --from=build /app/server/db/migrations ./server/db/migrations
 
 # Railway injects $PORT; default to 3000 for local docker run.
 ENV NODE_ENV=production

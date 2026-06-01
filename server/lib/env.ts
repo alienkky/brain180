@@ -12,6 +12,11 @@ const Schema = z.object({
   ADMIN_SEED_EMAIL: z.string().email().default("kky710@gmail.com"),
   ADMIN_SEED_PASSWORD: z.string().optional(),
 
+  // Run drizzle migrations + seedAdmin + seedLibraryContent on each container
+  // boot. Idempotent — re-running on an already-seeded DB is a noop. Set to
+  // "false" only for CI smoke tests where the DB is preloaded.
+  AUTO_BOOTSTRAP: z.enum(["true", "false"]).default("true"),
+
   // Tutor LLM provider selection. Defaults to "kimi" because v1 brain180 already
   // ran on Moonshot/Kimi and our local-dev path reuses that key. Switch via env.
   AI_PROVIDER: z.enum(["anthropic", "kimi"]).default("kimi"),
