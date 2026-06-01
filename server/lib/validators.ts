@@ -117,6 +117,14 @@ export const RateMessageBody = z.object({
   feedback: z.string().max(500).optional(),
 });
 
+// ─── Lesson Feedback (v1 FeedbackPanel 부활) ─────────────────────────
+
+export const LessonFeedbackBody = z.object({
+  display_name: z.string().trim().max(80).default(""),
+  content: z.string().trim().min(1).max(2000),
+  rating: z.number().int().min(0).max(5).default(0),
+});
+
 // ─── Admin ───────────────────────────────────────────────────────────
 
 export const RejectUserBody = z.object({

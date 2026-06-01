@@ -49,6 +49,22 @@ export interface TextExcerptDto {
   language: string;
 }
 
+export interface LessonFeedbackDto {
+  id: string;
+  lesson_id: string;
+  display_name: string;
+  content: string;
+  rating: number;
+  created_at: string;
+  is_mine: boolean;
+}
+
+export interface LessonFeedbackInput {
+  display_name?: string;
+  content: string;
+  rating?: number;
+}
+
 export type SessionMode = "analyze" | "reverse" | "practice";
 
 export interface SessionDto {
@@ -269,6 +285,18 @@ export const api = {
   moduleLessons: (moduleId: string) =>
     call<LessonDto[]>(`/api/library/modules/${moduleId}/lessons`),
   text: (textId: string) => call<TextExcerptDto>(`/api/library/texts/${textId}`),
+  lessonFeedback: (lessonId: string) =>
+    call<LessonFeedbackDto[]>(`/api/library/lessons/${lessonId}/feedback`),
+  addLessonFeedback: (lessonId: string, body: LessonFeedbackInput) =>
+    call<LessonFeedbackDto>(`/api/library/lessons/${lessonId}/feedback`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  deleteLessonFeedback: (lessonId: string, feedbackId: string) =>
+    call<{ id: string }>(
+      `/api/library/lessons/${lessonId}/feedback/${feedbackId}`,
+      { method: "DELETE" },
+    ),
   progress: () => call<ProgressEntryDto[]>("/api/practice/me/progress"),
   startSession: (lessonId: string, mode?: SessionMode) =>
     call<SessionDto>("/api/practice/sessions", {
