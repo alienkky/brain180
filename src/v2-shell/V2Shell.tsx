@@ -691,19 +691,19 @@ function PracticeScreen({
   };
 
   return (
-    <div className="grid h-full grid-cols-[1fr_1fr] gap-0">
-      <section className="flex flex-col overflow-hidden border-r border-brain-border">
-        <div className="flex items-center justify-between border-b border-brain-border bg-brain-surface px-6 py-3">
+    <div className="flex h-full flex-col md:grid md:grid-cols-[1fr_1fr] md:gap-0">
+      <section className="flex h-1/2 min-h-0 flex-col overflow-hidden border-b border-brain-border md:h-auto md:border-b-0 md:border-r">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brain-border bg-brain-surface px-4 py-3 md:px-6">
           <button
             onClick={onBack}
             className="text-sm text-brain-text-muted hover:text-brain-text"
           >
             ← 레슨 선택
           </button>
-          <div className="font-display text-lg">{lesson.title}</div>
+          <div className="font-display text-base md:text-lg">{lesson.title}</div>
           <ModePicker active={mode} onPick={setMode} disabled={sending} />
         </div>
-        <div className="flex-1 overflow-y-auto px-8 py-6">
+        <div className="flex-1 overflow-y-auto px-4 py-4 md:px-8 md:py-6">
           {!text && !error && (
             <p className="text-sm text-brain-text-muted">본문 불러오는 중…</p>
           )}
@@ -764,9 +764,9 @@ function PracticeScreen({
           )}
         </div>
       </section>
-      <section className="flex flex-col overflow-hidden bg-brain-surface-soft">
-        <div className="flex items-center justify-between border-b border-brain-border bg-brain-surface px-6 py-3">
-          <div className="flex gap-1">
+      <section className="flex h-1/2 min-h-0 flex-col overflow-hidden bg-brain-surface-soft md:h-auto">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brain-border bg-brain-surface px-4 py-3 md:px-6">
+          <div className="flex flex-wrap gap-1">
             <TabButton
               active={tab === "chat"}
               onClick={() => setTab("chat")}
