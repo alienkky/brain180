@@ -34,6 +34,8 @@ import {
 } from "./api";
 import { CognitiveMap } from "./CognitiveMap";
 import { EvaluationPanel } from "./EvaluationPanel";
+import { TextInteractive } from "./TextInteractive";
+import type { CircledPhrase } from "./TextInteractive";
 
 type Screen =
   | { name: "login" }
@@ -517,7 +519,8 @@ function PracticeScreen({
   // 자기평가 패널이 실시간으로 다시 계산되도록 캔버스 상태를 거울처럼 들고 있는다.
   // 평가 결과는 useMemo 가 캐싱하므로 매 변경마다 재렌더 비용은 미미.
   const [liveCanvas, setLiveCanvas] = useState<CanvasJson | null>(null);
-  const [textSelection, setTextSelection] = useState<CanvasCite | null>(null);
+  // v1 PracticeTextLayer 의 circledPhrases — 세션 메모리만으로 유지.
+  const [phrases, setPhrases] = useState<CircledPhrase[]>([]);
   const [pendingCite, setPendingCite] = useState<CanvasCite | null>(null);
   const [focusCite, setFocusCite] = useState<CanvasCite | null>(null);
   const currentCanvas = useRef<CanvasJson | null>(null);
@@ -535,6 +538,7 @@ function PracticeScreen({
     setCanvasReady(false);
     currentCanvas.current = null;
     setLiveCanvas(null);
+    setPhrases([]);
     clientRevision.current = 0;
     // Reverse mode: text starts hidden so student must reconstruct from the
     // canvas; analyze/practice show text up front.
@@ -611,35 +615,6 @@ function PracticeScreen({
       target.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }, [focusCite]);
-
-  const captureTextSelection = useCallback(() => {
-    if (!text || !textBodyRef.current) return;
-    const sel = window.getSelection();
-    if (!sel || sel.isCollapsed) {
-      setTextSelection(null);
-      return;
-    }
-    const range = sel.getRangeAt(0);
-    if (!textBodyRef.current.contains(range.commonAncestorContainer)) {
-      setTextSelection(null);
-      return;
-    }
-    const quote = sel.toString().trim();
-    if (!quote) {
-      setTextSelection(null);
-      return;
-    }
-    const start = text.body.indexOf(quote);
-    if (start === -1) {
-      setTextSelection(null);
-      return;
-    }
-    setTextSelection({
-      start,
-      end: start + quote.length,
-      quote: quote.slice(0, 400),
-    });
-  }, [text]);
 
   const sendChat = async (
     message: string,
@@ -756,44 +731,35 @@ function PracticeScreen({
                   </button>
                 </div>
               ) : (
-                <>
-                  <div
-                    ref={textBodyRef}
-                    onMouseUp={captureTextSelection}
-                    onKeyUp={captureTextSelection}
-                    className="mt-4 whitespace-pre-wrap font-serif text-base leading-relaxed"
-                  >
-                    {renderTextWithHighlight(text.body, focusCite)}
-                  </div>
-                  {textSelection && (
-                    <div className="sticky bottom-4 mt-4 flex items-center gap-2 rounded-xl border border-brain-accent/60 bg-brain-surface px-4 py-2 text-sm shadow-soft-2">
-                      <span className="flex-1 truncate text-brain-text-muted">
-                        선택: <span className="text-brain-text">{textSelection.quote.slice(0, 50)}</span>
-                        {textSelection.quote.length > 50 ? "…" : ""}
-                      </span>
-                      <button
-                        onClick={() => {
-                          setPendingCite(textSelection);
-                          setTextSelection(null);
-                          setTab("canvas");
-                          window.getSelection()?.removeAllRanges();
-                        }}
-                        className="rounded bg-brain-accent px-3 py-1 text-xs text-white hover:opacity-90"
-                      >
-                        캔버스에 인용 노드 추가
-                      </button>
-                      <button
-                        onClick={() => {
-                          setTextSelection(null);
-                          window.getSelection()?.removeAllRanges();
-                        }}
-                        className="rounded border border-brain-border px-2 py-1 text-xs text-brain-text-muted hover:text-brain-text"
-                      >
-                        취소
-                      </button>
-                    </div>
-                  )}
-                </>
+                <div ref={textBodyRef} className="-mx-8 mt-4 h-full">
+                  <TextInteractive
+                    body={text.body}
+                    phrases={phrases}
+                    onAddPhrase={(p) =>
+                      setPhrases((curr) => {
+                        // 동일 구간 중복 방지 — 글자 구간이 같으면 무시
+                        if (
+                          curr.some(
+                            (x) =>
+                              x.charStart === p.charStart &&
+                              x.charEnd === p.charEnd,
+                          )
+                        ) {
+                          return curr;
+                        }
+                        return [...curr, p];
+                      })
+                    }
+                    onRemovePhrase={(id) =>
+                      setPhrases((curr) => curr.filter((p) => p.id !== id))
+                    }
+                    onSendToCanvas={(cite) => {
+                      setPendingCite(cite);
+                      setTab("canvas");
+                    }}
+                    focusCite={focusCite}
+                  />
+                </div>
               )}
             </article>
           )}
@@ -1750,28 +1716,6 @@ function TabButton({
     >
       {label}
     </button>
-  );
-}
-
-function renderTextWithHighlight(
-  body: string,
-  cite: CanvasCite | null,
-): ReactNode {
-  if (!cite) return body;
-  const start = Math.max(0, Math.min(cite.start, body.length));
-  const end = Math.max(start, Math.min(cite.end, body.length));
-  if (end <= start) return body;
-  return (
-    <>
-      {body.slice(0, start)}
-      <mark
-        data-cite-highlight="true"
-        className="rounded bg-brain-highlight-soft px-0.5 text-brain-text"
-      >
-        {body.slice(start, end)}
-      </mark>
-      {body.slice(end)}
-    </>
   );
 }
 
