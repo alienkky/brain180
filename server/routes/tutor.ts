@@ -32,6 +32,7 @@ import {
 } from "../db/schema.js";
 import { ok, fail } from "../lib/envelope.js";
 import { UpstreamError, callAnthropic, type AnthropicMessageContent } from "../lib/anthropic.js";
+import { hasFeature } from "../lib/env.js";
 import { callTutorLLM, resolveTutorProvider } from "../lib/llm.js";
 import { parseBody, TutorChatBody, RateTutorBody } from "../lib/validators.js";
 import {
@@ -377,9 +378,13 @@ tutorRouter.post(
       )
       .map((m) => ({ role: m.role as "user" | "assistant", content: m.content as AnthropicMessageContent }));
 
-    // Build last user message — include canvas image for free-draw mode vision
+    // Build last user message — include canvas image for free-draw mode vision.
+    // If Kimi is the default provider but Anthropic is configured, build the
+    // image message now and route this turn to Claude vision below.
     const canvasImageB64 = body.canvas_image_base64;
-    if (canvasImageB64 && resolveTutorProvider() === "anthropic") {
+    const provider = resolveTutorProvider();
+    const canUseVision = !!canvasImageB64 && (provider === "anthropic" || hasFeature("anthropic"));
+    if (canvasImageB64 && canUseVision) {
       // Vision message: image + text
       messages.push({
         role: "user" as const,
@@ -416,18 +421,11 @@ tutorRouter.post(
     try {
       // For vision calls: if image present and provider is not Anthropic, try Anthropic
       // as a secondary provider (it natively supports vision).
-      const useVision = !!canvasImageB64;
-      const effectiveProvider = useVision && resolveTutorProvider() !== "anthropic"
+      const effectiveProvider = canUseVision && provider !== "anthropic"
         ? "anthropic-vision-fallback"
         : null;
       if (effectiveProvider === "anthropic-vision-fallback") {
-        const { hasFeature } = await import("../lib/env.js");
-        if (hasFeature("anthropic")) {
-          result = await callAnthropic({ userId, system: systemMessage, messages });
-        } else {
-          // No Anthropic key — fall back to regular call with text-only message
-          result = await callTutorLLM({ userId, system: systemMessage, messages });
-        }
+        result = await callAnthropic({ userId, system: systemMessage, messages });
       } else {
         result = await callTutorLLM({ userId, system: systemMessage, messages });
       }
