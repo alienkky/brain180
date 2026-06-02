@@ -193,6 +193,9 @@ export interface AdminLessonDto {
   order: number;
   objectives: string[];
   axis_focus: Record<string, unknown>;
+  cognitive_structure_analysis: string;
+  learner_questions: string;
+  tutor_reference_notes: string;
   text_excerpt_id: string | null;
   body: string;
   author: string;
@@ -209,6 +212,9 @@ export interface AdminLessonCreateInput {
   source?: string;
   language?: "ko" | "en";
   objectives?: string[];
+  cognitive_structure_analysis?: string;
+  learner_questions?: string;
+  tutor_reference_notes?: string;
   axis_focus?: Record<string, number>;
 }
 

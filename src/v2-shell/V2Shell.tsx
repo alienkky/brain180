@@ -1837,6 +1837,15 @@ function LessonEditorDialog({
   const [objectivesText, setObjectivesText] = useState(
     initial?.objectives.join("\n") ?? "",
   );
+  const [cognitiveStructureAnalysis, setCognitiveStructureAnalysis] = useState(
+    initial?.cognitive_structure_analysis ?? "",
+  );
+  const [learnerQuestions, setLearnerQuestions] = useState(
+    initial?.learner_questions ?? "",
+  );
+  const [tutorReferenceNotes, setTutorReferenceNotes] = useState(
+    initial?.tutor_reference_notes ?? "",
+  );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -1857,6 +1866,9 @@ function LessonEditorDialog({
           source: source || undefined,
           language,
           objectives,
+          cognitive_structure_analysis: cognitiveStructureAnalysis,
+          learner_questions: learnerQuestions,
+          tutor_reference_notes: tutorReferenceNotes,
         };
         await api.adminUpdateLesson(initial.id, patch);
       } else {
@@ -1869,6 +1881,9 @@ function LessonEditorDialog({
           source: source || undefined,
           language,
           objectives,
+          cognitive_structure_analysis: cognitiveStructureAnalysis,
+          learner_questions: learnerQuestions,
+          tutor_reference_notes: tutorReferenceNotes,
         };
         await api.adminCreateLesson(create);
       }
@@ -1949,6 +1964,45 @@ function LessonEditorDialog({
               className="w-full rounded border border-brain-border bg-brain-bg px-2 py-1"
             />
           </Field>
+          <section className="rounded-lg border border-brain-border bg-brain-surface-soft p-3">
+            <div className="mb-3">
+              <h4 className="text-sm font-semibold text-brain-text">
+                AI 튜터 참고자료
+              </h4>
+              <p className="mt-1 text-xs leading-relaxed text-brain-text-muted">
+                학생에게 직접 노출하지 않고, 튜터가 답변할 때 참조하는 레슨별 기준입니다.
+              </p>
+            </div>
+            <div className="space-y-3">
+              <Field label="인지구조 분석">
+                <textarea
+                  value={cognitiveStructureAnalysis}
+                  onChange={(e) => setCognitiveStructureAnalysis(e.target.value)}
+                  rows={5}
+                  placeholder="예: 이 글은 핵심 개념 → 근거 → 반례 → 재정의 순서로 전개된다..."
+                  className="w-full rounded border border-brain-border bg-brain-bg px-2 py-1 text-xs leading-relaxed"
+                />
+              </Field>
+              <Field label="학습자에게 던질 질문">
+                <textarea
+                  value={learnerQuestions}
+                  onChange={(e) => setLearnerQuestions(e.target.value)}
+                  rows={5}
+                  placeholder="예: 핵심 노드를 그렇게 잡은 근거는 어디에 있나요? 이 관계를 원인으로 볼 수 있나요?"
+                  className="w-full rounded border border-brain-border bg-brain-bg px-2 py-1 text-xs leading-relaxed"
+                />
+              </Field>
+              <Field label="AI 튜터 참고 메모">
+                <textarea
+                  value={tutorReferenceNotes}
+                  onChange={(e) => setTutorReferenceNotes(e.target.value)}
+                  rows={4}
+                  placeholder="예: 정답을 먼저 말하지 말고, 학생의 캔버스 노드 이름을 언급한 뒤 질문한다."
+                  className="w-full rounded border border-brain-border bg-brain-bg px-2 py-1 text-xs leading-relaxed"
+                />
+              </Field>
+            </div>
+          </section>
         </div>
         <div className="mt-4 flex justify-end gap-2">
           <button

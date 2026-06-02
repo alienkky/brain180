@@ -185,6 +185,9 @@ export const AdminLessonCreateBody = z.object({
   source: z.string().max(200).optional(),
   language: z.enum(["ko", "en"]).optional(),
   objectives: z.array(z.string().min(1).max(200)).max(10).optional(),
+  cognitive_structure_analysis: z.string().max(10_000).optional(),
+  learner_questions: z.string().max(10_000).optional(),
+  tutor_reference_notes: z.string().max(10_000).optional(),
   axis_focus: AxisFocus,
 });
 
@@ -196,6 +199,9 @@ export const AdminLessonUpdateBody = z.object({
   source: z.string().max(200).optional(),
   language: z.enum(["ko", "en"]).optional(),
   objectives: z.array(z.string().min(1).max(200)).max(10).optional(),
+  cognitive_structure_analysis: z.string().max(10_000).optional(),
+  learner_questions: z.string().max(10_000).optional(),
+  tutor_reference_notes: z.string().max(10_000).optional(),
   axis_focus: AxisFocus,
 });
 

@@ -53,6 +53,8 @@ const FALLBACK_PROMPT = [
   "{{mode_guidance}}",
   "학생이 텍스트 '{{lesson_title}}'의 사고구조를 추출하도록 돕습니다.",
   "원문: {{text_body}}",
+  "레슨별 튜터 참고자료:",
+  "{{lesson_tutor_notes}}",
   "축 가중치: {{axis_focus}}",
   "학생: {{user_name}}",
   "현재 인지 캔버스 상태:",
@@ -121,6 +123,32 @@ function formatCanvasState(snap: CanvasSnapshotShape | undefined): string {
     `관계 ${snap.edges.length}개:`,
     edgeLines,
   ].join("\n");
+}
+
+function formatLessonTutorNotes(sourceMeta: unknown): string {
+  const meta =
+    sourceMeta && typeof sourceMeta === "object"
+      ? (sourceMeta as Record<string, unknown>)
+      : {};
+  const cognitive =
+    typeof meta.cognitive_structure_analysis === "string"
+      ? meta.cognitive_structure_analysis.trim()
+      : "";
+  const questions =
+    typeof meta.learner_questions === "string"
+      ? meta.learner_questions.trim()
+      : "";
+  const notes =
+    typeof meta.tutor_reference_notes === "string"
+      ? meta.tutor_reference_notes.trim()
+      : "";
+  const sections: string[] = [];
+  if (cognitive) sections.push(`인지구조 분석:\n${cognitive}`);
+  if (questions) sections.push(`학습자에게 던질 질문:\n${questions}`);
+  if (notes) sections.push(`AI 튜터 참고 메모:\n${notes}`);
+  return sections.length > 0
+    ? sections.join("\n\n")
+    : "(관리자가 입력한 레슨별 참고자료 없음)";
 }
 
 function asyncHandler(
@@ -281,6 +309,7 @@ tutorRouter.post(
         id: lessons.id,
         title: lessons.title,
         textSource: lessons.textSource,
+        sourceMeta: lessons.sourceMeta,
         axisFocus: lessons.axisFocus,
         tutorSystemPromptId: lessons.tutorSystemPromptId,
       })
@@ -310,9 +339,11 @@ tutorRouter.post(
       canvasMode,
     });
     const mode = session.mode;
-    const systemMessage = substitute(prompt.content, {
+    const lessonTutorNotes = formatLessonTutorNotes(lesson.sourceMeta);
+    const systemMessageBase = substitute(prompt.content, {
       lesson_title: lesson.title,
       text_body: textBody,
+      lesson_tutor_notes: lessonTutorNotes,
       axis_focus: JSON.stringify(lesson.axisFocus ?? {}),
       user_name: userName,
       canvas_state: formatCanvasState(body.canvas_snapshot),
@@ -321,6 +352,14 @@ tutorRouter.post(
       mode_guidance: MODE_GUIDANCE[mode] ?? "",
       canvas_mode: canvasMode,
     });
+    const systemMessage = systemMessageBase.includes(lessonTutorNotes)
+      ? systemMessageBase
+      : [
+          systemMessageBase,
+          "",
+          "## 레슨별 튜터 참고자료",
+          lessonTutorNotes,
+        ].join("\n");
 
     // Conversation history (chronological), excluding system rows.
     const history = await db

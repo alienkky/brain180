@@ -486,11 +486,51 @@ interface AdminLessonDTO {
   order: number;
   objectives: string[];
   axis_focus: Record<string, unknown>;
+  cognitive_structure_analysis: string;
+  learner_questions: string;
+  tutor_reference_notes: string;
   text_excerpt_id: string | null;
   body: string;
   author: string;
   source: string;
   language: string;
+}
+
+interface LessonTutorMeta {
+  cognitive_structure_analysis: string;
+  learner_questions: string;
+  tutor_reference_notes: string;
+}
+
+function lessonTutorMeta(input: {
+  cognitive_structure_analysis?: string;
+  learner_questions?: string;
+  tutor_reference_notes?: string;
+}): LessonTutorMeta {
+  return {
+    cognitive_structure_analysis: input.cognitive_structure_analysis?.trim() ?? "",
+    learner_questions: input.learner_questions?.trim() ?? "",
+    tutor_reference_notes: input.tutor_reference_notes?.trim() ?? "",
+  };
+}
+
+function readLessonTutorMeta(sourceMeta: unknown): LessonTutorMeta {
+  const meta =
+    sourceMeta && typeof sourceMeta === "object"
+      ? (sourceMeta as Record<string, unknown>)
+      : {};
+  return {
+    cognitive_structure_analysis:
+      typeof meta.cognitive_structure_analysis === "string"
+        ? meta.cognitive_structure_analysis
+        : "",
+    learner_questions:
+      typeof meta.learner_questions === "string" ? meta.learner_questions : "",
+    tutor_reference_notes:
+      typeof meta.tutor_reference_notes === "string"
+        ? meta.tutor_reference_notes
+        : "",
+  };
 }
 
 async function lessonDTO(id: string): Promise<AdminLessonDTO | null> {
@@ -502,6 +542,7 @@ async function lessonDTO(id: string): Promise<AdminLessonDTO | null> {
       order: lessons.order,
       objectives: lessons.objectives,
       axisFocus: lessons.axisFocus,
+      sourceMeta: lessons.sourceMeta,
     })
     .from(lessons)
     .where(eq(lessons.id, id))
@@ -521,6 +562,7 @@ async function lessonDTO(id: string): Promise<AdminLessonDTO | null> {
     .orderBy(asc(textExcerpts.order))
     .limit(1);
   const e = excerptRows[0];
+  const tutorMeta = readLessonTutorMeta(l.sourceMeta);
   return {
     id: l.id,
     module_id: l.moduleId,
@@ -528,6 +570,9 @@ async function lessonDTO(id: string): Promise<AdminLessonDTO | null> {
     order: l.order,
     objectives: Array.isArray(l.objectives) ? (l.objectives as string[]) : [],
     axis_focus: (l.axisFocus ?? {}) as Record<string, unknown>,
+    cognitive_structure_analysis: tutorMeta.cognitive_structure_analysis,
+    learner_questions: tutorMeta.learner_questions,
+    tutor_reference_notes: tutorMeta.tutor_reference_notes,
     text_excerpt_id: e?.id ?? null,
     body: e?.content ?? "",
     author: e?.author ?? "",
@@ -590,6 +635,7 @@ adminRouter.post(
             title: body.title,
             order: body.order,
             textSource: body.source ?? "",
+            sourceMeta: lessonTutorMeta(body) as unknown as Record<string, unknown>,
             objectives: body.objectives ?? [],
             axisFocus: (body.axis_focus ?? {}) as Record<string, never>,
           })
@@ -642,6 +688,41 @@ adminRouter.patch(
         if (body.objectives !== undefined) lessonPatch.objectives = body.objectives;
         if (body.axis_focus !== undefined) lessonPatch.axisFocus = body.axis_focus;
         if (body.source !== undefined) lessonPatch.textSource = body.source;
+        if (
+          body.cognitive_structure_analysis !== undefined ||
+          body.learner_questions !== undefined ||
+          body.tutor_reference_notes !== undefined
+        ) {
+          const existing = await tx
+            .select({ sourceMeta: lessons.sourceMeta })
+            .from(lessons)
+            .where(eq(lessons.id, id))
+            .limit(1);
+          const prev =
+            existing[0]?.sourceMeta && typeof existing[0].sourceMeta === "object"
+              ? (existing[0].sourceMeta as Record<string, unknown>)
+              : {};
+          lessonPatch.sourceMeta = {
+            ...prev,
+            ...lessonTutorMeta({
+              cognitive_structure_analysis:
+                body.cognitive_structure_analysis ??
+                (typeof prev.cognitive_structure_analysis === "string"
+                  ? prev.cognitive_structure_analysis
+                  : ""),
+              learner_questions:
+                body.learner_questions ??
+                (typeof prev.learner_questions === "string"
+                  ? prev.learner_questions
+                  : ""),
+              tutor_reference_notes:
+                body.tutor_reference_notes ??
+                (typeof prev.tutor_reference_notes === "string"
+                  ? prev.tutor_reference_notes
+                  : ""),
+            }),
+          };
+        }
         const updated = await tx
           .update(lessons)
           .set(lessonPatch)
