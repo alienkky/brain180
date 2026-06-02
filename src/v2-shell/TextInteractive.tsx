@@ -416,27 +416,44 @@ export function TextInteractive({
                   onDoubleClick={() =>
                     handlePhraseDoubleClick(group.phrase)
                   }
-                  className="inline"
+                  className="relative inline-flex items-center"
                   style={{
-                    borderBottom: `2px solid var(--color-brain-accent)`,
+                    border: `1.5px solid var(--color-brain-accent)`,
+                    borderRadius: "9999px",
                     backgroundColor: focused
                       ? "rgba(184,92,63,0.30)"
                       : "rgba(184,92,63,0.08)",
                     boxShadow: focused
-                      ? "0 3px 0 rgba(184,92,63,0.30), 0 5px 10px rgba(184,92,63,0.20)"
+                      ? "0 0 0 3px rgba(184,92,63,0.15), 0 2px 8px rgba(184,92,63,0.20)"
                       : undefined,
-                    padding: "0 2px 2px",
-                    margin: "0 1px",
-                    verticalAlign: "baseline",
+                    padding: "1px 10px",
+                    margin: "0 10px 0 2px",
+                    verticalAlign: "middle",
                     color: "var(--color-brain-accent)",
                     cursor: "grab",
-                    transition: "background-color 0.2s ease, box-shadow 0.2s ease",
+                    transition: "all 0.2s ease",
                     fontWeight: focused ? 600 : 500,
                     userSelect: "none",
+                    lineHeight: 1.6,
                   }}
-                  title="더블클릭 = 캔버스 노드 · 클릭 = 접선 표시 해제 · 드래그 = 캔버스로 드롭"
+                  title="더블클릭 = 캔버스 노드 · 클릭 = 원형 접선 표시 해제 · 드래그 = 캔버스로 드롭"
                 >
-                  {group.items.map((w) => w.text).join("")}
+                  <span>{group.items.map((w) => w.text).join("")}</span>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      position: "absolute",
+                      left: "50%",
+                      right: "-10px",
+                      bottom: "-2px",
+                      height: "1.5px",
+                      backgroundColor: "var(--color-brain-accent)",
+                      borderRadius: "9999px",
+                      transform: "translateY(50%)",
+                      opacity: focused ? 1 : 0.85,
+                      pointerEvents: "none",
+                    }}
+                  />
                 </span>
               );
             }
