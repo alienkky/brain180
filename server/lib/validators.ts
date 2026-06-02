@@ -207,6 +207,18 @@ export const AdminLessonUpdateBody = z.object({
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
+const LogoDataUrl = z
+  .string()
+  .max(1_000_000)
+  .refine(
+    (value) => /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(value),
+    "invalid_logo_image",
+  );
+
+export const BrandingSettingsBody = z.object({
+  logo_data_url: LogoDataUrl.nullable(),
+});
+
 import type { Request, Response } from "express";
 import type { ZodTypeAny, z as ZodNamespace } from "zod";
 

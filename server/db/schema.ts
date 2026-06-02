@@ -60,6 +60,12 @@ export const reminderFrequencyEnum = pgEnum("reminder_frequency", ["daily", "wee
 export const reminderChannelEnum = pgEnum("reminder_channel", ["push", "email"]);
 export const apiProviderEnum = pgEnum("api_provider", ["claude", "openai", "kimi", "gemini", "ollama"]);
 
+export const appSettings = pgTable("app_settings", {
+  key: varchar("key", { length: 120 }).primaryKey(),
+  value: jsonb("value").$type<Record<string, unknown>>().notNull().default({}),
+  updatedAt,
+});
+
 export const users = pgTable(
   "users",
   {

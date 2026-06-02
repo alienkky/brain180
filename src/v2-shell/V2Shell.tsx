@@ -5,7 +5,7 @@
 // cookie is httpOnly so we cannot read it — we rely on `credentials: include`
 // in api.ts and probe /me on mount to restore sessions across reloads.
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import {
   ApiError,
   api,
@@ -17,6 +17,7 @@ import {
   type AdminModuleDto,
   type AdminModuleUpdateInput,
   type ArtifactGalleryDto,
+  type BrandingSettingsDto,
   type CanvasCite,
   type CanvasJson,
   type CanvasNode,
@@ -68,6 +69,24 @@ export function V2Shell() {
   const [comparePins, setComparePins] = useState<ComparePins>({ left: null, right: null });
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showMethodology, setShowMethodology] = useState(false);
+  const [branding, setBranding] = useState<BrandingSettingsDto>({
+    logo_data_url: null,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .brandingSettings()
+      .then((settings) => {
+        if (!cancelled) setBranding(settings);
+      })
+      .catch(() => {
+        /* Branding is optional; keep default wordmark if settings fail. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,6 +153,7 @@ export function V2Shell() {
         onGoSubscription={() => setScreen({ name: "subscription" })}
         onShowMethodology={() => setShowMethodology(true)}
         activeScreen={screen.name}
+        branding={branding}
       />
       {showOnboarding && (
         <OnboardingFlow onClose={() => setShowOnboarding(false)} />
@@ -190,7 +210,9 @@ export function V2Shell() {
             onBack={() => setScreen({ name: "library" })}
           />
         )}
-        {screen.name === "admin" && <AdminScreen />}
+        {screen.name === "admin" && (
+          <AdminScreen branding={branding} onBrandingChange={setBranding} />
+        )}
         {screen.name === "subscription" && (
           <SubscriptionScreen flash={screen.flash ?? null} />
         )}
@@ -207,6 +229,7 @@ function Header({
   onGoSubscription,
   onShowMethodology,
   activeScreen,
+  branding,
 }: {
   user: UserDto | null;
   onLogout: () => void;
@@ -215,13 +238,30 @@ function Header({
   onGoSubscription: () => void;
   onShowMethodology: () => void;
   activeScreen: Screen["name"];
+  branding: BrandingSettingsDto;
 }) {
   return (
     <header className="flex items-center justify-between border-b border-brain-border bg-brain-surface px-6 py-3 shadow-soft-1">
-      <div>
-        <div className="font-display text-xl tracking-tight">Brain180</div>
+      <button
+        type="button"
+        onClick={() => {
+          if (user) onGoLibrary();
+        }}
+        className="text-left transition hover:opacity-80 disabled:hover:opacity-100"
+        disabled={!user}
+        aria-label="Brain180 dashboard"
+      >
+        {branding.logo_data_url ? (
+          <img
+            src={branding.logo_data_url}
+            alt="Brain180"
+            className="h-8 max-w-[180px] object-contain object-left"
+          />
+        ) : (
+          <div className="font-display text-xl tracking-tight">Brain180</div>
+        )}
         <div className="text-xs text-brain-text-muted">천재의 뇌인지 구조 시각화</div>
-      </div>
+      </button>
       {user && (
         <div className="flex items-center gap-4 text-sm">
           <nav className="flex items-center gap-1">
@@ -1086,9 +1126,15 @@ function CanvasModeSelector({ onSelect }: { onSelect: (m: "free" | CanvasMode) =
   );
 }
 
-type AdminTab = "users" | "modules" | "lessons" | "tutorQuality";
+type AdminTab = "users" | "modules" | "lessons" | "tutorQuality" | "brand";
 
-function AdminScreen() {
+function AdminScreen({
+  branding,
+  onBrandingChange,
+}: {
+  branding: BrandingSettingsDto;
+  onBrandingChange: (settings: BrandingSettingsDto) => void;
+}) {
   const [tab, setTab] = useState<AdminTab>("users");
   return (
     <div className="flex h-full flex-col">
@@ -1109,6 +1155,9 @@ function AdminScreen() {
           >
             튜터 품질
           </AdminTabButton>
+          <AdminTabButton active={tab === "brand"} onClick={() => setTab("brand")}>
+            브랜드
+          </AdminTabButton>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-6">
@@ -1117,6 +1166,12 @@ function AdminScreen() {
           {tab === "modules" && <AdminModulesPanel />}
           {tab === "lessons" && <AdminLessonsPanel />}
           {tab === "tutorQuality" && <AdminTutorRatingsPanel />}
+          {tab === "brand" && (
+            <AdminBrandPanel
+              branding={branding}
+              onBrandingChange={onBrandingChange}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -1143,6 +1198,121 @@ function AdminTabButton({
     >
       {children}
     </button>
+  );
+}
+
+function AdminBrandPanel({
+  branding,
+  onBrandingChange,
+}: {
+  branding: BrandingSettingsDto;
+  onBrandingChange: (settings: BrandingSettingsDto) => void;
+}) {
+  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(branding.logo_data_url);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setLogoDataUrl(branding.logo_data_url);
+  }, [branding.logo_data_url]);
+
+  const onPickLogo = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setError("PNG, JPG, WebP 이미지만 등록할 수 있습니다.");
+      event.target.value = "";
+      return;
+    }
+    if (file.size > 700_000) {
+      setError("로고 이미지는 700KB 이하로 등록해 주세요.");
+      event.target.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : null;
+      setLogoDataUrl(result);
+    };
+    reader.onerror = () => {
+      setError("이미지를 읽지 못했습니다.");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await api.adminUpdateBrandingSettings({
+        logo_data_url: logoDataUrl,
+      });
+      onBrandingChange(next);
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="space-y-4">
+      <div>
+        <h2 className="font-display text-2xl">브랜드 설정</h2>
+        <p className="mt-1 text-sm text-brain-text-muted">
+          상단 Brain180 로고 이미지를 등록하거나 기본 텍스트 로고로 되돌립니다.
+        </p>
+      </div>
+      {error && (
+        <div className="rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
+          {error}
+        </div>
+      )}
+      <div className="rounded-xl border border-brain-border bg-brain-surface p-5 shadow-soft-1">
+        <div className="mb-4 text-sm font-medium text-brain-text">현재 로고</div>
+        <div className="flex min-h-24 items-center rounded-lg border border-dashed border-brain-border bg-brain-surface-soft px-4 py-5">
+          {logoDataUrl ? (
+            <img
+              src={logoDataUrl}
+              alt="Brain180"
+              className="max-h-16 max-w-[260px] object-contain object-left"
+            />
+          ) : (
+            <div>
+              <div className="font-display text-xl tracking-tight">Brain180</div>
+              <div className="text-xs text-brain-text-muted">기본 텍스트 로고</div>
+            </div>
+          )}
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <label className="cursor-pointer rounded border border-brain-border px-3 py-2 text-sm text-brain-text-muted hover:bg-brain-surface-soft">
+            이미지 등록
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={onPickLogo}
+              className="sr-only"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => setLogoDataUrl(null)}
+            className="rounded border border-brain-border px-3 py-2 text-sm text-brain-text-muted hover:bg-brain-surface-soft"
+          >
+            기본 로고로 되돌리기
+          </button>
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={busy}
+            className="rounded bg-brain-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+          >
+            {busy ? "저장 중" : "저장"}
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 

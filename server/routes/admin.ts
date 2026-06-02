@@ -27,12 +27,14 @@ import {
   AdminLessonUpdateBody,
   AdminModuleCreateBody,
   AdminModuleUpdateBody,
+  BrandingSettingsBody,
   RejectUserBody,
   parseBody,
 } from "../lib/validators.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { userRateLimit } from "../middleware/rate-limit.js";
 import { toUserDTO } from "./auth.js";
+import { getBrandingSettings, setBrandingSettings } from "../lib/branding.js";
 
 export const adminRouter = Router();
 adminRouter.use(requireAdmin);
@@ -57,6 +59,22 @@ const baseUserSelect = {
   mustChangePassword: users.mustChangePassword,
   createdAt: users.createdAt,
 } as const;
+
+adminRouter.get(
+  "/settings/branding",
+  asyncHandler(async (_req, res) => {
+    ok(res, await getBrandingSettings());
+  }),
+);
+
+adminRouter.patch(
+  "/settings/branding",
+  asyncHandler(async (req, res) => {
+    const body = parseBody(BrandingSettingsBody, req, res);
+    if (!body) return;
+    ok(res, await setBrandingSettings(body));
+  }),
+);
 
 adminRouter.get(
   "/tutor/ratings",

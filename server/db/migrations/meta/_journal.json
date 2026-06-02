@@ -43,6 +43,13 @@
       "when": 1780290000000,
       "tag": "0006_tutor_prompt_canvas_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780300000000,
+      "tag": "0007_app_settings",
+      "breakpoints": true
     }
   ]
 }

@@ -254,6 +254,10 @@ export interface AdminTutorRatingsDto {
   };
 }
 
+export interface BrandingSettingsDto {
+  logo_data_url: string | null;
+}
+
 export type PlanName = "free" | "standard" | "premium";
 
 export interface PlanDto {
@@ -452,6 +456,14 @@ export const api = {
     call<void>(`/api/admin/lessons/${lessonId}`, { method: "DELETE" }),
   adminTutorRatings: (limit = 50) =>
     call<AdminTutorRatingsDto>(`/api/admin/tutor/ratings?limit=${limit}`),
+  brandingSettings: () => call<BrandingSettingsDto>("/api/settings/branding"),
+  adminBrandingSettings: () =>
+    call<BrandingSettingsDto>("/api/admin/settings/branding"),
+  adminUpdateBrandingSettings: (input: BrandingSettingsDto) =>
+    call<BrandingSettingsDto>("/api/admin/settings/branding", {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
   chat: (
     sessionId: string,
     lessonId: string,
