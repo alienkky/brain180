@@ -65,6 +65,15 @@ const RELATIONS: { value: Relation; label: string }[] = [
   { value: "contains", label: "포함 ⊃" },
 ];
 
+// v1-matching edge colors and styles
+const EDGE_COLORS: { relation: Relation; color: string; style: "solid" | "dashed" | "dotted" }[] = [
+  { relation: "causes",    color: "#C68A3D", style: "solid" },
+  { relation: "supports",  color: "#6E8F82", style: "dashed" },
+  { relation: "contrasts", color: "#B85C3F", style: "dotted" },
+  { relation: "transforms",color: "#8F7FA8", style: "solid" },
+  { relation: "contains",  color: "#6F8AA8", style: "dashed" },
+];
+
 interface PendingEdge {
   fromId: string;
   toId: string;
@@ -455,18 +464,22 @@ export function CognitiveMap({
           className="h-full w-full"
           style={{ cursor: paletteType ? "crosshair" : "default" }}
         >
+          {/* Per-relation arrow markers — v1 style colored arrows */}
           <defs>
-            <marker
-              id="b180-arrow"
-              viewBox="0 0 10 10"
-              refX="9"
-              refY="5"
-              markerWidth="7"
-              markerHeight="7"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--color-brain-text-muted)" />
-            </marker>
+            {EDGE_COLORS.map(({ relation, color }) => (
+              <marker
+                key={relation}
+                id={`b180-arrow-${relation}`}
+                viewBox="0 0 10 10"
+                refX="9"
+                refY="5"
+                markerWidth="6"
+                markerHeight="6"
+                orient="auto-start-reverse"
+              >
+                <path d="M 0 0 L 10 5 L 0 10 z" fill={color} />
+              </marker>
+            ))}
           </defs>
           {canvas.edges.map((e) => {
             const from = nodeIndex.get(e.from);
@@ -474,7 +487,10 @@ export function CognitiveMap({
             if (!from || !to) return null;
             const midX = (from.x + to.x) / 2;
             const midY = (from.y + to.y) / 2;
-            const dashed = e.relation === "contrasts";
+            const ec = EDGE_COLORS.find((c) => c.relation === e.relation);
+            const edgeColor = ec?.color ?? "#A09684";
+            const edgeStyle = ec?.style ?? "solid";
+            const dashArray = edgeStyle === "dashed" ? "6 4" : edgeStyle === "dotted" ? "2 4" : undefined;
             return (
               <g key={e.id} onClick={() => onEdgeClick(e.id)} style={{ cursor: "pointer" }}>
                 <line
@@ -482,26 +498,28 @@ export function CognitiveMap({
                   y1={from.y}
                   x2={to.x}
                   y2={to.y}
-                  stroke="var(--color-brain-text-muted)"
+                  stroke={edgeColor}
                   strokeWidth={1.5}
-                  strokeDasharray={dashed ? "5 4" : undefined}
-                  markerEnd="url(#b180-arrow)"
+                  strokeDasharray={dashArray}
+                  markerEnd={`url(#b180-arrow-${e.relation})`}
+                  strokeOpacity={0.8}
                 />
                 <rect
-                  x={midX - 28}
+                  x={midX - 26}
                   y={midY - 9}
-                  width={56}
-                  height={18}
-                  rx={9}
+                  width={52}
+                  height={17}
+                  rx={8}
                   fill="var(--color-brain-surface)"
-                  stroke="var(--color-brain-border)"
+                  stroke={edgeColor}
+                  strokeOpacity={0.4}
                 />
                 <text
                   x={midX}
                   y={midY + 4}
                   textAnchor="middle"
-                  fontSize={10}
-                  fill="var(--color-brain-text-muted)"
+                  fontSize={9.5}
+                  fill={edgeColor}
                 >
                   {relationLabel(e.relation)}
                 </text>
@@ -509,9 +527,17 @@ export function CognitiveMap({
             );
           })}
           {canvas.nodes.map((n) => {
-            const color = NODE_TYPES.find((t) => t.value === n.type)?.color
-              ?? "var(--color-brain-text)";
+            const nt = NODE_TYPES.find((t) => t.value === n.type);
+            const color = nt?.color ?? "#8F857A";
             const selected = n.id === selectedNodeId;
+            // Dynamic radius: wider for longer labels (like v1 nodeSize)
+            const labelLen = n.label.length;
+            const r = Math.max(30, Math.min(48, 28 + labelLen * 1.5));
+            // Split label into up to 2 lines for long text
+            const words = n.label.split(/\s+/);
+            const mid = Math.ceil(words.length / 2);
+            const line1 = words.slice(0, mid).join(" ");
+            const line2 = words.length > 1 ? words.slice(mid).join(" ") : null;
             return (
               <g
                 key={n.id}
@@ -521,35 +547,66 @@ export function CognitiveMap({
                 onDoubleClick={(e) => onNodeDoubleClick(e, n)}
                 style={{ cursor: "grab" }}
               >
+                {/* Solid filled circle — v1 style */}
                 <circle
-                  r={28}
-                  fill="var(--color-brain-surface)"
-                  stroke={color}
-                  strokeWidth={selected ? 4 : 2}
+                  r={r}
+                  fill={color}
+                  fillOpacity={0.92}
+                  stroke="rgba(255,255,255,0.5)"
+                  strokeWidth={selected ? 3 : 1}
                 />
-                <text
-                  textAnchor="middle"
-                  y={4}
-                  fontSize={11}
-                  fill="var(--color-brain-text)"
-                  pointerEvents="none"
-                >
-                  {n.label.slice(0, 8)}
-                </text>
+                {/* Selection ring */}
+                {selected && (
+                  <circle r={r + 4} fill="none" stroke={color} strokeWidth={2} strokeOpacity={0.5} />
+                )}
+                {/* Label — white text like v1 */}
+                {line2 ? (
+                  <>
+                    <text
+                      textAnchor="middle"
+                      y={-5}
+                      fontSize={labelLen > 6 ? 10 : 12}
+                      fill="white"
+                      fontFamily="var(--font-serif)"
+                      fontWeight={500}
+                      pointerEvents="none"
+                    >
+                      {line1}
+                    </text>
+                    <text
+                      textAnchor="middle"
+                      y={10}
+                      fontSize={labelLen > 6 ? 10 : 12}
+                      fill="white"
+                      fontFamily="var(--font-serif)"
+                      fontWeight={500}
+                      pointerEvents="none"
+                    >
+                      {line2}
+                    </text>
+                  </>
+                ) : (
+                  <text
+                    textAnchor="middle"
+                    y={4}
+                    fontSize={labelLen > 6 ? 10 : 12}
+                    fill="white"
+                    fontFamily="var(--font-serif)"
+                    fontWeight={500}
+                    pointerEvents="none"
+                  >
+                    {n.label}
+                  </text>
+                )}
                 {n.cite && (
                   <g pointerEvents="none">
-                    <circle
-                      cx={20}
-                      cy={-20}
-                      r={8}
-                      fill="var(--color-brain-accent)"
-                    />
+                    <circle cx={r - 6} cy={-(r - 6)} r={7} fill="rgba(255,255,255,0.9)" />
                     <text
-                      x={20}
-                      y={-17}
+                      x={r - 6}
+                      y={-(r - 9)}
                       textAnchor="middle"
-                      fontSize={10}
-                      fill="white"
+                      fontSize={9}
+                      fill={color}
                     >
                       ¶
                     </text>
