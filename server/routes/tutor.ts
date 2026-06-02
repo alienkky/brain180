@@ -31,9 +31,9 @@ import {
   tutorSystemPrompts,
 } from "../db/schema.js";
 import { ok, fail } from "../lib/envelope.js";
-import { UpstreamError } from "../lib/anthropic.js";
+import { UpstreamError, callAnthropic, type AnthropicMessageContent } from "../lib/anthropic.js";
 import { callTutorLLM, resolveTutorProvider } from "../lib/llm.js";
-import { parseBody, TutorChatBody, RateMessageBody } from "../lib/validators.js";
+import { parseBody, TutorChatBody, RateTutorBody } from "../lib/validators.js";
 import {
   requireApprovedUser,
   requireAuth,
@@ -53,6 +53,8 @@ const FALLBACK_PROMPT = [
   "{{mode_guidance}}",
   "학생이 텍스트 '{{lesson_title}}'의 사고구조를 추출하도록 돕습니다.",
   "원문: {{text_body}}",
+  "레슨별 튜터 참고자료:",
+  "{{lesson_tutor_notes}}",
   "축 가중치: {{axis_focus}}",
   "학생: {{user_name}}",
   "현재 인지 캔버스 상태:",
@@ -123,6 +125,32 @@ function formatCanvasState(snap: CanvasSnapshotShape | undefined): string {
   ].join("\n");
 }
 
+function formatLessonTutorNotes(sourceMeta: unknown): string {
+  const meta =
+    sourceMeta && typeof sourceMeta === "object"
+      ? (sourceMeta as Record<string, unknown>)
+      : {};
+  const cognitive =
+    typeof meta.cognitive_structure_analysis === "string"
+      ? meta.cognitive_structure_analysis.trim()
+      : "";
+  const questions =
+    typeof meta.learner_questions === "string"
+      ? meta.learner_questions.trim()
+      : "";
+  const notes =
+    typeof meta.tutor_reference_notes === "string"
+      ? meta.tutor_reference_notes.trim()
+      : "";
+  const sections: string[] = [];
+  if (cognitive) sections.push(`인지구조 분석:\n${cognitive}`);
+  if (questions) sections.push(`학습자에게 던질 질문:\n${questions}`);
+  if (notes) sections.push(`AI 튜터 참고 메모:\n${notes}`);
+  return sections.length > 0
+    ? sections.join("\n\n")
+    : "(관리자가 입력한 레슨별 참고자료 없음)";
+}
+
 function asyncHandler(
   fn: (req: Request, res: Response) => Promise<unknown>,
 ): (req: Request, res: Response, next: NextFunction) => void {
@@ -139,6 +167,7 @@ interface TutorMessageDTO {
   model: string | null;
   input_tokens: number;
   output_tokens: number;
+  my_rating: TutorRatingDTO | null;
   created_at: string;
 }
 
@@ -151,6 +180,10 @@ function toMessageDTO(row: {
   tokensIn: number;
   tokensOut: number;
   createdAt: Date;
+  ratingId?: string | null;
+  ratingStars?: number | null;
+  ratingComment?: string | null;
+  ratingCreatedAt?: Date | null;
 }): TutorMessageDTO {
   return {
     id: row.id,
@@ -160,6 +193,15 @@ function toMessageDTO(row: {
     model: row.model,
     input_tokens: row.tokensIn,
     output_tokens: row.tokensOut,
+    my_rating: row.ratingId
+      ? {
+          id: row.ratingId,
+          message_id: row.id,
+          rating: row.ratingStars ?? 0,
+          feedback: row.ratingComment ?? null,
+          created_at: (row.ratingCreatedAt ?? row.createdAt).toISOString(),
+        }
+      : null,
     created_at: row.createdAt.toISOString(),
   };
 }
@@ -185,6 +227,7 @@ interface ResolvedPrompt {
 async function resolveSystemPrompt(lessonRow: {
   id: string;
   tutorSystemPromptId: string | null;
+  canvasMode?: string;
 }): Promise<ResolvedPrompt> {
   if (lessonRow.tutorSystemPromptId) {
     const rows = await db
@@ -199,17 +242,22 @@ async function resolveSystemPrompt(lessonRow: {
       return { content: rows[0].content, version: rows[0].version, source: "lesson" };
     }
   }
-  const active = await db
+  // Prefer mode-specific active prompt, fall back to any active prompt.
+  const activeRows = await db
     .select({
       content: tutorSystemPrompts.content,
       version: tutorSystemPrompts.version,
+      mode: tutorSystemPrompts.mode,
     })
     .from(tutorSystemPrompts)
     .where(eq(tutorSystemPrompts.isActive, true))
-    .orderBy(desc(tutorSystemPrompts.updatedAt))
-    .limit(1);
-  if (active[0]) {
-    return { content: active[0].content, version: active[0].version, source: "active" };
+    .orderBy(desc(tutorSystemPrompts.updatedAt));
+  if (activeRows.length > 0) {
+    const modeMatch = activeRows.find((r) => r.mode === lessonRow.canvasMode);
+    const fallbackRow = modeMatch ?? activeRows[0];
+    if (fallbackRow) {
+      return { content: fallbackRow.content, version: fallbackRow.version, source: "active" };
+    }
   }
   return { content: FALLBACK_PROMPT, version: "fallback-0", source: "fallback" };
 }
@@ -261,6 +309,7 @@ tutorRouter.post(
         id: lessons.id,
         title: lessons.title,
         textSource: lessons.textSource,
+        sourceMeta: lessons.sourceMeta,
         axisFocus: lessons.axisFocus,
         tutorSystemPromptId: lessons.tutorSystemPromptId,
       })
@@ -283,21 +332,34 @@ tutorRouter.post(
     const textBody = excerptRows[0]?.content ?? lesson.textSource;
 
     // Resolve + substitute system prompt.
+    const canvasMode = body.canvas_mode ?? "constrained";
     const prompt = await resolveSystemPrompt({
       id: lesson.id,
       tutorSystemPromptId: lesson.tutorSystemPromptId,
+      canvasMode,
     });
     const mode = session.mode;
-    const systemMessage = substitute(prompt.content, {
+    const lessonTutorNotes = formatLessonTutorNotes(lesson.sourceMeta);
+    const systemMessageBase = substitute(prompt.content, {
       lesson_title: lesson.title,
       text_body: textBody,
+      lesson_tutor_notes: lessonTutorNotes,
       axis_focus: JSON.stringify(lesson.axisFocus ?? {}),
       user_name: userName,
       canvas_state: formatCanvasState(body.canvas_snapshot),
       mode: mode,
       mode_label: MODE_LABEL[mode] ?? mode,
       mode_guidance: MODE_GUIDANCE[mode] ?? "",
+      canvas_mode: canvasMode,
     });
+    const systemMessage = systemMessageBase.includes(lessonTutorNotes)
+      ? systemMessageBase
+      : [
+          systemMessageBase,
+          "",
+          "## 레슨별 튜터 참고자료",
+          lessonTutorNotes,
+        ].join("\n");
 
     // Conversation history (chronological), excluding system rows.
     const history = await db
@@ -309,12 +371,35 @@ tutorRouter.post(
       .where(eq(tutorMessages.sessionId, session.id))
       .orderBy(asc(tutorMessages.createdAt));
 
-    const messages = history
+    const messages: Array<{ role: "user" | "assistant"; content: AnthropicMessageContent }> = history
       .filter((m): m is { role: "user" | "assistant"; content: string } =>
         m.role === "user" || m.role === "assistant",
       )
-      .map((m) => ({ role: m.role, content: m.content }));
-    messages.push({ role: "user" as const, content: body.message });
+      .map((m) => ({ role: m.role as "user" | "assistant", content: m.content as AnthropicMessageContent }));
+
+    // Build last user message — include canvas image for free-draw mode vision
+    const canvasImageB64 = body.canvas_image_base64;
+    if (canvasImageB64 && resolveTutorProvider() === "anthropic") {
+      // Vision message: image + text
+      messages.push({
+        role: "user" as const,
+        content: [
+          {
+            type: "image" as const,
+            source: { type: "base64" as const, media_type: "image/png" as const, data: canvasImageB64 },
+          },
+          { type: "text" as const, text: body.message },
+        ],
+      });
+    } else if (canvasImageB64) {
+      // Provider doesn't support vision — note the image and pass text
+      messages.push({
+        role: "user" as const,
+        content: `[자유형 캔버스 이미지 첨부됨 — 현재 튜터가 이미지를 직접 볼 수 없습니다]\n\n${body.message}`,
+      });
+    } else {
+      messages.push({ role: "user" as const, content: body.message });
+    }
 
     // Persist user row immediately so it survives upstream failure mid-call.
     const userInserted = await db
@@ -329,11 +414,23 @@ tutorRouter.post(
 
     let result;
     try {
-      result = await callTutorLLM({
-        userId,
-        system: systemMessage,
-        messages,
-      });
+      // For vision calls: if image present and provider is not Anthropic, try Anthropic
+      // as a secondary provider (it natively supports vision).
+      const useVision = !!canvasImageB64;
+      const effectiveProvider = useVision && resolveTutorProvider() !== "anthropic"
+        ? "anthropic-vision-fallback"
+        : null;
+      if (effectiveProvider === "anthropic-vision-fallback") {
+        const { hasFeature } = await import("../lib/env.js");
+        if (hasFeature("anthropic")) {
+          result = await callAnthropic({ userId, system: systemMessage, messages });
+        } else {
+          // No Anthropic key — fall back to regular call with text-only message
+          result = await callTutorLLM({ userId, system: systemMessage, messages });
+        }
+      } else {
+        result = await callTutorLLM({ userId, system: systemMessage, messages });
+      }
     } catch (err) {
       if (err instanceof UpstreamError) {
         fail(res, 502, "upstream_error", {
@@ -418,9 +515,20 @@ tutorRouter.get(
         model: tutorMessages.model,
         tokensIn: tutorMessages.tokensIn,
         tokensOut: tutorMessages.tokensOut,
+        ratingId: tutorRatings.id,
+        ratingStars: tutorRatings.stars,
+        ratingComment: tutorRatings.comment,
+        ratingCreatedAt: tutorRatings.createdAt,
         createdAt: tutorMessages.createdAt,
       })
       .from(tutorMessages)
+      .leftJoin(
+        tutorRatings,
+        and(
+          eq(tutorRatings.messageId, tutorMessages.id),
+          eq(tutorRatings.userId, req.user!.id),
+        ),
+      )
       .where(eq(tutorMessages.sessionId, session.id))
       .orderBy(asc(tutorMessages.createdAt));
 
@@ -439,7 +547,7 @@ tutorRouter.post(
       return;
     }
 
-    const body = parseBody(RateMessageBody, req, res);
+    const body = parseBody(RateTutorBody, req, res);
     if (!body) return;
 
     // Message must exist, be assistant role, belong to user's session.
@@ -472,23 +580,20 @@ tutorRouter.post(
       return;
     }
 
-    const existing = await db
-      .select({ id: tutorRatings.id })
-      .from(tutorRatings)
-      .where(and(eq(tutorRatings.messageId, msg.id), eq(tutorRatings.userId, req.user!.id)))
-      .limit(1);
-    if (existing[0]) {
-      fail(res, 409, "already_rated");
-      return;
-    }
-
-    const inserted = await db
+    const upserted = await db
       .insert(tutorRatings)
       .values({
         messageId: msg.id,
         userId: req.user!.id,
         stars: body.rating,
         comment: body.feedback ?? null,
+      })
+      .onConflictDoUpdate({
+        target: [tutorRatings.messageId, tutorRatings.userId],
+        set: {
+          stars: body.rating,
+          comment: body.feedback ?? null,
+        },
       })
       .returning({
         id: tutorRatings.id,
@@ -504,7 +609,7 @@ tutorRouter.post(
       .set({ rating: body.rating })
       .where(eq(tutorMessages.id, msg.id));
 
-    const row = inserted[0]!;
+    const row = upserted[0]!;
     const dto: TutorRatingDTO = {
       id: row.id,
       message_id: row.messageId,

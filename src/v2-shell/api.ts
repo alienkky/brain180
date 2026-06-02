@@ -117,6 +117,16 @@ export interface ArtifactDto {
   saved_at: string;
 }
 
+export interface ArtifactGalleryDto {
+  artifact_id: string;
+  session_id: string;
+  saved_at: string;
+  mode: "free" | "constrained" | "guided";
+  node_count: number;
+  edge_count: number;
+  lesson: LessonDto;
+}
+
 export interface ProgressEntryDto {
   lesson_id: string;
   session_count: number;
@@ -131,7 +141,21 @@ export interface TutorMessageDto {
   model: string | null;
   input_tokens: number;
   output_tokens: number;
+  my_rating: TutorRatingDto | null;
   created_at: string;
+}
+
+export interface TutorRatingDto {
+  id: string;
+  message_id: string;
+  rating: number;
+  feedback: string | null;
+  created_at: string;
+}
+
+export interface RateTutorInput {
+  rating: number;
+  feedback?: string;
 }
 
 export type ModuleAxis = "cognitive" | "value" | "time";
@@ -169,6 +193,9 @@ export interface AdminLessonDto {
   order: number;
   objectives: string[];
   axis_focus: Record<string, unknown>;
+  cognitive_structure_analysis: string;
+  learner_questions: string;
+  tutor_reference_notes: string;
   text_excerpt_id: string | null;
   body: string;
   author: string;
@@ -185,10 +212,51 @@ export interface AdminLessonCreateInput {
   source?: string;
   language?: "ko" | "en";
   objectives?: string[];
+  cognitive_structure_analysis?: string;
+  learner_questions?: string;
+  tutor_reference_notes?: string;
   axis_focus?: Record<string, number>;
 }
 
 export type AdminLessonUpdateInput = Partial<Omit<AdminLessonCreateInput, "module_id">>;
+
+export interface AdminTutorRatingRecentDto {
+  id: string;
+  message_id: string;
+  user_id: string;
+  user_name: string;
+  rating: number;
+  feedback: string | null;
+  created_at: string;
+  message_content: string;
+  model: string | null;
+  prompt_version: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  session_id: string;
+  lesson_id: string;
+}
+
+export interface AdminTutorRatingAggregateDto {
+  key: string;
+  count: number;
+  average: number;
+}
+
+export interface AdminTutorRatingsDto {
+  recent: AdminTutorRatingRecentDto[];
+  summary: {
+    count: number;
+    average: number | null;
+    by_model: AdminTutorRatingAggregateDto[];
+    by_prompt_version: AdminTutorRatingAggregateDto[];
+    distribution: { rating: number; count: number }[];
+  };
+}
+
+export interface BrandingSettingsDto {
+  logo_data_url: string | null;
+}
 
 export type PlanName = "free" | "standard" | "premium";
 
@@ -279,6 +347,29 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
+  register: (email: string, password: string, name: string) =>
+    call<LoginData>("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ email, password, name }),
+    }),
+  verifyEmail: (token: string) =>
+    call<LoginData>("/api/auth/email/verify", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    }),
+  forgotPassword: (email: string) =>
+    call<{ ok: true; sent: boolean; token?: string; url?: string; reason?: string }>(
+      "/api/auth/password/forgot",
+      {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      },
+    ),
+  resetPassword: (token: string, newPassword: string) =>
+    call<{ ok: true }>("/api/auth/password/reset", {
+      method: "POST",
+      body: JSON.stringify({ token, new_password: newPassword }),
+    }),
   me: () => call<UserDto>("/api/auth/me"),
   logout: () => call<{ ok: true }>("/api/auth/logout", { method: "POST" }),
   modules: () => call<ModuleDto[]>("/api/library/modules"),
@@ -298,6 +389,7 @@ export const api = {
       { method: "DELETE" },
     ),
   progress: () => call<ProgressEntryDto[]>("/api/practice/me/progress"),
+  artifacts: () => call<ArtifactGalleryDto[]>("/api/practice/me/artifacts"),
   startSession: (lessonId: string, mode?: SessionMode) =>
     call<SessionDto>("/api/practice/sessions", {
       method: "POST",
@@ -306,8 +398,15 @@ export const api = {
         ...(mode ? { mode } : {}),
       }),
     }),
+  session: (sessionId: string) =>
+    call<SessionDto>(`/api/practice/sessions/${sessionId}`),
   messages: (sessionId: string) =>
     call<TutorMessageDto[]>(`/api/tutor/sessions/${sessionId}/messages`),
+  rateTutorMessage: (messageId: string, input: RateTutorInput) =>
+    call<TutorRatingDto>(`/api/tutor/messages/${messageId}/rate`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
   getArtifact: (sessionId: string) =>
     call<ArtifactDto | null>(`/api/practice/sessions/${sessionId}/artifact`),
   putArtifact: (sessionId: string, canvas: CanvasJson, clientRevision: number) =>
@@ -355,11 +454,23 @@ export const api = {
     }),
   adminDeleteLesson: (lessonId: string) =>
     call<void>(`/api/admin/lessons/${lessonId}`, { method: "DELETE" }),
+  adminTutorRatings: (limit = 50) =>
+    call<AdminTutorRatingsDto>(`/api/admin/tutor/ratings?limit=${limit}`),
+  brandingSettings: () => call<BrandingSettingsDto>("/api/settings/branding"),
+  adminBrandingSettings: () =>
+    call<BrandingSettingsDto>("/api/admin/settings/branding"),
+  adminUpdateBrandingSettings: (input: BrandingSettingsDto) =>
+    call<BrandingSettingsDto>("/api/admin/settings/branding", {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
   chat: (
     sessionId: string,
     lessonId: string,
     message: string,
     canvasSnapshot?: CanvasJson | null,
+    canvasMode?: "free" | "constrained" | "guided" | null,
+    canvasImageBase64?: string | null,
   ) =>
     call<TutorMessageDto>("/api/tutor/chat", {
       method: "POST",
@@ -368,6 +479,8 @@ export const api = {
         lesson_id: lessonId,
         message,
         ...(canvasSnapshot ? { canvas_snapshot: canvasSnapshot } : {}),
+        ...(canvasMode ? { canvas_mode: canvasMode } : {}),
+        ...(canvasImageBase64 ? { canvas_image_base64: canvasImageBase64 } : {}),
       }),
     }),
   billingPlans: () => call<PlanDto[]>("/api/billing/plans"),

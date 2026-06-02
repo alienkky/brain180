@@ -11,10 +11,17 @@ import Anthropic from "@anthropic-ai/sdk";
 import { loadEnv } from "./env.js";
 import { anonymizeUserId } from "./anon.js";
 
+export type AnthropicMessageContent =
+  | string
+  | Array<
+      | { type: "text"; text: string }
+      | { type: "image"; source: { type: "base64"; media_type: "image/png" | "image/jpeg"; data: string } }
+    >;
+
 export interface AnthropicCall {
   userId: string;
   system: string;
-  messages: Array<{ role: "user" | "assistant"; content: string }>;
+  messages: Array<{ role: "user" | "assistant"; content: AnthropicMessageContent }>;
   maxTokens?: number;
   temperature?: number;
   model?: string;

@@ -105,6 +105,25 @@ interface ProgressEntryDTO {
   last_started_at: string | null;
 }
 
+interface ArtifactGalleryDTO {
+  artifact_id: string;
+  session_id: string;
+  saved_at: string;
+  mode: "free" | "constrained" | "guided";
+  node_count: number;
+  edge_count: number;
+  lesson: {
+    id: string;
+    module_id: string;
+    order: number;
+    title: string;
+    text_excerpt_id: string | null;
+    tutor_system_prompt_id: string | null;
+    objectives: string[];
+    axis_focus: Record<string, unknown>;
+  };
+}
+
 practiceRouter.get(
   "/me/progress",
   userRateLimit,
@@ -123,6 +142,58 @@ practiceRouter.get(
       session_count: Number(r.sessionCount),
       last_started_at: r.lastStartedAt ? new Date(r.lastStartedAt).toISOString() : null,
     }));
+    ok(res, dto);
+  }),
+);
+
+practiceRouter.get(
+  "/me/artifacts",
+  userRateLimit,
+  asyncHandler(async (req, res) => {
+    const rows = await db
+      .select({
+        artifactId: canvasArtifacts.id,
+        sessionId: canvasArtifacts.sessionId,
+        mode: canvasArtifacts.mode,
+        payload: canvasArtifacts.payload,
+        savedAt: canvasArtifacts.savedAt,
+        lessonId: lessons.id,
+        moduleId: lessons.moduleId,
+        order: lessons.order,
+        title: lessons.title,
+        textExcerptId: sql<string | null>`(SELECT id FROM text_excerpts WHERE lesson_id = ${lessons.id} ORDER BY "order" LIMIT 1)`,
+        tutorSystemPromptId: lessons.tutorSystemPromptId,
+        objectives: lessons.objectives,
+        axisFocus: lessons.axisFocus,
+      })
+      .from(canvasArtifacts)
+      .innerJoin(learningSessions, eq(canvasArtifacts.sessionId, learningSessions.id))
+      .innerJoin(lessons, eq(learningSessions.lessonId, lessons.id))
+      .where(and(eq(learningSessions.userId, req.user!.id), sql`${canvasArtifacts.deletedAt} IS NULL`))
+      .orderBy(desc(canvasArtifacts.savedAt))
+      .limit(20);
+
+    const dto: ArtifactGalleryDTO[] = rows.map((row) => {
+      const payload = row.payload as { nodes?: unknown[]; edges?: unknown[] };
+      return {
+        artifact_id: row.artifactId,
+        session_id: row.sessionId,
+        saved_at: row.savedAt.toISOString(),
+        mode: row.mode,
+        node_count: Array.isArray(payload.nodes) ? payload.nodes.length : 0,
+        edge_count: Array.isArray(payload.edges) ? payload.edges.length : 0,
+        lesson: {
+          id: row.lessonId,
+          module_id: row.moduleId,
+          order: row.order,
+          title: row.title,
+          text_excerpt_id: row.textExcerptId,
+          tutor_system_prompt_id: row.tutorSystemPromptId,
+          objectives: row.objectives,
+          axis_focus: (row.axisFocus ?? {}) as Record<string, unknown>,
+        },
+      };
+    });
     ok(res, dto);
   }),
 );
@@ -339,8 +410,22 @@ practiceRouter.get("/artifacts/:id", (_req, res) =>
   res.status(501).json(NOT_IMPL),
 );
 
-// ── 503 mvp_cut ─────────────────────────────────────────────────────
-const NOT_AVAIL = { error: "service_unavailable", reason: "mvp_cut" };
-practiceRouter.post("/artifacts/:id/export", (_req, res) =>
-  res.status(503).json(NOT_AVAIL),
+// ── Canvas export — client-side PNG download (ALI-83) ────────────────
+// Server-side PDF/R2 upload deferred. Client uses CognitiveMap SVG → PNG directly.
+// This endpoint records the export intent for analytics only.
+practiceRouter.post(
+  "/artifacts/:id/export",
+  userRateLimit,
+  asyncHandler(async (req, res) => {
+    const id = String(req.params["id"] ?? "");
+    if (!UUID_RE.test(id)) { fail(res, 400, "validation_error"); return; }
+    const format = (req.body as { format?: string })?.format ?? "png";
+    if (!["png", "pdf", "svg"].includes(format)) {
+      fail(res, 400, "validation_error", { message: "format must be png|pdf|svg" });
+      return;
+    }
+    // R2 server-side upload deferred to post-beta.
+    // Client handles PNG export directly from SVG (see CognitiveMap ↓ PNG button).
+    ok(res, { format, client_download: true }, 200);
+  }),
 );

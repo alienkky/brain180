@@ -18,15 +18,26 @@
 import OpenAI from "openai";
 import { loadEnv, moonshotApiKey } from "./env.js";
 import { anonymizeUserId } from "./anon.js";
-import { UpstreamError, type UsageLogRow } from "./anthropic.js";
+import { UpstreamError, type UsageLogRow, type AnthropicMessageContent } from "./anthropic.js";
 
 export interface KimiCall {
   userId: string;
   system: string;
-  messages: Array<{ role: "user" | "assistant"; content: string }>;
+  messages: Array<{ role: "user" | "assistant"; content: AnthropicMessageContent }>;
   maxTokens?: number;
   temperature?: number;
   model?: string;
+}
+
+function contentToString(c: AnthropicMessageContent): string {
+  if (typeof c === "string") return c;
+  return c
+    .map((block) => {
+      if (block.type === "text") return block.text;
+      if (block.type === "image") return "[이미지 첨부됨 — 이 모델은 이미지를 직접 볼 수 없습니다]";
+      return "";
+    })
+    .join("\n");
 }
 
 export interface KimiResult {
@@ -104,7 +115,7 @@ export async function callKimi(call: KimiCall): Promise<KimiResult> {
 
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     { role: "system", content: call.system },
-    ...call.messages.map((m) => ({ role: m.role, content: m.content })),
+    ...call.messages.map((m) => ({ role: m.role, content: contentToString(m.content) })),
   ];
 
   let lastErr: unknown = null;

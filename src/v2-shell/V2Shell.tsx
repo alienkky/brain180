@@ -5,16 +5,19 @@
 // cookie is httpOnly so we cannot read it — we rely on `credentials: include`
 // in api.ts and probe /me on mount to restore sessions across reloads.
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import {
   ApiError,
   api,
+  type AdminTutorRatingsDto,
   type AdminLessonCreateInput,
   type AdminLessonDto,
   type AdminLessonUpdateInput,
   type AdminModuleCreateInput,
   type AdminModuleDto,
   type AdminModuleUpdateInput,
+  type ArtifactGalleryDto,
+  type BrandingSettingsDto,
   type CanvasCite,
   type CanvasJson,
   type CanvasNode,
@@ -30,19 +33,25 @@ import {
   type SubscriptionDto,
   type TextExcerptDto,
   type TutorMessageDto,
+  type TutorRatingDto,
   type UserDto,
 } from "./api";
-import { CognitiveMap } from "./CognitiveMap";
+import { CognitiveMap, type CanvasMode } from "./CognitiveMap";
+import { FreeDrawCanvas, type FreeCanvasJson, type FreeDrawCanvasGetBase64 } from "./FreeDrawCanvas";
 import { EvaluationPanel } from "./EvaluationPanel";
 import { FeedbackPanel } from "./FeedbackPanel";
 import { PatternPanel } from "./PatternPanel";
 import { TextInteractive } from "./TextInteractive";
 import type { CircledPhrase } from "./TextInteractive";
+import { TutorBubble } from "./TutorBubble";
+import { LoginLanding } from "./LoginLanding";
+import { OnboardingFlow, isOnboarded } from "./OnboardingFlow";
+import { MethodologyScreen } from "./MethodologyScreen";
 
 type Screen =
   | { name: "login" }
   | { name: "library" }
-  | { name: "practice"; lesson: LessonDto }
+  | { name: "practice"; lesson: LessonDto; resumeSessionId?: string }
   | { name: "compare"; left: LessonDto; right: LessonDto }
   | { name: "admin" }
   | { name: "subscription"; flash?: string | null };
@@ -58,14 +67,38 @@ export function V2Shell() {
   const [bootError, setBootError] = useState<string | null>(null);
   const [booting, setBooting] = useState(true);
   const [comparePins, setComparePins] = useState<ComparePins>({ left: null, right: null });
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showMethodology, setShowMethodology] = useState(false);
+  const [branding, setBranding] = useState<BrandingSettingsDto>({
+    logo_data_url: null,
+  });
 
   useEffect(() => {
     let cancelled = false;
     api
-      .me()
+      .brandingSettings()
+      .then((settings) => {
+        if (!cancelled) setBranding(settings);
+      })
+      .catch(() => {
+        /* Branding is optional; keep default wordmark if settings fail. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const authReturn = await consumeAuthReturnUrl();
+      if (authReturn) return authReturn;
+      const user = await api.me();
+      return { user };
+    })()
       .then(async (u) => {
         if (cancelled) return;
-        setUser(u);
+        setUser(u.user);
         const flash = await consumeTossReturnUrl();
         setScreen(
           flash ? { name: "subscription", flash } : { name: "library" },
@@ -89,6 +122,7 @@ export function V2Shell() {
   const onLoggedIn = (u: UserDto) => {
     setUser(u);
     setScreen({ name: "library" });
+    if (!isOnboarded()) setShowOnboarding(true);
   };
 
   const onLogout = async () => {
@@ -117,8 +151,16 @@ export function V2Shell() {
         onGoLibrary={() => setScreen({ name: "library" })}
         onGoAdmin={() => setScreen({ name: "admin" })}
         onGoSubscription={() => setScreen({ name: "subscription" })}
+        onShowMethodology={() => setShowMethodology(true)}
         activeScreen={screen.name}
+        branding={branding}
       />
+      {showOnboarding && (
+        <OnboardingFlow onClose={() => setShowOnboarding(false)} />
+      )}
+      {showMethodology && (
+        <MethodologyScreen onClose={() => setShowMethodology(false)} />
+      )}
       {bootError && (
         <div className="border-b border-brain-border bg-brain-highlight-soft px-6 py-2 text-sm text-brain-text">
           {bootError}
@@ -145,11 +187,19 @@ export function V2Shell() {
                 });
               }
             }}
+            onOpenArtifact={(item) =>
+              setScreen({
+                name: "practice",
+                lesson: item.lesson,
+                resumeSessionId: item.session_id,
+              })
+            }
           />
         )}
         {screen.name === "practice" && (
           <PracticeScreen
             lesson={screen.lesson}
+            resumeSessionId={screen.resumeSessionId}
             onBack={() => setScreen({ name: "library" })}
           />
         )}
@@ -160,7 +210,9 @@ export function V2Shell() {
             onBack={() => setScreen({ name: "library" })}
           />
         )}
-        {screen.name === "admin" && <AdminScreen />}
+        {screen.name === "admin" && (
+          <AdminScreen branding={branding} onBrandingChange={setBranding} />
+        )}
         {screen.name === "subscription" && (
           <SubscriptionScreen flash={screen.flash ?? null} />
         )}
@@ -175,21 +227,41 @@ function Header({
   onGoLibrary,
   onGoAdmin,
   onGoSubscription,
+  onShowMethodology,
   activeScreen,
+  branding,
 }: {
   user: UserDto | null;
   onLogout: () => void;
   onGoLibrary: () => void;
   onGoAdmin: () => void;
   onGoSubscription: () => void;
+  onShowMethodology: () => void;
   activeScreen: Screen["name"];
+  branding: BrandingSettingsDto;
 }) {
   return (
     <header className="flex items-center justify-between border-b border-brain-border bg-brain-surface px-6 py-3 shadow-soft-1">
-      <div>
-        <div className="font-display text-xl tracking-tight">Brain180</div>
+      <button
+        type="button"
+        onClick={() => {
+          if (user) onGoLibrary();
+        }}
+        className="text-left transition hover:opacity-80 disabled:hover:opacity-100"
+        disabled={!user}
+        aria-label="Brain180 dashboard"
+      >
+        {branding.logo_data_url ? (
+          <img
+            src={branding.logo_data_url}
+            alt="Brain180"
+            className="h-8 max-w-[180px] object-contain object-left"
+          />
+        ) : (
+          <div className="font-display text-xl tracking-tight">Brain180</div>
+        )}
         <div className="text-xs text-brain-text-muted">천재의 뇌인지 구조 시각화</div>
-      </div>
+      </button>
       {user && (
         <div className="flex items-center gap-4 text-sm">
           <nav className="flex items-center gap-1">
@@ -211,6 +283,13 @@ function Header({
               />
             )}
           </nav>
+          <button
+            onClick={onShowMethodology}
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-brain-border text-sm text-brain-text-muted hover:bg-brain-surface-soft"
+            title="Brain180 방법론 소개"
+          >
+            ?
+          </button>
           <span className="text-brain-text-muted">
             {user.name}{" "}
             <span className="text-brain-text-soft">· {user.role}</span>
@@ -251,21 +330,60 @@ function HeaderNavButton({
   );
 }
 
+// 로그인/가입 폼에서만 쓰는 친절 에러 매퍼. 서버는 envelope.code (예:
+// "weak_password", "email_taken", "invalid_credentials") 만 던지므로
+// 사용자에게 보일 한국어를 여기서 합성. toMessage() 는 기술 디버그용이라
+// 그대로 둔다.
+function friendlyAuthError(e: unknown): string {
+  if (e instanceof ApiError) {
+    switch (e.code) {
+      case "weak_password":
+        return "비밀번호가 정책을 충족하지 못합니다 — 8자 이상 + 영문 / 숫자 / 특수문자 중 2종 이상.";
+      case "email_taken":
+        return "이미 사용 중인 이메일입니다. 로그인 탭으로 진행하세요.";
+      case "invalid_credentials":
+        return "이메일 또는 비밀번호가 일치하지 않습니다.";
+      case "validation_error":
+        return "입력값을 확인해주세요 (이메일 형식, 비밀번호 길이 등).";
+      case "account_blocked":
+        return "이 계정은 차단/거절 상태입니다. 관리자에게 문의하세요.";
+      case "rate_limited":
+        return "잠시 후 다시 시도해 주세요. (요청이 너무 잦습니다)";
+      default:
+        return `${e.message || "오류가 발생했습니다"} (${e.code})`;
+    }
+  }
+  if (e instanceof Error) return e.message;
+  return String(e);
+}
+
 function LoginScreen({ onLoggedIn }: { onLoggedIn: (u: UserDto) => void }) {
-  const [email, setEmail] = useState("kky710@gmail.com");
+  return <LoginLanding onLoggedIn={onLoggedIn} />;
+
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (mode === "register" && password !== confirm) {
+      setError("비밀번호가 일치하지 않습니다.");
+      return;
+    }
     setSubmitting(true);
     try {
-      const data = await api.login(email, password);
+      const data =
+        mode === "login"
+          ? await api.login(email, password)
+          : await api.register(email, password, name);
       onLoggedIn(data.user);
     } catch (e: unknown) {
-      setError(toMessage(e));
+      setError(friendlyAuthError(e));
     } finally {
       setSubmitting(false);
     }
@@ -278,11 +396,62 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: (u: UserDto) => void }) {
         className="w-full max-w-sm space-y-4 rounded-2xl border border-brain-border bg-brain-surface p-8 shadow-soft-2"
       >
         <div>
-          <h1 className="font-display text-2xl">로그인</h1>
+          <h1 className="font-display text-2xl">
+            {mode === "login" ? "로그인" : "회원가입"}
+          </h1>
           <p className="mt-1 text-sm text-brain-text-muted">
-            Brain180 v2 에 접속하려면 인증이 필요합니다.
+            {mode === "login"
+              ? "Brain180 에 다시 오신 것을 환영합니다."
+              : "이메일과 이름만으로 바로 학습을 시작할 수 있습니다."}
           </p>
         </div>
+        <div className="flex gap-1 rounded-lg border border-brain-border bg-brain-bg p-1">
+          <button
+            type="button"
+            onClick={() => {
+              setMode("login");
+              setError(null);
+            }}
+            className={
+              "flex-1 rounded-md px-3 py-1.5 text-sm transition " +
+              (mode === "login"
+                ? "bg-brain-accent text-white"
+                : "text-brain-text-muted hover:text-brain-text")
+            }
+          >
+            로그인
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode("register");
+              setError(null);
+            }}
+            className={
+              "flex-1 rounded-md px-3 py-1.5 text-sm transition " +
+              (mode === "register"
+                ? "bg-brain-accent text-white"
+                : "text-brain-text-muted hover:text-brain-text")
+            }
+          >
+            가입
+          </button>
+        </div>
+        {mode === "register" && (
+          <label className="block text-sm">
+            <span className="text-brain-text-muted">이름</span>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoComplete="name"
+              minLength={1}
+              maxLength={40}
+              required
+              className="mt-1 w-full rounded border border-brain-border bg-brain-bg px-3 py-2 outline-none focus:border-brain-accent"
+            />
+          </label>
+        )}
         <label className="block text-sm">
           <span className="text-brain-text-muted">이메일</span>
           <input
@@ -300,11 +469,32 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: (u: UserDto) => void }) {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
+            autoComplete={
+              mode === "login" ? "current-password" : "new-password"
+            }
+            minLength={mode === "register" ? 8 : 1}
             required
             className="mt-1 w-full rounded border border-brain-border bg-brain-bg px-3 py-2 outline-none focus:border-brain-accent"
           />
+          {mode === "register" && (
+            <p className="mt-1 text-[11px] text-brain-text-soft">
+              8자 이상. 영문 / 숫자 / 특수문자 중 *2종 이상* 섞기.
+            </p>
+          )}
         </label>
+        {mode === "register" && (
+          <label className="block text-sm">
+            <span className="text-brain-text-muted">비밀번호 확인</span>
+            <input
+              type="password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              autoComplete="new-password"
+              required
+              className="mt-1 w-full rounded border border-brain-border bg-brain-bg px-3 py-2 outline-none focus:border-brain-accent"
+            />
+          </label>
+        )}
         {error && (
           <div className="rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
             {error}
@@ -315,7 +505,11 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: (u: UserDto) => void }) {
           disabled={submitting}
           className="w-full rounded bg-brain-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
-          {submitting ? "확인 중…" : "로그인"}
+          {submitting
+            ? "확인 중…"
+            : mode === "login"
+              ? "로그인"
+              : "가입하고 시작"}
         </button>
       </form>
     </div>
@@ -328,16 +522,19 @@ function LibraryScreen({
   onPinCompare,
   onClearPin,
   onStartCompare,
+  onOpenArtifact,
 }: {
   onPickLesson: (lesson: LessonDto) => void;
   comparePins: ComparePins;
   onPinCompare: (slot: "left" | "right", lesson: LessonDto) => void;
   onClearPin: (slot: "left" | "right") => void;
   onStartCompare: () => void;
+  onOpenArtifact: (item: ArtifactGalleryDto) => void;
 }) {
   const [modules, setModules] = useState<ModuleDto[] | null>(null);
   const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
   const [lessons, setLessons] = useState<LessonDto[] | null>(null);
+  const [artifacts, setArtifacts] = useState<ArtifactGalleryDto[] | null>(null);
   const [loadingLessons, setLoadingLessons] = useState(false);
   const [progress, setProgress] = useState<Map<string, ProgressEntryDto>>(
     () => new Map(),
@@ -346,14 +543,15 @@ function LibraryScreen({
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([api.modules(), api.progress()])
-      .then(([modRows, progRows]) => {
+    Promise.all([api.modules(), api.progress(), api.artifacts()])
+      .then(([modRows, progRows, artifactRows]) => {
         if (cancelled) return;
         setModules(modRows);
         if (modRows[0]) {
           setActiveModuleId(modRows[0].id);
         }
         setProgress(new Map(progRows.map((p) => [p.lesson_id, p])));
+        setArtifacts(artifactRows);
       })
       .catch((e: unknown) => !cancelled && setError(toMessage(e)));
     return () => {
@@ -379,43 +577,24 @@ function LibraryScreen({
   return (
     <div className="grid h-full grid-cols-[280px_1fr] gap-0">
       <aside className="overflow-y-auto border-r border-brain-border bg-brain-surface-soft p-4">
-        <h2 className="mb-3 font-display text-lg">모듈</h2>
+        <h2 className="mb-3 font-display text-lg">분야</h2>
         {!modules && <p className="text-sm text-brain-text-muted">불러오는 중…</p>}
         {modules && modules.length === 0 && (
           <p className="text-sm text-brain-text-muted">
-            아직 시드된 모듈이 없습니다.
+            아직 등록된 작품이 없습니다.
           </p>
         )}
-        <ul className="space-y-1">
-          {modules?.map((m) => (
-            <li key={m.id}>
-              <button
-                onClick={() => setActiveModuleId(m.id)}
-                className={
-                  "w-full rounded px-3 py-2 text-left text-sm transition " +
-                  (m.id === activeModuleId
-                    ? "bg-brain-accent text-white"
-                    : "text-brain-text hover:bg-brain-surface")
-                }
-              >
-                <div className="font-medium">{m.title}</div>
-                <div
-                  className={
-                    "text-xs " +
-                    (m.id === activeModuleId
-                      ? "text-white/80"
-                      : "text-brain-text-muted")
-                  }
-                >
-                  {m.field} · {m.lesson_count}개 레슨
-                </div>
-              </button>
-            </li>
-          ))}
-        </ul>
+        {modules && (
+          <ModulesByField
+            modules={modules}
+            activeModuleId={activeModuleId}
+            onPick={setActiveModuleId}
+          />
+        )}
       </aside>
       <section className="overflow-y-auto p-6">
         <ProgressSummary progress={progress} />
+        <ArtifactGallery artifacts={artifacts} onOpen={onOpenArtifact} />
         <CompareBar
           pins={comparePins}
           onClear={onClearPin}
@@ -432,7 +611,7 @@ function LibraryScreen({
         )}
         {!loadingLessons && lessons && lessons.length === 0 && (
           <p className="text-sm text-brain-text-muted">
-            이 모듈에는 레슨이 없습니다.
+            이 작품에는 장이 없습니다.
           </p>
         )}
         <ul className="space-y-3">
@@ -480,9 +659,14 @@ function LibraryScreen({
   );
 }
 
-type PracticeTab = "chat" | "canvas" | "eval" | "pattern" | "feedback";
+type PracticeTab = "canvas" | "eval" | "pattern" | "feedback";
 
 const MODE_OPTIONS: { value: SessionMode; label: string; hint: string }[] = [
+  {
+    value: "practice",
+    label: "연습",
+    hint: "자유 그리기: 본문은 참고, 캔버스 중심 코칭",
+  },
   {
     value: "analyze",
     label: "분석",
@@ -491,20 +675,17 @@ const MODE_OPTIONS: { value: SessionMode; label: string; hint: string }[] = [
   {
     value: "reverse",
     label: "역해석",
-    hint: "캔버스 → 본문: 그래프를 먼저 본 뒤 본문을 추측",
-  },
-  {
-    value: "practice",
-    label: "연습",
-    hint: "자유 그리기: 본문은 참고, 캔버스 중심 코칭",
+    hint: "캔버스 → 본문: 본문을 숨긴 채 먼저 구조를 그린 뒤 원문과 비교",
   },
 ];
 
 function PracticeScreen({
   lesson,
+  resumeSessionId,
   onBack,
 }: {
   lesson: LessonDto;
+  resumeSessionId?: string;
   onBack: () => void;
 }) {
   const [text, setText] = useState<TextExcerptDto | null>(null);
@@ -513,8 +694,14 @@ function PracticeScreen({
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<PracticeTab>("chat");
+  const [ratingToast, setRatingToast] = useState<string | null>(null);
+  const [tab, setTab] = useState<PracticeTab>("canvas");
+  // 튜터 버블 열림 상태 — v1 의 floating ChatPanel 패턴 복원.
+  const [tutorOpen, setTutorOpen] = useState(false);
   const [mode, setMode] = useState<SessionMode>("analyze");
+  // 캔버스 모드 (ALI-81): null = 미선택 (진입 시 카드 표시)
+  const [canvasMode, setCanvasMode] = useState<"free" | CanvasMode | null>(null);
+  const freeCanvasGetBase64 = useRef<FreeDrawCanvasGetBase64 | null>(null);
   const [revealText, setRevealText] = useState(false);
   const [initialCanvas, setInitialCanvas] = useState<CanvasJson | null>(null);
   const [canvasReady, setCanvasReady] = useState(false);
@@ -527,7 +714,6 @@ function PracticeScreen({
   const [focusCite, setFocusCite] = useState<CanvasCite | null>(null);
   const currentCanvas = useRef<CanvasJson | null>(null);
   const clientRevision = useRef(0);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
   const textBodyRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -551,9 +737,12 @@ function PracticeScreen({
         const textPromise = lesson.text_excerpt_id
           ? api.text(lesson.text_excerpt_id)
           : Promise.resolve(null);
+        const sessionPromise = resumeSessionId
+          ? api.session(resumeSessionId)
+          : api.startSession(lesson.id, mode);
         const [textRow, sess] = await Promise.all([
           textPromise,
-          api.startSession(lesson.id, mode),
+          sessionPromise,
         ]);
         if (cancelled) return;
         setText(textRow);
@@ -576,7 +765,7 @@ function PracticeScreen({
     return () => {
       cancelled = true;
     };
-  }, [lesson.id, lesson.text_excerpt_id, mode]);
+  }, [lesson.id, lesson.text_excerpt_id, mode, resumeSessionId]);
 
   const onSaveCanvas = useCallback(
     async (next: CanvasJson) => {
@@ -629,11 +818,14 @@ function PracticeScreen({
       model: null,
       input_tokens: 0,
       output_tokens: 0,
+      my_rating: null,
       created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, optimistic]);
     try {
-      await api.chat(session.id, lesson.id, message, snapshot);
+      // In free-draw mode, include canvas image for AI vision analysis
+      const imageBase64 = canvasMode === "free" ? freeCanvasGetBase64.current?.() ?? null : null;
+      await api.chat(session.id, lesson.id, message, snapshot, canvasMode ?? undefined, imageBase64);
       const fresh = await api.messages(session.id);
       setMessages(fresh);
     } catch (e: unknown) {
@@ -650,7 +842,7 @@ function PracticeScreen({
         snapshot.nodes.length === 0
           ? "현재 캔버스는 비어 있습니다. 이 본문에서 첫 번째로 추출해야 할 핵심 개념 노드를 한 개 제안해 주시고, 그 이유를 짧게 설명해 주세요."
           : "현재 인지 캔버스 상태를 함께 첨부했습니다. 다음으로 추가하면 좋을 노드 1~2개와 그 노드들을 기존 노드와 어떻게 연결하면 좋을지(관계 유형 포함)를 제안해 주세요. 학생이 직접 그릴 수 있도록 *이유와 방향*만 알려주시고 정답을 단정하지는 마세요.";
-      setTab("chat");
+      setTutorOpen(true);
       setSending(true);
       try {
         await sendChat(message, snapshot);
@@ -665,13 +857,6 @@ function PracticeScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [session, lesson.id, sending],
   );
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
-    });
-  }, [messages.length]);
 
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -690,6 +875,23 @@ function PracticeScreen({
       setSending(false);
     }
   };
+
+  const rateTutorMessage = useCallback(
+    async (
+      messageId: string,
+      rating: number,
+      feedback?: string,
+    ): Promise<TutorRatingDto> => {
+      const saved = await api.rateTutorMessage(messageId, { rating, feedback });
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, my_rating: saved } : m)),
+      );
+      setRatingToast("감사합니다 — 튜터가 더 나아질 자리에 쓰입니다");
+      window.setTimeout(() => setRatingToast(null), 1000);
+      return saved;
+    },
+    [],
+  );
 
   return (
     <div className="flex h-full flex-col md:grid md:grid-cols-[1fr_1fr] md:gap-0">
@@ -769,11 +971,6 @@ function PracticeScreen({
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brain-border bg-brain-surface px-4 py-3 md:px-6">
           <div className="flex flex-wrap gap-1">
             <TabButton
-              active={tab === "chat"}
-              onClick={() => setTab("chat")}
-              label="사고구조 튜터"
-            />
-            <TabButton
               active={tab === "canvas"}
               onClick={() => setTab("canvas")}
               label="인지 캔버스"
@@ -794,89 +991,45 @@ function PracticeScreen({
               label="피드백"
             />
           </div>
-          <div className="text-xs text-brain-text-muted">
+          <div className="flex items-center gap-3 text-xs text-brain-text-muted">
+            {tab === "canvas" && canvasMode !== null && (
+              <button
+                onClick={() => setCanvasMode(null)}
+                className="rounded border border-brain-border px-2 py-1 text-[11px] hover:bg-brain-surface-soft"
+                title="캔버스 모드 변경"
+              >
+                모드 변경
+              </button>
+            )}
             {session ? `세션 ${session.id.slice(0, 8)}…` : "세션 시작 중…"}
           </div>
         </div>
-        {tab === "chat" && (
-          <>
-            <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4">
-              {messages.length === 0 && !error && (
-                <p className="text-sm text-brain-text-muted">
-                  본문에 대한 질문을 던지면 튜터가 사고 패턴을 함께 풀어드립니다.
-                </p>
-              )}
-              <ul className="space-y-3">
-                {messages.map((m) => (
-                  <li
-                    key={m.id}
-                    className={
-                      "max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-soft-1 " +
-                      (m.role === "user"
-                        ? "ml-auto bg-brain-accent text-white"
-                        : "mr-auto bg-brain-surface text-brain-text")
-                    }
-                  >
-                    <div className="whitespace-pre-wrap">{m.content}</div>
-                    {m.model && (
-                      <div className="mt-1 text-[10px] uppercase tracking-wider opacity-60">
-                        {m.model} · in {m.input_tokens} / out {m.output_tokens}
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            {error && (
-              <div className="border-t border-brain-danger/40 bg-brain-accent-soft/50 px-6 py-2 text-sm text-brain-danger">
-                {error}
-              </div>
-            )}
-            <form
-              onSubmit={send}
-              className="flex items-end gap-2 border-t border-brain-border bg-brain-surface p-3"
-            >
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    send(e as unknown as React.FormEvent);
-                  }
-                }}
-                rows={2}
-                disabled={!session || sending}
-                placeholder="질문을 입력하세요 — Enter 전송, Shift+Enter 줄바꿈"
-                className="flex-1 resize-none rounded border border-brain-border bg-brain-bg px-3 py-2 text-sm outline-none focus:border-brain-accent disabled:opacity-50"
-              />
-              <button
-                type="submit"
-                disabled={!session || sending || !input.trim()}
-                className="rounded bg-brain-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-              >
-                {sending ? "…" : "전송"}
-              </button>
-            </form>
-          </>
-        )}
         {tab === "canvas" && (
           <div className="flex-1 overflow-hidden">
-            {canvasReady ? (
+            {!canvasReady ? (
+              <p className="p-6 text-sm text-brain-text-muted">캔버스 불러오는 중…</p>
+            ) : canvasMode === null ? (
+              <CanvasModeSelector onSelect={setCanvasMode} />
+            ) : canvasMode === "free" ? (
+              <FreeDrawCanvas
+                initial={initialCanvas as FreeCanvasJson | null}
+                onSave={onSaveCanvas}
+                onChange={onCanvasChange}
+                onCanvasRef={(fn) => { freeCanvasGetBase64.current = fn; }}
+                disabled={!session}
+              />
+            ) : (
               <CognitiveMap
                 initial={initialCanvas}
                 onSave={onSaveCanvas}
                 onChange={onCanvasChange}
                 onAskTutor={onAskTutor}
                 onNodeFocus={onNodeFocus}
+                canvasMode={canvasMode}
                 injectCite={pendingCite}
                 onCiteConsumed={() => setPendingCite(null)}
                 disabled={!session}
               />
-            ) : (
-              <p className="p-6 text-sm text-brain-text-muted">
-                캔버스 불러오는 중…
-              </p>
             )}
           </div>
         )}
@@ -899,13 +1052,89 @@ function PracticeScreen({
           </div>
         )}
       </section>
+      <TutorBubble
+        open={tutorOpen}
+        onToggle={() => setTutorOpen((v) => !v)}
+        session={session}
+        messages={messages}
+        error={error}
+        sending={sending}
+        input={input}
+        onInputChange={setInput}
+        onSend={send}
+        onRateMessage={rateTutorMessage}
+        onAskTutor={onAskTutor}
+        liveCanvas={liveCanvas}
+        ratingToast={ratingToast}
+      />
     </div>
   );
 }
 
-type AdminTab = "users" | "modules" | "lessons";
+const CANVAS_MODES: {
+  value: "free" | CanvasMode;
+  label: string;
+  subtitle: string;
+  desc: string;
+  accent: string;
+}[] = [
+  {
+    value: "free",
+    label: "자유형",
+    subtitle: "Free Draw",
+    desc: "펜으로 자유롭게 그리세요. 형태보다 사고의 흐름에 집중합니다.",
+    accent: "var(--color-brain-sage)",
+  },
+  {
+    value: "constrained",
+    label: "제약형",
+    subtitle: "Constrained",
+    desc: "핵심·기둥·다리·가지 4종 노드와 5종 관계로 구조화합니다.",
+    accent: "var(--color-brain-accent)",
+  },
+  {
+    value: "guided",
+    label: "단계형",
+    subtitle: "Guided",
+    desc: "핵심→기둥→다리→가지 순서로 단계별 게이트를 통과합니다.",
+    accent: "var(--color-brain-node-bridge)",
+  },
+];
 
-function AdminScreen() {
+function CanvasModeSelector({ onSelect }: { onSelect: (m: "free" | CanvasMode) => void }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-6 bg-brain-bg px-6 py-10">
+      <div className="text-center">
+        <p className="text-base font-semibold text-brain-text">캔버스 모드를 선택하세요</p>
+        <p className="mt-1 text-sm text-brain-text-muted">선택 후 언제든지 탭 상단에서 변경할 수 있습니다.</p>
+      </div>
+      <div className="flex flex-wrap justify-center gap-4">
+        {CANVAS_MODES.map((m) => (
+          <button
+            key={m.value}
+            onClick={() => onSelect(m.value)}
+            className="flex w-52 flex-col items-start rounded-xl border-2 bg-brain-surface p-5 text-left transition hover:shadow-md"
+            style={{ borderColor: m.accent }}
+          >
+            <span className="mb-1 text-lg font-bold" style={{ color: m.accent }}>{m.label}</span>
+            <span className="mb-2 text-xs font-medium text-brain-text-muted tracking-wide">{m.subtitle}</span>
+            <span className="text-sm text-brain-text">{m.desc}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+type AdminTab = "users" | "modules" | "lessons" | "tutorQuality" | "brand";
+
+function AdminScreen({
+  branding,
+  onBrandingChange,
+}: {
+  branding: BrandingSettingsDto;
+  onBrandingChange: (settings: BrandingSettingsDto) => void;
+}) {
   const [tab, setTab] = useState<AdminTab>("users");
   return (
     <div className="flex h-full flex-col">
@@ -920,6 +1149,15 @@ function AdminScreen() {
           <AdminTabButton active={tab === "lessons"} onClick={() => setTab("lessons")}>
             레슨
           </AdminTabButton>
+          <AdminTabButton
+            active={tab === "tutorQuality"}
+            onClick={() => setTab("tutorQuality")}
+          >
+            튜터 품질
+          </AdminTabButton>
+          <AdminTabButton active={tab === "brand"} onClick={() => setTab("brand")}>
+            브랜드
+          </AdminTabButton>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-6">
@@ -927,6 +1165,13 @@ function AdminScreen() {
           {tab === "users" && <AdminUsersPanel />}
           {tab === "modules" && <AdminModulesPanel />}
           {tab === "lessons" && <AdminLessonsPanel />}
+          {tab === "tutorQuality" && <AdminTutorRatingsPanel />}
+          {tab === "brand" && (
+            <AdminBrandPanel
+              branding={branding}
+              onBrandingChange={onBrandingChange}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -954,6 +1199,290 @@ function AdminTabButton({
       {children}
     </button>
   );
+}
+
+function AdminBrandPanel({
+  branding,
+  onBrandingChange,
+}: {
+  branding: BrandingSettingsDto;
+  onBrandingChange: (settings: BrandingSettingsDto) => void;
+}) {
+  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(branding.logo_data_url);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setLogoDataUrl(branding.logo_data_url);
+  }, [branding.logo_data_url]);
+
+  const onPickLogo = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setError("PNG, JPG, WebP 이미지만 등록할 수 있습니다.");
+      event.target.value = "";
+      return;
+    }
+    if (file.size > 700_000) {
+      setError("로고 이미지는 700KB 이하로 등록해 주세요.");
+      event.target.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : null;
+      setLogoDataUrl(result);
+    };
+    reader.onerror = () => {
+      setError("이미지를 읽지 못했습니다.");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await api.adminUpdateBrandingSettings({
+        logo_data_url: logoDataUrl,
+      });
+      onBrandingChange(next);
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="space-y-4">
+      <div>
+        <h2 className="font-display text-2xl">브랜드 설정</h2>
+        <p className="mt-1 text-sm text-brain-text-muted">
+          상단 Brain180 로고 이미지를 등록하거나 기본 텍스트 로고로 되돌립니다.
+        </p>
+      </div>
+      {error && (
+        <div className="rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
+          {error}
+        </div>
+      )}
+      <div className="rounded-xl border border-brain-border bg-brain-surface p-5 shadow-soft-1">
+        <div className="mb-4 text-sm font-medium text-brain-text">현재 로고</div>
+        <div className="flex min-h-24 items-center rounded-lg border border-dashed border-brain-border bg-brain-surface-soft px-4 py-5">
+          {logoDataUrl ? (
+            <img
+              src={logoDataUrl}
+              alt="Brain180"
+              className="max-h-16 max-w-[260px] object-contain object-left"
+            />
+          ) : (
+            <div>
+              <div className="font-display text-xl tracking-tight">Brain180</div>
+              <div className="text-xs text-brain-text-muted">기본 텍스트 로고</div>
+            </div>
+          )}
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <label className="cursor-pointer rounded border border-brain-border px-3 py-2 text-sm text-brain-text-muted hover:bg-brain-surface-soft">
+            이미지 등록
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={onPickLogo}
+              className="sr-only"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => setLogoDataUrl(null)}
+            className="rounded border border-brain-border px-3 py-2 text-sm text-brain-text-muted hover:bg-brain-surface-soft"
+          >
+            기본 로고로 되돌리기
+          </button>
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={busy}
+            className="rounded bg-brain-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+          >
+            {busy ? "저장 중" : "저장"}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function AdminTutorRatingsPanel() {
+  const [data, setData] = useState<AdminTutorRatingsDto | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
+    setError(null);
+    try {
+      setData(await api.adminTutorRatings(80));
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .adminTutorRatings(80)
+      .then((rows) => {
+        if (!cancelled) setData(rows);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(toMessage(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const maxDistribution = Math.max(
+    1,
+    ...(data?.summary.distribution.map((d) => d.count) ?? [0]),
+  );
+
+  return (
+    <>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-display text-2xl">튜터 품질</h2>
+          <p className="mt-1 text-sm text-brain-text-muted">
+            학생이 남긴 AI 튜터 응답 별점과 코멘트를 확인합니다.
+          </p>
+        </div>
+        <button
+          onClick={() => void reload()}
+          className="rounded border border-brain-border px-3 py-1 text-sm text-brain-text-muted hover:bg-brain-surface-soft"
+        >
+          새로고침
+        </button>
+      </div>
+      {error && (
+        <div className="mb-4 rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
+          {error}
+        </div>
+      )}
+      {!data && !error && (
+        <p className="text-sm text-brain-text-muted">불러오는 중…</p>
+      )}
+      {data && (
+        <div className="space-y-5">
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1">
+              <div className="text-xs text-brain-text-muted">전체 평균</div>
+              <div className="mt-1 font-display text-3xl">
+                {formatRating(data.summary.average)}
+              </div>
+              <div className="mt-1 text-xs text-brain-text-soft">
+                평가 {data.summary.count.toLocaleString("ko-KR")}개
+              </div>
+            </div>
+            <AggregateCard title="모델별 평균" rows={data.summary.by_model} />
+            <AggregateCard
+              title="프롬프트 버전별 평균"
+              rows={data.summary.by_prompt_version}
+            />
+          </div>
+
+          <section className="rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1">
+            <h3 className="mb-3 font-display text-lg">별점 분포</h3>
+            <div className="space-y-2">
+              {data.summary.distribution.map((d) => (
+                <div key={d.rating} className="grid grid-cols-[48px_1fr_48px] items-center gap-3 text-sm">
+                  <div className="text-brain-text-muted">{d.rating}점</div>
+                  <div className="h-3 overflow-hidden rounded-full bg-brain-surface-soft">
+                    <div
+                      className="h-full rounded-full bg-brain-accent"
+                      style={{ width: `${(d.count / maxDistribution) * 100}%` }}
+                    />
+                  </div>
+                  <div className="text-right text-brain-text-muted">{d.count}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <h3 className="mb-3 font-display text-lg">최근 평가</h3>
+            {data.recent.length === 0 && (
+              <p className="text-sm text-brain-text-muted">아직 등록된 평가가 없습니다.</p>
+            )}
+            <ul className="space-y-3">
+              {data.recent.map((r) => (
+                <li
+                  key={r.id}
+                  className="rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-display text-base">
+                      {"★".repeat(r.rating)}
+                      <span className="text-brain-text-soft">
+                        {"☆".repeat(5 - r.rating)}
+                      </span>
+                    </div>
+                    <div className="text-xs text-brain-text-muted">
+                      {new Date(r.created_at).toLocaleString("ko-KR")} · {r.user_name}
+                    </div>
+                  </div>
+                  {r.feedback && (
+                    <p className="mt-2 rounded bg-brain-surface-soft px-3 py-2 text-sm">
+                      {r.feedback}
+                    </p>
+                  )}
+                  <p className="mt-2 line-clamp-3 text-sm text-brain-text-muted">
+                    {r.message_content}
+                  </p>
+                  <div className="mt-2 text-[11px] uppercase tracking-wider text-brain-text-soft">
+                    {r.model ?? "unknown"} · prompt {r.prompt_version ?? "unknown"} · in{" "}
+                    {r.input_tokens} / out {r.output_tokens}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+      )}
+    </>
+  );
+}
+
+function AggregateCard({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: AdminTutorRatingsDto["summary"]["by_model"];
+}) {
+  return (
+    <div className="rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1">
+      <div className="mb-2 text-xs text-brain-text-muted">{title}</div>
+      {rows.length === 0 && (
+        <div className="text-sm text-brain-text-muted">데이터 없음</div>
+      )}
+      <ul className="space-y-2">
+        {rows.slice(0, 4).map((r) => (
+          <li key={r.key} className="flex items-center justify-between gap-3 text-sm">
+            <span className="truncate text-brain-text">{r.key}</span>
+            <span className="shrink-0 text-brain-text-muted">
+              {formatRating(r.average)} · {r.count}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function formatRating(value: number | null): string {
+  return value == null ? "-" : value.toFixed(2);
 }
 
 function AdminUsersPanel() {
@@ -1478,6 +2007,15 @@ function LessonEditorDialog({
   const [objectivesText, setObjectivesText] = useState(
     initial?.objectives.join("\n") ?? "",
   );
+  const [cognitiveStructureAnalysis, setCognitiveStructureAnalysis] = useState(
+    initial?.cognitive_structure_analysis ?? "",
+  );
+  const [learnerQuestions, setLearnerQuestions] = useState(
+    initial?.learner_questions ?? "",
+  );
+  const [tutorReferenceNotes, setTutorReferenceNotes] = useState(
+    initial?.tutor_reference_notes ?? "",
+  );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -1498,6 +2036,9 @@ function LessonEditorDialog({
           source: source || undefined,
           language,
           objectives,
+          cognitive_structure_analysis: cognitiveStructureAnalysis,
+          learner_questions: learnerQuestions,
+          tutor_reference_notes: tutorReferenceNotes,
         };
         await api.adminUpdateLesson(initial.id, patch);
       } else {
@@ -1510,6 +2051,9 @@ function LessonEditorDialog({
           source: source || undefined,
           language,
           objectives,
+          cognitive_structure_analysis: cognitiveStructureAnalysis,
+          learner_questions: learnerQuestions,
+          tutor_reference_notes: tutorReferenceNotes,
         };
         await api.adminCreateLesson(create);
       }
@@ -1590,6 +2134,45 @@ function LessonEditorDialog({
               className="w-full rounded border border-brain-border bg-brain-bg px-2 py-1"
             />
           </Field>
+          <section className="rounded-lg border border-brain-border bg-brain-surface-soft p-3">
+            <div className="mb-3">
+              <h4 className="text-sm font-semibold text-brain-text">
+                AI 튜터 참고자료
+              </h4>
+              <p className="mt-1 text-xs leading-relaxed text-brain-text-muted">
+                학생에게 직접 노출하지 않고, 튜터가 답변할 때 참조하는 레슨별 기준입니다.
+              </p>
+            </div>
+            <div className="space-y-3">
+              <Field label="인지구조 분석">
+                <textarea
+                  value={cognitiveStructureAnalysis}
+                  onChange={(e) => setCognitiveStructureAnalysis(e.target.value)}
+                  rows={5}
+                  placeholder="예: 이 글은 핵심 개념 → 근거 → 반례 → 재정의 순서로 전개된다..."
+                  className="w-full rounded border border-brain-border bg-brain-bg px-2 py-1 text-xs leading-relaxed"
+                />
+              </Field>
+              <Field label="학습자에게 던질 질문">
+                <textarea
+                  value={learnerQuestions}
+                  onChange={(e) => setLearnerQuestions(e.target.value)}
+                  rows={5}
+                  placeholder="예: 핵심 노드를 그렇게 잡은 근거는 어디에 있나요? 이 관계를 원인으로 볼 수 있나요?"
+                  className="w-full rounded border border-brain-border bg-brain-bg px-2 py-1 text-xs leading-relaxed"
+                />
+              </Field>
+              <Field label="AI 튜터 참고 메모">
+                <textarea
+                  value={tutorReferenceNotes}
+                  onChange={(e) => setTutorReferenceNotes(e.target.value)}
+                  rows={4}
+                  placeholder="예: 정답을 먼저 말하지 말고, 학생의 캔버스 노드 이름을 언급한 뒤 질문한다."
+                  className="w-full rounded border border-brain-border bg-brain-bg px-2 py-1 text-xs leading-relaxed"
+                />
+              </Field>
+            </div>
+          </section>
         </div>
         <div className="mt-4 flex justify-end gap-2">
           <button
@@ -1618,6 +2201,151 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <span className="mb-1 block text-xs font-medium text-brain-text-muted">{label}</span>
       {children}
     </label>
+  );
+}
+
+// 분야 (modules.field) 의 enum 값 → 한국어 라벨. CLAUDE.md 의 분야 매트릭스와
+// 정렬. 백엔드 컬럼은 그대로 두고 라벨만 한국화한다.
+const FIELD_LABEL: Record<string, string> = {
+  literature: "문학",
+  philosophy: "철학",
+  science: "과학·수학",
+  art: "예술·음악",
+  "eastern-classics": "동양 고전",
+  economics: "경제·사회",
+};
+
+const FIELD_ORDER = [
+  "science",
+  "philosophy",
+  "literature",
+  "art",
+  "economics",
+  "eastern-classics",
+];
+
+function ModulesByField({
+  modules,
+  activeModuleId,
+  onPick,
+}: {
+  modules: ModuleDto[];
+  activeModuleId: string | null;
+  onPick: (id: string) => void;
+}) {
+  const grouped = new Map<string, ModuleDto[]>();
+  for (const m of modules) {
+    const list = grouped.get(m.field) ?? [];
+    list.push(m);
+    grouped.set(m.field, list);
+  }
+  // 알려진 순서로 먼저, 모르는 분야는 뒤에.
+  const fields = [
+    ...FIELD_ORDER.filter((f) => grouped.has(f)),
+    ...Array.from(grouped.keys()).filter((f) => !FIELD_ORDER.includes(f)),
+  ];
+  return (
+    <div className="space-y-4">
+      {fields.map((field) => {
+        const list = grouped.get(field) ?? [];
+        const label = FIELD_LABEL[field] ?? field;
+        return (
+          <section key={field}>
+            <h3
+              className="mb-1.5 text-[10px] uppercase tracking-[0.18em]"
+              style={{
+                color: "var(--color-brain-text-soft)",
+                fontWeight: 600,
+              }}
+            >
+              {label}{" "}
+              <span
+                className="ml-1 text-[10px] normal-case"
+                style={{ color: "var(--color-brain-text-soft)" }}
+              >
+                ({list.length})
+              </span>
+            </h3>
+            <ul className="space-y-1">
+              {list.map((m) => (
+                <li key={m.id}>
+                  <button
+                    onClick={() => onPick(m.id)}
+                    className={
+                      "w-full rounded px-3 py-2 text-left text-sm transition " +
+                      (m.id === activeModuleId
+                        ? "bg-brain-accent text-white"
+                        : "text-brain-text hover:bg-brain-surface")
+                    }
+                  >
+                    <div className="font-medium">{m.title}</div>
+                    <div
+                      className={
+                        "text-xs " +
+                        (m.id === activeModuleId
+                          ? "text-white/80"
+                          : "text-brain-text-muted")
+                      }
+                    >
+                      {m.lesson_count}장
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function ArtifactGallery({
+  artifacts,
+  onOpen,
+}: {
+  artifacts: ArtifactGalleryDto[] | null;
+  onOpen: (item: ArtifactGalleryDto) => void;
+}) {
+  if (!artifacts) {
+    return (
+      <div className="mb-4 rounded-xl border border-brain-border bg-brain-surface-soft px-4 py-3 text-sm text-brain-text-muted">
+        작업물을 불러오는 중...
+      </div>
+    );
+  }
+  if (artifacts.length === 0) return null;
+  return (
+    <section className="mb-4 rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="font-display text-lg">내 작업물</h2>
+          <p className="mt-1 text-xs text-brain-text-muted">최근 저장한 캔버스를 이어서 엽니다.</p>
+        </div>
+        <span className="rounded-full bg-brain-accent-soft px-2 py-0.5 text-xs text-brain-accent">
+          {artifacts.length}개
+        </span>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {artifacts.slice(0, 6).map((item) => (
+          <button
+            key={item.artifact_id}
+            type="button"
+            onClick={() => onOpen(item)}
+            className="rounded-lg border border-brain-border bg-brain-bg p-3 text-left transition hover:border-brain-accent hover:bg-brain-surface-soft"
+          >
+            <div className="line-clamp-1 font-display text-sm text-brain-text">
+              {item.lesson.title}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-brain-text-muted">
+              <span>노드 {item.node_count}</span>
+              <span>엣지 {item.edge_count}</span>
+              <span>{new Date(item.saved_at).toLocaleDateString("ko-KR")}</span>
+            </div>
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -1702,7 +2430,7 @@ function ModePicker({
           disabled={disabled}
           title={m.hint}
           className={
-            "rounded-full px-3 py-1 text-xs transition " +
+            "rounded-full px-3 py-1 font-sans text-xs transition " +
             (m.value === active
               ? "bg-brain-accent text-white"
               : "border border-brain-border text-brain-text-muted hover:border-brain-accent hover:text-brain-text")
@@ -1728,7 +2456,7 @@ function TabButton({
     <button
       onClick={onClick}
       className={
-        "rounded-full px-3 py-1 font-display text-sm transition " +
+        "rounded-full px-3 py-1 font-sans text-sm transition " +
         (active
           ? "bg-brain-accent text-white"
           : "text-brain-text-muted hover:text-brain-text")
@@ -2048,6 +2776,19 @@ declare global {
 }
 
 const TOSS_SDK_URL = "https://js.tosspayments.com/v1/payment";
+
+async function consumeAuthReturnUrl(): Promise<{ user: UserDto } | null> {
+  if (typeof window === "undefined") return null;
+  if (window.location.pathname !== "/verify-email") return null;
+  const token = new URLSearchParams(window.location.search).get("token");
+  if (!token) return null;
+  try {
+    const result = await api.verifyEmail(token);
+    return { user: result.user };
+  } finally {
+    window.history.replaceState({}, "", "/");
+  }
+}
 
 function loadTossSdk(): Promise<void> {
   if (typeof window === "undefined") return Promise.reject(new Error("no_window"));

@@ -6,9 +6,19 @@
 import { randomBytes } from "node:crypto";
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
-import { and, eq, isNull, asc, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lt, asc, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { lessons, modules, textExcerpts, users } from "../db/schema.js";
+import {
+  apiUsageLogs,
+  canvasArtifacts,
+  learningSessions,
+  lessons,
+  modules,
+  textExcerpts,
+  tutorMessages,
+  tutorRatings,
+  users,
+} from "../db/schema.js";
 import { ok, fail } from "../lib/envelope.js";
 import { hashPassword } from "../lib/password.js";
 import { lucia } from "../lib/lucia.js";
@@ -17,12 +27,14 @@ import {
   AdminLessonUpdateBody,
   AdminModuleCreateBody,
   AdminModuleUpdateBody,
+  BrandingSettingsBody,
   RejectUserBody,
   parseBody,
 } from "../lib/validators.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { userRateLimit } from "../middleware/rate-limit.js";
 import { toUserDTO } from "./auth.js";
+import { getBrandingSettings, setBrandingSettings } from "../lib/branding.js";
 
 export const adminRouter = Router();
 adminRouter.use(requireAdmin);
@@ -47,6 +59,133 @@ const baseUserSelect = {
   mustChangePassword: users.mustChangePassword,
   createdAt: users.createdAt,
 } as const;
+
+adminRouter.get(
+  "/settings/branding",
+  asyncHandler(async (_req, res) => {
+    ok(res, await getBrandingSettings());
+  }),
+);
+
+adminRouter.patch(
+  "/settings/branding",
+  asyncHandler(async (req, res) => {
+    const body = parseBody(BrandingSettingsBody, req, res);
+    if (!body) return;
+    ok(res, await setBrandingSettings(body));
+  }),
+);
+
+adminRouter.get(
+  "/tutor/ratings",
+  asyncHandler(async (req, res) => {
+    const rawLimit = Number(req.query.limit ?? 50);
+    const limit = Number.isFinite(rawLimit)
+      ? Math.min(Math.max(Math.trunc(rawLimit), 1), 200)
+      : 50;
+
+    const recentRows = await db
+      .select({
+        id: tutorRatings.id,
+        messageId: tutorRatings.messageId,
+        userId: tutorRatings.userId,
+        userName: users.name,
+        rating: tutorRatings.stars,
+        feedback: tutorRatings.comment,
+        createdAt: tutorRatings.createdAt,
+        messageContent: tutorMessages.content,
+        model: tutorMessages.model,
+        promptVersion: tutorMessages.promptVersion,
+        tokensIn: tutorMessages.tokensIn,
+        tokensOut: tutorMessages.tokensOut,
+        sessionId: tutorMessages.sessionId,
+        lessonId: learningSessions.lessonId,
+      })
+      .from(tutorRatings)
+      .innerJoin(tutorMessages, eq(tutorMessages.id, tutorRatings.messageId))
+      .innerJoin(learningSessions, eq(learningSessions.id, tutorMessages.sessionId))
+      .innerJoin(users, eq(users.id, tutorRatings.userId))
+      .orderBy(desc(tutorRatings.createdAt))
+      .limit(limit);
+
+    const totalRows = await db
+      .select({
+        count: sql<number>`count(*)::int`,
+        average: sql<number | null>`avg(${tutorRatings.stars})::float`,
+      })
+      .from(tutorRatings);
+
+    const modelRows = await db
+      .select({
+        key: sql<string>`coalesce(${tutorMessages.model}, 'unknown')`,
+        count: sql<number>`count(*)::int`,
+        average: sql<number>`avg(${tutorRatings.stars})::float`,
+      })
+      .from(tutorRatings)
+      .innerJoin(tutorMessages, eq(tutorMessages.id, tutorRatings.messageId))
+      .groupBy(sql`coalesce(${tutorMessages.model}, 'unknown')`)
+      .orderBy(sql`avg(${tutorRatings.stars}) desc`);
+
+    const promptRows = await db
+      .select({
+        key: sql<string>`coalesce(${tutorMessages.promptVersion}, 'unknown')`,
+        count: sql<number>`count(*)::int`,
+        average: sql<number>`avg(${tutorRatings.stars})::float`,
+      })
+      .from(tutorRatings)
+      .innerJoin(tutorMessages, eq(tutorMessages.id, tutorRatings.messageId))
+      .groupBy(sql`coalesce(${tutorMessages.promptVersion}, 'unknown')`)
+      .orderBy(sql`avg(${tutorRatings.stars}) desc`);
+
+    const distributionRows = await db
+      .select({
+        rating: tutorRatings.stars,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(tutorRatings)
+      .groupBy(tutorRatings.stars)
+      .orderBy(asc(tutorRatings.stars));
+
+    const distribution = [1, 2, 3, 4, 5].map((rating) => ({
+      rating,
+      count: Number(distributionRows.find((r) => r.rating === rating)?.count ?? 0),
+    }));
+
+    ok(res, {
+      recent: recentRows.map((r) => ({
+        id: r.id,
+        message_id: r.messageId,
+        user_id: r.userId,
+        user_name: r.userName,
+        rating: r.rating,
+        feedback: r.feedback,
+        created_at: r.createdAt.toISOString(),
+        message_content: r.messageContent,
+        model: r.model,
+        prompt_version: r.promptVersion,
+        input_tokens: r.tokensIn,
+        output_tokens: r.tokensOut,
+        session_id: r.sessionId,
+        lesson_id: r.lessonId,
+      })),
+      summary: {
+        count: Number(totalRows[0]?.count ?? 0),
+        average: totalRows[0]?.average == null ? null : Number(totalRows[0].average),
+        by_model: modelRows.map((r) => ({
+          key: r.key,
+          count: Number(r.count),
+          average: Number(r.average),
+        })),
+        by_prompt_version: promptRows.map((r) => ({
+          key: r.key,
+          count: Number(r.count),
+          average: Number(r.average),
+        })),
+        distribution,
+      },
+    });
+  }),
+);
 
 // ── GET /api/admin/users/pending ────────────────────────────────────
 adminRouter.get(
@@ -365,11 +504,51 @@ interface AdminLessonDTO {
   order: number;
   objectives: string[];
   axis_focus: Record<string, unknown>;
+  cognitive_structure_analysis: string;
+  learner_questions: string;
+  tutor_reference_notes: string;
   text_excerpt_id: string | null;
   body: string;
   author: string;
   source: string;
   language: string;
+}
+
+interface LessonTutorMeta {
+  cognitive_structure_analysis: string;
+  learner_questions: string;
+  tutor_reference_notes: string;
+}
+
+function lessonTutorMeta(input: {
+  cognitive_structure_analysis?: string;
+  learner_questions?: string;
+  tutor_reference_notes?: string;
+}): LessonTutorMeta {
+  return {
+    cognitive_structure_analysis: input.cognitive_structure_analysis?.trim() ?? "",
+    learner_questions: input.learner_questions?.trim() ?? "",
+    tutor_reference_notes: input.tutor_reference_notes?.trim() ?? "",
+  };
+}
+
+function readLessonTutorMeta(sourceMeta: unknown): LessonTutorMeta {
+  const meta =
+    sourceMeta && typeof sourceMeta === "object"
+      ? (sourceMeta as Record<string, unknown>)
+      : {};
+  return {
+    cognitive_structure_analysis:
+      typeof meta.cognitive_structure_analysis === "string"
+        ? meta.cognitive_structure_analysis
+        : "",
+    learner_questions:
+      typeof meta.learner_questions === "string" ? meta.learner_questions : "",
+    tutor_reference_notes:
+      typeof meta.tutor_reference_notes === "string"
+        ? meta.tutor_reference_notes
+        : "",
+  };
 }
 
 async function lessonDTO(id: string): Promise<AdminLessonDTO | null> {
@@ -381,6 +560,7 @@ async function lessonDTO(id: string): Promise<AdminLessonDTO | null> {
       order: lessons.order,
       objectives: lessons.objectives,
       axisFocus: lessons.axisFocus,
+      sourceMeta: lessons.sourceMeta,
     })
     .from(lessons)
     .where(eq(lessons.id, id))
@@ -400,6 +580,7 @@ async function lessonDTO(id: string): Promise<AdminLessonDTO | null> {
     .orderBy(asc(textExcerpts.order))
     .limit(1);
   const e = excerptRows[0];
+  const tutorMeta = readLessonTutorMeta(l.sourceMeta);
   return {
     id: l.id,
     module_id: l.moduleId,
@@ -407,6 +588,9 @@ async function lessonDTO(id: string): Promise<AdminLessonDTO | null> {
     order: l.order,
     objectives: Array.isArray(l.objectives) ? (l.objectives as string[]) : [],
     axis_focus: (l.axisFocus ?? {}) as Record<string, unknown>,
+    cognitive_structure_analysis: tutorMeta.cognitive_structure_analysis,
+    learner_questions: tutorMeta.learner_questions,
+    tutor_reference_notes: tutorMeta.tutor_reference_notes,
     text_excerpt_id: e?.id ?? null,
     body: e?.content ?? "",
     author: e?.author ?? "",
@@ -469,6 +653,7 @@ adminRouter.post(
             title: body.title,
             order: body.order,
             textSource: body.source ?? "",
+            sourceMeta: lessonTutorMeta(body) as unknown as Record<string, unknown>,
             objectives: body.objectives ?? [],
             axisFocus: (body.axis_focus ?? {}) as Record<string, never>,
           })
@@ -521,6 +706,41 @@ adminRouter.patch(
         if (body.objectives !== undefined) lessonPatch.objectives = body.objectives;
         if (body.axis_focus !== undefined) lessonPatch.axisFocus = body.axis_focus;
         if (body.source !== undefined) lessonPatch.textSource = body.source;
+        if (
+          body.cognitive_structure_analysis !== undefined ||
+          body.learner_questions !== undefined ||
+          body.tutor_reference_notes !== undefined
+        ) {
+          const existing = await tx
+            .select({ sourceMeta: lessons.sourceMeta })
+            .from(lessons)
+            .where(eq(lessons.id, id))
+            .limit(1);
+          const prev =
+            existing[0]?.sourceMeta && typeof existing[0].sourceMeta === "object"
+              ? (existing[0].sourceMeta as Record<string, unknown>)
+              : {};
+          lessonPatch.sourceMeta = {
+            ...prev,
+            ...lessonTutorMeta({
+              cognitive_structure_analysis:
+                body.cognitive_structure_analysis ??
+                (typeof prev.cognitive_structure_analysis === "string"
+                  ? prev.cognitive_structure_analysis
+                  : ""),
+              learner_questions:
+                body.learner_questions ??
+                (typeof prev.learner_questions === "string"
+                  ? prev.learner_questions
+                  : ""),
+              tutor_reference_notes:
+                body.tutor_reference_notes ??
+                (typeof prev.tutor_reference_notes === "string"
+                  ? prev.tutor_reference_notes
+                  : ""),
+            }),
+          };
+        }
         const updated = await tx
           .update(lessons)
           .set(lessonPatch)
@@ -596,10 +816,130 @@ adminRouter.delete(
   }),
 );
 
-// ── 503 mvp_cut stubs ───────────────────────────────────────────────
-const NOT_AVAIL = { error: "service_unavailable", reason: "mvp_cut" };
-adminRouter.get("/users", (_req, res) => res.status(503).json(NOT_AVAIL));
-adminRouter.post("/users/:id/suspend", (_req, res) =>
-  res.status(503).json(NOT_AVAIL),
+// ── Export / analytics ──────────────────────────────────────────────
+
+function toIso(d: Date | null | undefined): string {
+  return d ? d.toISOString() : "";
+}
+
+function csvRow(values: (string | number | boolean | null | undefined)[]): string {
+  return values
+    .map((v) => {
+      const s = v == null ? "" : String(v);
+      return `"${s.replace(/"/g, '""')}"`;
+    })
+    .join(",");
+}
+
+// GET /api/admin/export/sessions?from=ISO&to=ISO
+adminRouter.get(
+  "/export/sessions",
+  asyncHandler(async (req, res) => {
+    const from = req.query.from ? new Date(req.query.from as string) : new Date(0);
+    const to = req.query.to ? new Date(req.query.to as string) : new Date();
+    const rows = await db
+      .select({
+        id: learningSessions.id,
+        userId: learningSessions.userId,
+        lessonId: learningSessions.lessonId,
+        mode: learningSessions.mode,
+        startedAt: learningSessions.startedAt,
+        endedAt: learningSessions.endedAt,
+      })
+      .from(learningSessions)
+      .where(and(gte(learningSessions.startedAt, from), lt(learningSessions.startedAt, to)))
+      .orderBy(asc(learningSessions.startedAt));
+
+    const header = csvRow(["id", "user_id", "lesson_id", "mode", "started_at", "ended_at"]);
+    const lines = rows.map((r) =>
+      csvRow([r.id, r.userId, r.lessonId, r.mode, toIso(r.startedAt), toIso(r.endedAt)]),
+    );
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", "attachment; filename=sessions.csv");
+    res.send([header, ...lines].join("\r\n"));
+  }),
 );
-adminRouter.get("/api-usage", (_req, res) => res.status(503).json(NOT_AVAIL));
+
+// GET /api/admin/export/users — PII: email + name only, no password hashes
+adminRouter.get(
+  "/export/users",
+  asyncHandler(async (_req, res) => {
+    const rows = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        role: users.role,
+        status: users.status,
+        createdAt: users.createdAt,
+        lastLoginAt: users.lastLoginAt,
+      })
+      .from(users)
+      .where(isNull(users.deletedAt))
+      .orderBy(asc(users.createdAt));
+
+    const header = csvRow(["id", "name", "email", "role", "status", "created_at", "last_login_at"]);
+    const lines = rows.map((r) =>
+      csvRow([r.id, r.name, r.email, r.role, r.status, toIso(r.createdAt), toIso(r.lastLoginAt)]),
+    );
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", "attachment; filename=users.csv");
+    res.send([header, ...lines].join("\r\n"));
+  }),
+);
+
+// GET /api/admin/api-usage?days=7
+adminRouter.get(
+  "/api-usage",
+  asyncHandler(async (req, res) => {
+    const days = Math.min(90, parseInt(String(req.query.days ?? "7"), 10) || 7);
+    const since = new Date();
+    since.setUTCDate(since.getUTCDate() - days);
+    const rows = await db
+      .select({
+        provider: apiUsageLogs.provider,
+        model: apiUsageLogs.model,
+        calls: sql<number>`count(*)::int`,
+        totalIn: sql<number>`sum(${apiUsageLogs.tokensIn})::int`,
+        totalOut: sql<number>`sum(${apiUsageLogs.tokensOut})::int`,
+        errors: sql<number>`sum(case when ${apiUsageLogs.status}!='ok' then 1 else 0 end)::int`,
+      })
+      .from(apiUsageLogs)
+      .where(gte(apiUsageLogs.createdAt, since))
+      .groupBy(apiUsageLogs.provider, apiUsageLogs.model)
+      .orderBy(desc(sql`sum(${apiUsageLogs.tokensIn}+${apiUsageLogs.tokensOut})`));
+    ok(res, { period_days: days, rows });
+  }),
+);
+
+// GET /api/admin/users — list all non-deleted users (simple)
+adminRouter.get(
+  "/users",
+  asyncHandler(async (_req, res) => {
+    const rows = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        role: users.role,
+        status: users.status,
+        createdAt: users.createdAt,
+        lastLoginAt: users.lastLoginAt,
+      })
+      .from(users)
+      .where(isNull(users.deletedAt))
+      .orderBy(desc(users.createdAt));
+    ok(res, rows);
+  }),
+);
+
+// POST /api/admin/users/:id/suspend
+adminRouter.post(
+  "/users/:id/suspend",
+  asyncHandler(async (req, res) => {
+    const id = String(req.params["id"] ?? "");
+    if (!UUID_RE.test(id)) { fail(res, 400, "validation_error"); return; }
+    await db.update(users).set({ status: "suspended" as never }).where(eq(users.id, id));
+    ok(res, { id, status: "suspended" });
+  }),
+);

@@ -11,9 +11,11 @@ export const Iso = z.string().datetime({ offset: true });
 
 export const Email = z.string().email().max(254);
 
+// Beta open: 8자 + 2종 (영문/숫자/특수문자 중 2종 이상). 일반 학생 진입
+// 마찰을 낮추기 위해 12자에서 8자로 완화. 결제 도입 시점에서 12자로 회귀 검토.
 export const Password = z
   .string()
-  .min(12, "weak_password")
+  .min(8, "weak_password")
   .max(128, "weak_password")
   .refine((s) => {
     let cats = 0;
@@ -46,6 +48,19 @@ export const LoginBody = z.object({
 
 export const ChangePasswordBody = z.object({
   current_password: z.string().min(1).max(128),
+  new_password: Password,
+});
+
+export const VerifyEmailBody = z.object({
+  token: z.string().min(20).max(255),
+});
+
+export const ForgotPasswordBody = z.object({
+  email: Email,
+});
+
+export const ResetPasswordBody = z.object({
+  token: z.string().min(20).max(255),
   new_password: Password,
 });
 
@@ -110,12 +125,17 @@ export const TutorChatBody = z.object({
   lesson_id: Uuid,
   message: z.string().min(1).max(4000),
   canvas_snapshot: CanvasJson.optional(),
+  canvas_mode: z.enum(["free", "constrained", "guided"]).optional(),
+  // base64-encoded PNG from FreeDrawCanvas (自由형 mode vision)
+  canvas_image_base64: z.string().max(5_000_000).optional(),
 });
 
-export const RateMessageBody = z.object({
+export const RateTutorBody = z.object({
   rating: z.number().int().min(1).max(5),
-  feedback: z.string().max(500).optional(),
+  feedback: z.string().trim().max(500).optional(),
 });
+
+export const RateMessageBody = RateTutorBody;
 
 // ─── Lesson Feedback (v1 FeedbackPanel 부활) ─────────────────────────
 
@@ -165,6 +185,9 @@ export const AdminLessonCreateBody = z.object({
   source: z.string().max(200).optional(),
   language: z.enum(["ko", "en"]).optional(),
   objectives: z.array(z.string().min(1).max(200)).max(10).optional(),
+  cognitive_structure_analysis: z.string().max(10_000).optional(),
+  learner_questions: z.string().max(10_000).optional(),
+  tutor_reference_notes: z.string().max(10_000).optional(),
   axis_focus: AxisFocus,
 });
 
@@ -176,10 +199,25 @@ export const AdminLessonUpdateBody = z.object({
   source: z.string().max(200).optional(),
   language: z.enum(["ko", "en"]).optional(),
   objectives: z.array(z.string().min(1).max(200)).max(10).optional(),
+  cognitive_structure_analysis: z.string().max(10_000).optional(),
+  learner_questions: z.string().max(10_000).optional(),
+  tutor_reference_notes: z.string().max(10_000).optional(),
   axis_focus: AxisFocus,
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────
+
+const LogoDataUrl = z
+  .string()
+  .max(1_000_000)
+  .refine(
+    (value) => /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(value),
+    "invalid_logo_image",
+  );
+
+export const BrandingSettingsBody = z.object({
+  logo_data_url: LogoDataUrl.nullable(),
+});
 
 import type { Request, Response } from "express";
 import type { ZodTypeAny, z as ZodNamespace } from "zod";
