@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import {
   ApiError,
   api,
+  type AdminTutorRatingsDto,
   type AdminLessonCreateInput,
   type AdminLessonDto,
   type AdminLessonUpdateInput,
@@ -31,6 +32,7 @@ import {
   type SubscriptionDto,
   type TextExcerptDto,
   type TutorMessageDto,
+  type TutorRatingDto,
   type UserDto,
 } from "./api";
 import { CognitiveMap, type CanvasMode } from "./CognitiveMap";
@@ -652,6 +654,7 @@ function PracticeScreen({
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ratingToast, setRatingToast] = useState<string | null>(null);
   const [tab, setTab] = useState<PracticeTab>("canvas");
   // 튜터 버블 열림 상태 — v1 의 floating ChatPanel 패턴 복원.
   const [tutorOpen, setTutorOpen] = useState(false);
@@ -774,6 +777,7 @@ function PracticeScreen({
       model: null,
       input_tokens: 0,
       output_tokens: 0,
+      my_rating: null,
       created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, optimistic]);
@@ -829,9 +833,19 @@ function PracticeScreen({
     }
   };
 
-  const onRateTutorMessage = useCallback(
-    async (messageId: string, rating: number, feedback?: string) => {
-      await api.rateTutorMessage(messageId, rating, feedback);
+  const rateTutorMessage = useCallback(
+    async (
+      messageId: string,
+      rating: number,
+      feedback?: string,
+    ): Promise<TutorRatingDto> => {
+      const saved = await api.rateTutorMessage(messageId, { rating, feedback });
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, my_rating: saved } : m)),
+      );
+      setRatingToast("감사합니다 — 튜터가 더 나아질 자리에 쓰입니다");
+      window.setTimeout(() => setRatingToast(null), 1000);
+      return saved;
     },
     [],
   );
@@ -995,9 +1009,10 @@ function PracticeScreen({
         input={input}
         onInputChange={setInput}
         onSend={send}
+        onRateMessage={rateTutorMessage}
         onAskTutor={onAskTutor}
-        onRateMessage={onRateTutorMessage}
         liveCanvas={liveCanvas}
+        ratingToast={ratingToast}
       />
     </div>
   );
@@ -1058,7 +1073,7 @@ function CanvasModeSelector({ onSelect }: { onSelect: (m: "free" | CanvasMode) =
   );
 }
 
-type AdminTab = "users" | "modules" | "lessons";
+type AdminTab = "users" | "modules" | "lessons" | "tutorQuality";
 
 function AdminScreen() {
   const [tab, setTab] = useState<AdminTab>("users");
@@ -1075,6 +1090,12 @@ function AdminScreen() {
           <AdminTabButton active={tab === "lessons"} onClick={() => setTab("lessons")}>
             레슨
           </AdminTabButton>
+          <AdminTabButton
+            active={tab === "tutorQuality"}
+            onClick={() => setTab("tutorQuality")}
+          >
+            튜터 품질
+          </AdminTabButton>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-6">
@@ -1082,6 +1103,7 @@ function AdminScreen() {
           {tab === "users" && <AdminUsersPanel />}
           {tab === "modules" && <AdminModulesPanel />}
           {tab === "lessons" && <AdminLessonsPanel />}
+          {tab === "tutorQuality" && <AdminTutorRatingsPanel />}
         </div>
       </div>
     </div>
@@ -1109,6 +1131,175 @@ function AdminTabButton({
       {children}
     </button>
   );
+}
+
+function AdminTutorRatingsPanel() {
+  const [data, setData] = useState<AdminTutorRatingsDto | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
+    setError(null);
+    try {
+      setData(await api.adminTutorRatings(80));
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .adminTutorRatings(80)
+      .then((rows) => {
+        if (!cancelled) setData(rows);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(toMessage(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const maxDistribution = Math.max(
+    1,
+    ...(data?.summary.distribution.map((d) => d.count) ?? [0]),
+  );
+
+  return (
+    <>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-display text-2xl">튜터 품질</h2>
+          <p className="mt-1 text-sm text-brain-text-muted">
+            학생이 남긴 AI 튜터 응답 별점과 코멘트를 확인합니다.
+          </p>
+        </div>
+        <button
+          onClick={() => void reload()}
+          className="rounded border border-brain-border px-3 py-1 text-sm text-brain-text-muted hover:bg-brain-surface-soft"
+        >
+          새로고침
+        </button>
+      </div>
+      {error && (
+        <div className="mb-4 rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
+          {error}
+        </div>
+      )}
+      {!data && !error && (
+        <p className="text-sm text-brain-text-muted">불러오는 중…</p>
+      )}
+      {data && (
+        <div className="space-y-5">
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1">
+              <div className="text-xs text-brain-text-muted">전체 평균</div>
+              <div className="mt-1 font-display text-3xl">
+                {formatRating(data.summary.average)}
+              </div>
+              <div className="mt-1 text-xs text-brain-text-soft">
+                평가 {data.summary.count.toLocaleString("ko-KR")}개
+              </div>
+            </div>
+            <AggregateCard title="모델별 평균" rows={data.summary.by_model} />
+            <AggregateCard
+              title="프롬프트 버전별 평균"
+              rows={data.summary.by_prompt_version}
+            />
+          </div>
+
+          <section className="rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1">
+            <h3 className="mb-3 font-display text-lg">별점 분포</h3>
+            <div className="space-y-2">
+              {data.summary.distribution.map((d) => (
+                <div key={d.rating} className="grid grid-cols-[48px_1fr_48px] items-center gap-3 text-sm">
+                  <div className="text-brain-text-muted">{d.rating}점</div>
+                  <div className="h-3 overflow-hidden rounded-full bg-brain-surface-soft">
+                    <div
+                      className="h-full rounded-full bg-brain-accent"
+                      style={{ width: `${(d.count / maxDistribution) * 100}%` }}
+                    />
+                  </div>
+                  <div className="text-right text-brain-text-muted">{d.count}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <h3 className="mb-3 font-display text-lg">최근 평가</h3>
+            {data.recent.length === 0 && (
+              <p className="text-sm text-brain-text-muted">아직 등록된 평가가 없습니다.</p>
+            )}
+            <ul className="space-y-3">
+              {data.recent.map((r) => (
+                <li
+                  key={r.id}
+                  className="rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-display text-base">
+                      {"★".repeat(r.rating)}
+                      <span className="text-brain-text-soft">
+                        {"☆".repeat(5 - r.rating)}
+                      </span>
+                    </div>
+                    <div className="text-xs text-brain-text-muted">
+                      {new Date(r.created_at).toLocaleString("ko-KR")} · {r.user_name}
+                    </div>
+                  </div>
+                  {r.feedback && (
+                    <p className="mt-2 rounded bg-brain-surface-soft px-3 py-2 text-sm">
+                      {r.feedback}
+                    </p>
+                  )}
+                  <p className="mt-2 line-clamp-3 text-sm text-brain-text-muted">
+                    {r.message_content}
+                  </p>
+                  <div className="mt-2 text-[11px] uppercase tracking-wider text-brain-text-soft">
+                    {r.model ?? "unknown"} · prompt {r.prompt_version ?? "unknown"} · in{" "}
+                    {r.input_tokens} / out {r.output_tokens}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+      )}
+    </>
+  );
+}
+
+function AggregateCard({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: AdminTutorRatingsDto["summary"]["by_model"];
+}) {
+  return (
+    <div className="rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1">
+      <div className="mb-2 text-xs text-brain-text-muted">{title}</div>
+      {rows.length === 0 && (
+        <div className="text-sm text-brain-text-muted">데이터 없음</div>
+      )}
+      <ul className="space-y-2">
+        {rows.slice(0, 4).map((r) => (
+          <li key={r.key} className="flex items-center justify-between gap-3 text-sm">
+            <span className="truncate text-brain-text">{r.key}</span>
+            <span className="shrink-0 text-brain-text-muted">
+              {formatRating(r.average)} · {r.count}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function formatRating(value: number | null): string {
+  return value == null ? "-" : value.toFixed(2);
 }
 
 function AdminUsersPanel() {

@@ -12,7 +12,7 @@
 //     하지 않음. 본 버블은 *대화 자리* 만 책임.
 
 import { useEffect, useRef, useState } from "react";
-import type { CanvasJson, SessionDto, TutorMessageDto } from "./api";
+import type { CanvasJson, SessionDto, TutorMessageDto, TutorRatingDto } from "./api";
 
 interface Props {
   open: boolean;
@@ -25,9 +25,15 @@ interface Props {
   input: string;
   onInputChange: (next: string) => void;
   onSend: (e: React.FormEvent) => void;
+  onRateMessage: (
+    messageId: string,
+    rating: number,
+    feedback?: string,
+  ) => Promise<TutorRatingDto>;
   onAskTutor?: (snapshot: CanvasJson) => void;
   onRateMessage?: (messageId: string, rating: number, feedback?: string) => Promise<void>;
   liveCanvas?: CanvasJson | null;
+  ratingToast?: string | null;
 }
 
 export function TutorBubble({
@@ -40,9 +46,11 @@ export function TutorBubble({
   input,
   onInputChange,
   onSend,
+  onRateMessage,
   onAskTutor,
   onRateMessage,
   liveCanvas,
+  ratingToast,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -173,11 +181,8 @@ export function TutorBubble({
                   {m.model} · in {m.input_tokens} / out {m.output_tokens}
                 </div>
               )}
-              {m.role === "assistant" && onRateMessage && (
-                <TutorRatingControls
-                  messageId={m.id}
-                  onRateMessage={onRateMessage}
-                />
+              {m.role === "assistant" && !m.id.startsWith("pending-") && (
+                <TutorRatingWidget message={m} onRate={onRateMessage} />
               )}
             </li>
           ))}
@@ -235,6 +240,116 @@ export function TutorBubble({
           </button>
         </div>
       )}
+      {ratingToast && (
+        <div className="pointer-events-none absolute bottom-20 left-1/2 w-[calc(100%-32px)] -translate-x-1/2 rounded border border-brain-accent/30 bg-brain-surface px-3 py-2 text-center text-[12px] text-brain-text shadow-soft-2">
+          {ratingToast}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TutorRatingWidget({
+  message,
+  onRate,
+}: {
+  message: TutorMessageDto;
+  onRate: (
+    messageId: string,
+    rating: number,
+    feedback?: string,
+  ) => Promise<TutorRatingDto>;
+}) {
+  const [hover, setHover] = useState(0);
+  const [draftRating, setDraftRating] = useState(message.my_rating?.rating ?? 0);
+  const [feedback, setFeedback] = useState(message.my_rating?.feedback ?? "");
+  const [commentOpen, setCommentOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (rating: number, nextFeedback = feedback) => {
+    if (rating < 1 || rating > 5 || saving) return;
+    setSaving(true);
+    setError(null);
+    setDraftRating(rating);
+    try {
+      await onRate(message.id, rating, nextFeedback.trim() || undefined);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const active = hover || draftRating;
+
+  return (
+    <div className="mt-2 border-t border-brain-border/70 pt-1.5">
+      <div
+        className="flex items-center gap-1"
+        onMouseLeave={() => setHover(0)}
+        aria-label="튜터 응답 별점"
+      >
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            disabled={saving}
+            onMouseEnter={() => setHover(n)}
+            onFocus={() => setHover(n)}
+            onBlur={() => setHover(0)}
+            onClick={() => {
+              setCommentOpen(true);
+              void submit(n);
+            }}
+            className={
+              "h-6 w-6 text-center text-[16px] leading-6 transition disabled:opacity-50 " +
+              (n <= active
+                ? "text-brain-highlight"
+                : "text-brain-text-soft hover:text-brain-highlight")
+            }
+            title={`${n}점`}
+            aria-label={`${n}점`}
+          >
+            {n <= active ? "★" : "☆"}
+          </button>
+        ))}
+        {message.my_rating && (
+          <button
+            type="button"
+            onClick={() => setCommentOpen((v) => !v)}
+            className="ml-1 rounded border border-brain-border px-2 py-0.5 text-[10px] text-brain-text-muted hover:bg-brain-surface-soft"
+          >
+            수정
+          </button>
+        )}
+      </div>
+      {commentOpen && (
+        <div className="mt-2 space-y-1">
+          <textarea
+            value={feedback}
+            onChange={(e) => setFeedback(e.target.value.slice(0, 500))}
+            rows={2}
+            maxLength={500}
+            placeholder="선택: 어떤 점이 좋거나 아쉬웠나요?"
+            className="w-full resize-none rounded border border-brain-border bg-brain-bg px-2 py-1 text-[12px] text-brain-text outline-none focus:border-brain-accent"
+          />
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] text-brain-text-soft">
+              {feedback.length}/500
+            </span>
+            <button
+              type="button"
+              disabled={saving || draftRating === 0}
+              onClick={() => void submit(draftRating)}
+              className="rounded bg-brain-accent px-2 py-0.5 text-[11px] text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {saving ? "저장 중" : "코멘트 저장"}
+            </button>
+          </div>
+        </div>
+      )}
+      {error && <div className="mt-1 text-[10px] text-brain-danger">{error}</div>}
     </div>
   );
 }

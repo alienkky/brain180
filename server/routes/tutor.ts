@@ -33,7 +33,7 @@ import {
 import { ok, fail } from "../lib/envelope.js";
 import { UpstreamError } from "../lib/anthropic.js";
 import { callTutorLLM, resolveTutorProvider } from "../lib/llm.js";
-import { parseBody, TutorChatBody, RateMessageBody } from "../lib/validators.js";
+import { parseBody, TutorChatBody, RateTutorBody } from "../lib/validators.js";
 import {
   requireApprovedUser,
   requireAuth,
@@ -139,6 +139,7 @@ interface TutorMessageDTO {
   model: string | null;
   input_tokens: number;
   output_tokens: number;
+  my_rating: TutorRatingDTO | null;
   created_at: string;
 }
 
@@ -151,6 +152,10 @@ function toMessageDTO(row: {
   tokensIn: number;
   tokensOut: number;
   createdAt: Date;
+  ratingId?: string | null;
+  ratingStars?: number | null;
+  ratingComment?: string | null;
+  ratingCreatedAt?: Date | null;
 }): TutorMessageDTO {
   return {
     id: row.id,
@@ -160,6 +165,15 @@ function toMessageDTO(row: {
     model: row.model,
     input_tokens: row.tokensIn,
     output_tokens: row.tokensOut,
+    my_rating: row.ratingId
+      ? {
+          id: row.ratingId,
+          message_id: row.id,
+          rating: row.ratingStars ?? 0,
+          feedback: row.ratingComment ?? null,
+          created_at: (row.ratingCreatedAt ?? row.createdAt).toISOString(),
+        }
+      : null,
     created_at: row.createdAt.toISOString(),
   };
 }
@@ -427,9 +441,20 @@ tutorRouter.get(
         model: tutorMessages.model,
         tokensIn: tutorMessages.tokensIn,
         tokensOut: tutorMessages.tokensOut,
+        ratingId: tutorRatings.id,
+        ratingStars: tutorRatings.stars,
+        ratingComment: tutorRatings.comment,
+        ratingCreatedAt: tutorRatings.createdAt,
         createdAt: tutorMessages.createdAt,
       })
       .from(tutorMessages)
+      .leftJoin(
+        tutorRatings,
+        and(
+          eq(tutorRatings.messageId, tutorMessages.id),
+          eq(tutorRatings.userId, req.user!.id),
+        ),
+      )
       .where(eq(tutorMessages.sessionId, session.id))
       .orderBy(asc(tutorMessages.createdAt));
 
@@ -448,7 +473,7 @@ tutorRouter.post(
       return;
     }
 
-    const body = parseBody(RateMessageBody, req, res);
+    const body = parseBody(RateTutorBody, req, res);
     if (!body) return;
 
     // Message must exist, be assistant role, belong to user's session.
@@ -481,23 +506,20 @@ tutorRouter.post(
       return;
     }
 
-    const existing = await db
-      .select({ id: tutorRatings.id })
-      .from(tutorRatings)
-      .where(and(eq(tutorRatings.messageId, msg.id), eq(tutorRatings.userId, req.user!.id)))
-      .limit(1);
-    if (existing[0]) {
-      fail(res, 409, "already_rated");
-      return;
-    }
-
-    const inserted = await db
+    const upserted = await db
       .insert(tutorRatings)
       .values({
         messageId: msg.id,
         userId: req.user!.id,
         stars: body.rating,
         comment: body.feedback ?? null,
+      })
+      .onConflictDoUpdate({
+        target: [tutorRatings.messageId, tutorRatings.userId],
+        set: {
+          stars: body.rating,
+          comment: body.feedback ?? null,
+        },
       })
       .returning({
         id: tutorRatings.id,
@@ -513,7 +535,7 @@ tutorRouter.post(
       .set({ rating: body.rating })
       .where(eq(tutorMessages.id, msg.id));
 
-    const row = inserted[0]!;
+    const row = upserted[0]!;
     const dto: TutorRatingDTO = {
       id: row.id,
       message_id: row.messageId,
