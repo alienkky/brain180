@@ -222,19 +222,13 @@ export function LoginLanding({ onLoggedIn }: { onLoggedIn: (u: UserDto) => void 
 function LandingContent() {
   return (
     <div className="min-h-full bg-brain-bg text-brain-text">
-      {/* Header */}
-      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-brain-border bg-brain-surface/90 px-8 py-4 backdrop-blur-sm">
-        <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brain-accent text-sm font-bold text-white">B</span>
-          <span className="font-display text-lg font-bold text-brain-text">Brain180</span>
-        </div>
-        <nav className="hidden items-center gap-6 text-sm text-brain-text-muted md:flex">
-          <a href="#program" className="hover:text-brain-text">Program</a>
-          <a href="#method" className="hover:text-brain-text">Method</a>
-          <a href="#system" className="hover:text-brain-text">System</a>
-          <a href="#journey" className="hover:text-brain-text">Journey</a>
-        </nav>
-      </header>
+      {/* Nav — Brain180 title is in the app header above, no duplicate here */}
+      <nav className="sticky top-0 z-10 flex items-center justify-end gap-6 border-b border-brain-border bg-brain-surface/90 px-8 py-3 text-sm text-brain-text-muted backdrop-blur-sm">
+        <a href="#program" className="hover:text-brain-text">프로그램</a>
+        <a href="#method" className="hover:text-brain-text">방법론</a>
+        <a href="#system" className="hover:text-brain-text">시스템</a>
+        <a href="#journey" className="hover:text-brain-text">여정</a>
+      </nav>
 
       {/* Hero */}
       <section className="flex flex-col gap-8 px-8 py-16 md:flex-row md:items-center md:py-24">
@@ -255,17 +249,22 @@ function LandingContent() {
         </div>
         <div className="flex flex-shrink-0 gap-4">
           {[
-            { n: "01", label: "Lens", color: "#B85C3F" },
-            { n: "02", label: "Coupling", color: "#C68A3D" },
-            { n: "03", label: "Feedback", color: "#6E8F82" },
+            { n: "01", label: "렌즈", color: "#B85C3F", img: "/assets/brain180-line-study.svg" },
+            { n: "02", label: "커플링", color: "#C68A3D", img: "/assets/brain180-line-brain.svg" },
+            { n: "03", label: "피드백", color: "#6E8F82", img: "/assets/brain180-line-speech.svg" },
           ].map((c) => (
             <div
               key={c.n}
-              className="flex h-28 w-24 flex-col items-center justify-center gap-2 rounded-2xl border-2 bg-brain-surface shadow-soft-1"
+              className="flex h-32 w-24 flex-col items-center justify-center gap-2 rounded-2xl border-2 bg-brain-surface shadow-soft-1 px-2"
               style={{ borderColor: `${c.color}40` }}
             >
               <span className="text-xs font-semibold text-brain-text-muted">{c.n}</span>
-              <span className="text-2xl font-bold" style={{ color: c.color }}>▣</span>
+              <img
+                src={c.img}
+                alt={c.label}
+                className="h-12 w-12"
+                style={{ filter: `opacity(0.85)` }}
+              />
               <span className="text-[11px] font-medium text-brain-text">{c.label}</span>
             </div>
           ))}
