@@ -33,6 +33,7 @@ function FreeCanvasBase({ initial, onSave, onChange, disabled }: Props) {
   const [color, setColor] = useState(COLORS[0]);
   const [width, setWidth] = useState(WIDTHS[1]);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [pathCount, setPathCount] = useState(0); // triggers re-render for undo button state
   const isDrawing = useRef(false);
   const paths = useRef<DrawPath[]>((initial?.paths ?? []).map((p) => ({ ...p })));
   const currentPath = useRef<DrawPath | null>(null);
@@ -66,8 +67,21 @@ function FreeCanvasBase({ initial, onSave, onChange, disabled }: Props) {
 
   useEffect(() => {
     paths.current = (initial?.paths ?? []).map((p) => ({ ...p }));
+    setPathCount(paths.current.length);
     redraw();
   }, [initial, redraw]);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        onUndo();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -158,13 +172,23 @@ function FreeCanvasBase({ initial, onSave, onChange, disabled }: Props) {
     isDrawing.current = false;
     if (currentPath.current.points.length >= 2) {
       paths.current.push(currentPath.current);
+      setPathCount(paths.current.length);
       scheduleSave();
     }
     currentPath.current = null;
   }
 
+  function onUndo() {
+    if (paths.current.length === 0) return;
+    paths.current.pop();
+    setPathCount(paths.current.length);
+    redraw();
+    scheduleSave();
+  }
+
   function onClear() {
     paths.current = [];
+    setPathCount(0);
     redraw();
     scheduleSave();
   }
@@ -214,6 +238,14 @@ function FreeCanvasBase({ initial, onSave, onChange, disabled }: Props) {
           </button>
         ))}
         <div className="mx-1 h-5 w-px bg-brain-border" />
+        <button
+          className="rounded px-3 py-1.5 text-xs text-brain-text-muted hover:bg-brain-surface-soft disabled:opacity-40"
+          onClick={onUndo}
+          disabled={disabled || pathCount === 0}
+          title="마지막 획 되돌리기 (Ctrl+Z)"
+        >
+          ↩ 되돌리기
+        </button>
         <button
           className="rounded px-3 py-1.5 text-xs text-brain-danger hover:bg-red-50"
           onClick={onClear}

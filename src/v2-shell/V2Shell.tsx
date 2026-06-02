@@ -948,7 +948,16 @@ function PracticeScreen({
               label="피드백"
             />
           </div>
-          <div className="text-xs text-brain-text-muted">
+          <div className="flex items-center gap-3 text-xs text-brain-text-muted">
+            {tab === "canvas" && canvasMode !== null && (
+              <button
+                onClick={() => setCanvasMode(null)}
+                className="rounded border border-brain-border px-2 py-1 text-[11px] hover:bg-brain-surface-soft"
+                title="캔버스 모드 변경"
+              >
+                모드 변경
+              </button>
+            )}
             {session ? `세션 ${session.id.slice(0, 8)}…` : "세션 시작 중…"}
           </div>
         </div>
