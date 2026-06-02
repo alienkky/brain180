@@ -82,31 +82,18 @@ export function LoginLanding({ onLoggedIn }: { onLoggedIn: (u: UserDto) => void 
   };
 
   return (
-    <div className="grid h-full overflow-y-auto bg-brain-bg lg:grid-cols-[minmax(0,1fr)_430px]">
-      <section className="flex min-h-[620px] flex-col justify-between px-6 py-8 md:px-10">
-        <div className="max-w-4xl">
-          <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-brain-border bg-brain-surface px-3 py-1 text-xs text-brain-text-muted shadow-soft-1">
-            <span className="h-2 w-2 rounded-full bg-brain-accent" />
-            Brain180 작업 페이지
-          </div>
-          <h1 className="font-display text-4xl leading-tight tracking-tight text-brain-text md:text-5xl">
-            텍스트를 읽고, 구조를 그리고, AI 튜터와 바로 대화합니다.
-          </h1>
-          <p className="mt-4 max-w-2xl text-base leading-7 text-brain-text-muted">
-            로그인하면 라이브러리, 분석 캔버스, 튜터 대화, 학습 기록으로 바로 이어집니다.
-          </p>
-        </div>
+    <div className="flex h-full flex-col lg:flex-row bg-brain-bg overflow-hidden">
+      {/* ── Left: scrollable marketing content (ALI-75) ── */}
+      <div className="flex-1 overflow-y-auto">
+        <LandingContent />
+      </div>
 
-        <div className="mt-10 grid max-w-5xl gap-4 md:grid-cols-3">
-          <PreviewPanel title="라이브러리" meta="3축 텍스트" rows={["인지", "가치", "시간"]} />
-          <PreviewPanel title="분석 캔버스" meta="노드와 연결" rows={["개념", "근거", "전환"]} />
-          <PreviewPanel title="AI 튜터" meta="결과물 기반 대화" rows={["질문", "피드백", "평가"]} />
-        </div>
-      </section>
+      {/* ── Right: login form (fixed width) ── */}
+      <div className="flex-shrink-0 overflow-y-auto lg:w-[430px]">
 
       <form
         onSubmit={submit}
-        className="m-4 flex min-h-[calc(100vh-2rem)] flex-col justify-center space-y-4 rounded-2xl border border-brain-border bg-brain-surface p-6 shadow-soft-2 md:m-6 md:p-8"
+        className="flex min-h-full flex-col justify-center space-y-4 border-l border-brain-border bg-brain-surface p-6 shadow-soft-2 md:p-8"
       >
         <div>
           <h2 className="font-display text-2xl">{modeTitle(mode)}</h2>
@@ -225,6 +212,182 @@ export function LoginLanding({ onLoggedIn }: { onLoggedIn: (u: UserDto) => void 
           )}
         </div>
       </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Landing content (ALI-75 marketing page integrated) ──────────────────────
+
+function LandingContent() {
+  return (
+    <div className="min-h-full bg-brain-bg text-brain-text">
+      {/* Header */}
+      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-brain-border bg-brain-surface/90 px-8 py-4 backdrop-blur-sm">
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brain-accent text-sm font-bold text-white">B</span>
+          <span className="font-display text-lg font-bold text-brain-text">Brain180</span>
+        </div>
+        <nav className="hidden items-center gap-6 text-sm text-brain-text-muted md:flex">
+          <a href="#program" className="hover:text-brain-text">Program</a>
+          <a href="#method" className="hover:text-brain-text">Method</a>
+          <a href="#system" className="hover:text-brain-text">System</a>
+          <a href="#journey" className="hover:text-brain-text">Journey</a>
+        </nav>
+      </header>
+
+      {/* Hero */}
+      <section className="flex flex-col gap-8 px-8 py-16 md:flex-row md:items-center md:py-24">
+        <div className="flex-1">
+          <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-brain-accent">
+            Brainshot Project
+          </p>
+          <h1 className="font-display text-4xl font-bold leading-[1.15] tracking-tight text-brain-text md:text-5xl">
+            <span className="block">천재의 뇌를</span>
+            <span className="block">아이의 사고</span>
+            <span className="block text-brain-accent">습관으로</span>
+          </h1>
+          <p className="mt-6 max-w-md text-base leading-7 text-brain-text-muted">
+            고전 텍스트에 남아 있는 천재들의 지식이 아니라,<br />
+            그들이 세상을 이해하던 뇌인지구조를<br />
+            아이의 사고 방식으로 옮깁니다.
+          </p>
+        </div>
+        <div className="flex flex-shrink-0 gap-4">
+          {[
+            { n: "01", label: "Lens", color: "#B85C3F" },
+            { n: "02", label: "Coupling", color: "#C68A3D" },
+            { n: "03", label: "Feedback", color: "#6E8F82" },
+          ].map((c) => (
+            <div
+              key={c.n}
+              className="flex h-28 w-24 flex-col items-center justify-center gap-2 rounded-2xl border-2 bg-brain-surface shadow-soft-1"
+              style={{ borderColor: `${c.color}40` }}
+            >
+              <span className="text-xs font-semibold text-brain-text-muted">{c.n}</span>
+              <span className="text-2xl font-bold" style={{ color: c.color }}>▣</span>
+              <span className="text-[11px] font-medium text-brain-text">{c.label}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Program */}
+      <section id="program" className="border-t border-brain-border bg-brain-surface px-8 py-14">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-brain-accent">
+          Install the author's brain
+        </p>
+        <h2 className="font-display text-3xl font-bold leading-snug text-brain-text">
+          브레인180은<br />
+          지식을 가르치기보다<br />
+          사고의 구조를 옮깁니다.
+        </h2>
+        <p className="mt-6 max-w-2xl text-base leading-7 text-brain-text-muted">
+          인류 역사상 각 분야 천재들이 남긴 고전 텍스트에서 지식이 아닌 뇌인지구조를 추출하고,
+          아이가 그 구조를 자신의 언어와 스피치로 다시 작동시키게 합니다.
+        </p>
+      </section>
+
+      {/* 3-step */}
+      <section id="method" className="border-t border-brain-border px-8 py-14">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-brain-accent">
+          Download Method
+        </p>
+        <h2 className="mb-10 font-display text-3xl font-bold text-brain-text">
+          3단계 변화 흐름
+        </h2>
+        <div className="grid gap-4 md:grid-cols-3">
+          {[
+            { n: "01", title: "추출", desc: "저자의 렌즈를 시각화합니다.", color: "#B85C3F" },
+            { n: "02", title: "탑재", desc: "천 명의 인지방식을 아이가 활용하게 합니다.", color: "#C68A3D" },
+            { n: "03", title: "압축", desc: "긴 변화 과정을 집중 훈련으로 줄입니다.", color: "#6E8F82" },
+          ].map((s) => (
+            <div key={s.n} className="rounded-xl border border-brain-border bg-brain-surface p-6">
+              <span className="text-xs font-bold" style={{ color: s.color }}>{s.n}</span>
+              <h3 className="mt-2 text-xl font-bold text-brain-text">{s.title}</h3>
+              <p className="mt-2 text-sm text-brain-text-muted">{s.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="border-t border-brain-border bg-brain-surface px-8 py-14">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-brain-accent">
+          Career Aptitude Test
+        </p>
+        <h2 className="mb-10 font-display text-3xl font-bold text-brain-text">
+          8,192가지 뇌인지 행동 유형으로<br />
+          아이의 진짜 원인을 봅니다.
+        </h2>
+        <div className="grid gap-4 md:grid-cols-3">
+          {[
+            {
+              title: "8,192가지 행동 유형",
+              desc: "아이마다 다른 방식으로 느끼고 생각하고 행동한다는 전제에서 시작합니다.",
+            },
+            {
+              title: "심층적 원인 진단",
+              desc: "과목을 못하거나 싫어하는 이유, 성적 변화의 원인을 파악합니다.",
+            },
+            {
+              title: "뇌적성 진로설계",
+              desc: "강점과 약점을 함께 보며 어떤 분야에서 180 역량을 낼지 예측합니다.",
+            },
+          ].map((f) => (
+            <div key={f.title} className="rounded-xl border border-brain-border bg-brain-bg p-6">
+              <div className="mb-3 h-8 w-8 rounded-lg bg-brain-accent/10 flex items-center justify-center">
+                <span className="text-base text-brain-accent">◈</span>
+              </div>
+              <h3 className="text-base font-bold text-brain-text">{f.title}</h3>
+              <p className="mt-2 text-sm text-brain-text-muted">{f.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Self Feedback System */}
+      <section id="system" className="border-t border-brain-border px-8 py-14">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-brain-accent">
+          Self Feedback System
+        </p>
+        <h2 className="mb-2 font-display text-3xl font-bold text-brain-text">
+          렌즈를 읽고, 커플링하고,<br />말하며, 다시 조정합니다.
+        </h2>
+        <ol className="mt-8 flex flex-col gap-3 md:flex-row">
+          {[
+            { label: "LENS", desc: "저자 렌즈 모델링" },
+            { label: "Coupling", desc: "인지 커플링 스피치" },
+            { label: "SPEECH", desc: "즉각적 이해도 검증" },
+            { label: "FEEDBACK", desc: "모델 개선" },
+          ].map((s, i, arr) => (
+            <li key={s.label} className="flex flex-1 items-center gap-3">
+              <div className="flex-1 rounded-xl border border-brain-border bg-brain-surface px-5 py-4">
+                <p className="text-sm font-bold text-brain-accent">{s.label}</p>
+                <p className="mt-1 text-xs text-brain-text-muted">{s.desc}</p>
+              </div>
+              {i < arr.length - 1 && (
+                <span className="hidden text-brain-text-muted md:inline">→</span>
+              )}
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      {/* Journey CTA */}
+      <section id="journey" className="border-t border-brain-border bg-brain-surface px-8 py-16 text-center">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-brain-accent">
+          Brain180 Journey
+        </p>
+        <h2 className="font-display text-3xl font-bold leading-snug text-brain-text">
+          이제 아이의 뇌를<br />
+          지능 180으로 바꾸는<br />
+          여정을 시작합니다.
+        </h2>
+        <p className="mt-6 text-sm text-brain-text-muted">
+          오른쪽에서 로그인하거나 계정을 만들어 바로 시작하세요.
+        </p>
+      </section>
     </div>
   );
 }
@@ -289,29 +452,6 @@ function TextInput({
   );
 }
 
-function PreviewPanel({ title, meta, rows }: { title: string; meta: string; rows: string[] }) {
-  return (
-    <div className="rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="font-display text-base text-brain-text">{title}</div>
-          <div className="mt-1 text-xs text-brain-text-muted">{meta}</div>
-        </div>
-        <span className="rounded-full bg-brain-accent-soft px-2 py-0.5 text-[11px] text-brain-accent">
-          준비됨
-        </span>
-      </div>
-      <div className="mt-4 space-y-2">
-        {rows.map((row) => (
-          <div key={row} className="flex items-center gap-2 text-xs text-brain-text-muted">
-            <span className="h-1.5 w-1.5 rounded-full bg-brain-accent" />
-            {row}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 function friendlyAuthError(e: unknown): string {
   if (e instanceof ApiError) {
