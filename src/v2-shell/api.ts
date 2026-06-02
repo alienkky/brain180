@@ -404,6 +404,7 @@ export const api = {
     lessonId: string,
     message: string,
     canvasSnapshot?: CanvasJson | null,
+    canvasMode?: "free" | "constrained" | "guided" | null,
   ) =>
     call<TutorMessageDto>("/api/tutor/chat", {
       method: "POST",
@@ -412,6 +413,7 @@ export const api = {
         lesson_id: lessonId,
         message,
         ...(canvasSnapshot ? { canvas_snapshot: canvasSnapshot } : {}),
+        ...(canvasMode ? { canvas_mode: canvasMode } : {}),
       }),
     }),
   rateTutorMessage: (messageId: string, rating: number, feedback?: string) =>

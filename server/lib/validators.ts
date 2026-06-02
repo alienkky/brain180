@@ -125,6 +125,7 @@ export const TutorChatBody = z.object({
   lesson_id: Uuid,
   message: z.string().min(1).max(4000),
   canvas_snapshot: CanvasJson.optional(),
+  canvas_mode: z.enum(["free", "constrained", "guided"]).optional(),
 });
 
 export const RateMessageBody = z.object({

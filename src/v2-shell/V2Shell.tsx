@@ -33,7 +33,8 @@ import {
   type TutorMessageDto,
   type UserDto,
 } from "./api";
-import { CognitiveMap } from "./CognitiveMap";
+import { CognitiveMap, type CanvasMode } from "./CognitiveMap";
+import { FreeDrawCanvas, type FreeCanvasJson } from "./FreeDrawCanvas";
 import { EvaluationPanel } from "./EvaluationPanel";
 import { FeedbackPanel } from "./FeedbackPanel";
 import { PatternPanel } from "./PatternPanel";
@@ -634,6 +635,8 @@ function PracticeScreen({
   // 튜터 버블 열림 상태 — v1 의 floating ChatPanel 패턴 복원.
   const [tutorOpen, setTutorOpen] = useState(false);
   const [mode, setMode] = useState<SessionMode>("analyze");
+  // 캔버스 모드 (ALI-81): null = 미선택 (진입 시 카드 표시)
+  const [canvasMode, setCanvasMode] = useState<"free" | CanvasMode | null>(null);
   const [revealText, setRevealText] = useState(false);
   const [initialCanvas, setInitialCanvas] = useState<CanvasJson | null>(null);
   const [canvasReady, setCanvasReady] = useState(false);
@@ -754,7 +757,7 @@ function PracticeScreen({
     };
     setMessages((prev) => [...prev, optimistic]);
     try {
-      await api.chat(session.id, lesson.id, message, snapshot);
+      await api.chat(session.id, lesson.id, message, snapshot, canvasMode ?? undefined);
       const fresh = await api.messages(session.id);
       setMessages(fresh);
     } catch (e: unknown) {
@@ -916,21 +919,29 @@ function PracticeScreen({
         </div>
         {tab === "canvas" && (
           <div className="flex-1 overflow-hidden">
-            {canvasReady ? (
+            {!canvasReady ? (
+              <p className="p-6 text-sm text-brain-text-muted">캔버스 불러오는 중…</p>
+            ) : canvasMode === null ? (
+              <CanvasModeSelector onSelect={setCanvasMode} />
+            ) : canvasMode === "free" ? (
+              <FreeDrawCanvas
+                initial={initialCanvas as FreeCanvasJson | null}
+                onSave={onSaveCanvas}
+                onChange={onCanvasChange}
+                disabled={!session}
+              />
+            ) : (
               <CognitiveMap
                 initial={initialCanvas}
                 onSave={onSaveCanvas}
                 onChange={onCanvasChange}
                 onAskTutor={onAskTutor}
                 onNodeFocus={onNodeFocus}
+                canvasMode={canvasMode}
                 injectCite={pendingCite}
                 onCiteConsumed={() => setPendingCite(null)}
                 disabled={!session}
               />
-            ) : (
-              <p className="p-6 text-sm text-brain-text-muted">
-                캔버스 불러오는 중…
-              </p>
             )}
           </div>
         )}
@@ -967,6 +978,61 @@ function PracticeScreen({
         onRateMessage={onRateTutorMessage}
         liveCanvas={liveCanvas}
       />
+    </div>
+  );
+}
+
+const CANVAS_MODES: {
+  value: "free" | CanvasMode;
+  label: string;
+  subtitle: string;
+  desc: string;
+  accent: string;
+}[] = [
+  {
+    value: "free",
+    label: "자유형",
+    subtitle: "Free Draw",
+    desc: "펜으로 자유롭게 그리세요. 형태보다 사고의 흐름에 집중합니다.",
+    accent: "var(--color-brain-sage)",
+  },
+  {
+    value: "constrained",
+    label: "제약형",
+    subtitle: "Constrained",
+    desc: "핵심·기둥·다리·가지 4종 노드와 5종 관계로 구조화합니다.",
+    accent: "var(--color-brain-accent)",
+  },
+  {
+    value: "guided",
+    label: "단계형",
+    subtitle: "Guided",
+    desc: "핵심→기둥→다리→가지 순서로 단계별 게이트를 통과합니다.",
+    accent: "var(--color-brain-node-bridge)",
+  },
+];
+
+function CanvasModeSelector({ onSelect }: { onSelect: (m: "free" | CanvasMode) => void }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-6 bg-brain-bg px-6 py-10">
+      <div className="text-center">
+        <p className="text-base font-semibold text-brain-text">캔버스 모드를 선택하세요</p>
+        <p className="mt-1 text-sm text-brain-text-muted">선택 후 언제든지 탭 상단에서 변경할 수 있습니다.</p>
+      </div>
+      <div className="flex flex-wrap justify-center gap-4">
+        {CANVAS_MODES.map((m) => (
+          <button
+            key={m.value}
+            onClick={() => onSelect(m.value)}
+            className="flex w-52 flex-col items-start rounded-xl border-2 bg-brain-surface p-5 text-left transition hover:shadow-md"
+            style={{ borderColor: m.accent }}
+          >
+            <span className="mb-1 text-lg font-bold" style={{ color: m.accent }}>{m.label}</span>
+            <span className="mb-2 text-xs font-medium text-brain-text-muted tracking-wide">{m.subtitle}</span>
+            <span className="text-sm text-brain-text">{m.desc}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

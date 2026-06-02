@@ -399,6 +399,7 @@ export const tutorSystemPrompts = pgTable(
     name: varchar("name", { length: 160 }).notNull(),
     version: varchar("version", { length: 40 }).notNull(),
     content: text("content").notNull(),
+    mode: canvasModeEnum("mode"),
     isActive: boolean("is_active").notNull().default(false),
     createdAt,
     updatedAt,
@@ -406,6 +407,7 @@ export const tutorSystemPrompts = pgTable(
   (table) => ({
     nameVersionIdx: uniqueIndex("tutor_system_prompts_name_version_idx").on(table.name, table.version),
     activeIdx: index("tutor_system_prompts_active_idx").on(table.isActive),
+    modeIdx: index("tutor_system_prompts_mode_idx").on(table.mode),
   }),
 );
 

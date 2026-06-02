@@ -36,6 +36,13 @@
       "when": 1780280000000,
       "tag": "0005_lesson_feedback",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1780290000000,
+      "tag": "0006_tutor_prompt_canvas_mode",
+      "breakpoints": true
     }
   ]
 }

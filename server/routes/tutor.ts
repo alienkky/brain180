@@ -185,6 +185,7 @@ interface ResolvedPrompt {
 async function resolveSystemPrompt(lessonRow: {
   id: string;
   tutorSystemPromptId: string | null;
+  canvasMode?: string;
 }): Promise<ResolvedPrompt> {
   if (lessonRow.tutorSystemPromptId) {
     const rows = await db
@@ -199,17 +200,22 @@ async function resolveSystemPrompt(lessonRow: {
       return { content: rows[0].content, version: rows[0].version, source: "lesson" };
     }
   }
-  const active = await db
+  // Prefer mode-specific active prompt, fall back to any active prompt.
+  const activeRows = await db
     .select({
       content: tutorSystemPrompts.content,
       version: tutorSystemPrompts.version,
+      mode: tutorSystemPrompts.mode,
     })
     .from(tutorSystemPrompts)
     .where(eq(tutorSystemPrompts.isActive, true))
-    .orderBy(desc(tutorSystemPrompts.updatedAt))
-    .limit(1);
-  if (active[0]) {
-    return { content: active[0].content, version: active[0].version, source: "active" };
+    .orderBy(desc(tutorSystemPrompts.updatedAt));
+  if (activeRows.length > 0) {
+    const modeMatch = activeRows.find((r) => r.mode === lessonRow.canvasMode);
+    const fallbackRow = modeMatch ?? activeRows[0];
+    if (fallbackRow) {
+      return { content: fallbackRow.content, version: fallbackRow.version, source: "active" };
+    }
   }
   return { content: FALLBACK_PROMPT, version: "fallback-0", source: "fallback" };
 }
@@ -283,9 +289,11 @@ tutorRouter.post(
     const textBody = excerptRows[0]?.content ?? lesson.textSource;
 
     // Resolve + substitute system prompt.
+    const canvasMode = body.canvas_mode ?? "constrained";
     const prompt = await resolveSystemPrompt({
       id: lesson.id,
       tutorSystemPromptId: lesson.tutorSystemPromptId,
+      canvasMode,
     });
     const mode = session.mode;
     const systemMessage = substitute(prompt.content, {
@@ -297,6 +305,7 @@ tutorRouter.post(
       mode: mode,
       mode_label: MODE_LABEL[mode] ?? mode,
       mode_guidance: MODE_GUIDANCE[mode] ?? "",
+      canvas_mode: canvasMode,
     });
 
     // Conversation history (chronological), excluding system rows.

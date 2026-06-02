@@ -70,12 +70,30 @@ interface PendingEdge {
   toId: string;
 }
 
+export type CanvasMode = "constrained" | "guided";
+
+const GUIDED_STEPS: { type: NodeType; label: string; hint: string }[] = [
+  { type: "concept", label: "1단계: 핵심 노드", hint: "텍스트의 중심 사상을 '핵심' 노드로 1개 만드세요." },
+  { type: "anchor", label: "2단계: 기둥 노드", hint: "핵심을 지탱하는 주요 개념을 '기둥' 노드로 추가하세요." },
+  { type: "bridge", label: "3단계: 다리 노드", hint: "개념들을 연결하는 '다리' 노드를 추가하세요." },
+  { type: "branch", label: "4단계: 가지 노드", hint: "파생 개념을 '가지' 노드로 추가하고 관계를 연결하세요." },
+];
+
+function guidedStep(canvas: CanvasJson): number {
+  const has = (t: NodeType) => canvas.nodes.some((n) => n.type === t);
+  if (!has("concept")) return 0;
+  if (!has("anchor")) return 1;
+  if (!has("bridge")) return 2;
+  return 3;
+}
+
 interface Props {
   initial: CanvasJson | null;
   onSave: (next: CanvasJson) => Promise<void> | void;
   onChange?: (next: CanvasJson) => void;
   onAskTutor?: (snapshot: CanvasJson) => void;
   onNodeFocus?: (node: CanvasNode) => void;
+  canvasMode?: CanvasMode;
   // When this prop transitions from null → cite, the canvas auto-creates an
   // anchor node carrying that cite and then calls onCiteConsumed so the
   // parent can clear the slot.
@@ -97,6 +115,7 @@ export function CognitiveMap({
   onChange,
   onAskTutor,
   onNodeFocus,
+  canvasMode = "constrained",
   injectCite,
   onCiteConsumed,
   disabled,
@@ -311,29 +330,43 @@ export function CognitiveMap({
     return m;
   }, [canvas.nodes]);
 
+  const step = canvasMode === "guided" ? guidedStep(canvas) : null;
+
   return (
     <div className="flex h-full flex-col">
+      {step !== null && (
+        <div className="border-b border-brain-accent/30 bg-brain-accent/5 px-4 py-2">
+          <p className="text-[11px] font-semibold text-brain-accent">
+            {GUIDED_STEPS[step]?.label ?? "완성"}{" "}
+            <span className="text-brain-text-muted font-normal">
+              — {GUIDED_STEPS[step]?.hint ?? "모든 단계 완료! 관계를 자유롭게 연결하세요."}
+            </span>
+          </p>
+        </div>
+      )}
       <div className="flex flex-col gap-2 border-b border-brain-border bg-brain-surface px-3 py-2">
         <div className="flex items-center gap-2">
           <span className="mr-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-brain-text-soft">
             {selectedNode ? "역할 다시" : "노드 만들기"}
           </span>
-          {NODE_TYPES.map((t) => {
+          {NODE_TYPES.map((t, idx) => {
             const active = selectedNode
               ? selectedNode.type === t.value
               : paletteType === t.value;
+            const guidedLocked = step !== null && idx > step;
             return (
               <button
                 key={t.value}
                 onClick={() => {
+                  if (guidedLocked) return;
                   if (selectedNode) {
                     reassignSelectedType(t.value);
                   } else {
                     setPaletteType(paletteType === t.value ? null : t.value);
                   }
                 }}
-                disabled={disabled}
-                title={t.desc}
+                disabled={disabled || guidedLocked}
+                title={guidedLocked ? `${t.label}: 이전 단계를 먼저 완성하세요` : t.desc}
                 className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[12px] transition disabled:opacity-50"
                 style={{
                   borderColor: active ? t.color : "var(--color-brain-border)",
