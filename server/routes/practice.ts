@@ -410,8 +410,22 @@ practiceRouter.get("/artifacts/:id", (_req, res) =>
   res.status(501).json(NOT_IMPL),
 );
 
-// ── 503 mvp_cut ─────────────────────────────────────────────────────
-const NOT_AVAIL = { error: "service_unavailable", reason: "mvp_cut" };
-practiceRouter.post("/artifacts/:id/export", (_req, res) =>
-  res.status(503).json(NOT_AVAIL),
+// ── Canvas export — client-side PNG download (ALI-83) ────────────────
+// Server-side PDF/R2 upload deferred. Client uses CognitiveMap SVG → PNG directly.
+// This endpoint records the export intent for analytics only.
+practiceRouter.post(
+  "/artifacts/:id/export",
+  userRateLimit,
+  asyncHandler(async (req, res) => {
+    const id = String(req.params["id"] ?? "");
+    if (!UUID_RE.test(id)) { fail(res, 400, "validation_error"); return; }
+    const format = (req.body as { format?: string })?.format ?? "png";
+    if (!["png", "pdf", "svg"].includes(format)) {
+      fail(res, 400, "validation_error", { message: "format must be png|pdf|svg" });
+      return;
+    }
+    // R2 server-side upload deferred to post-beta.
+    // Client handles PNG export directly from SVG (see CognitiveMap ↓ PNG button).
+    ok(res, { format, client_download: true }, 200);
+  }),
 );

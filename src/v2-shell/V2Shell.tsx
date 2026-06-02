@@ -42,6 +42,8 @@ import { TextInteractive } from "./TextInteractive";
 import type { CircledPhrase } from "./TextInteractive";
 import { TutorBubble } from "./TutorBubble";
 import { LoginLanding } from "./LoginLanding";
+import { OnboardingFlow, isOnboarded } from "./OnboardingFlow";
+import { MethodologyScreen } from "./MethodologyScreen";
 
 type Screen =
   | { name: "login" }
@@ -62,6 +64,8 @@ export function V2Shell() {
   const [bootError, setBootError] = useState<string | null>(null);
   const [booting, setBooting] = useState(true);
   const [comparePins, setComparePins] = useState<ComparePins>({ left: null, right: null });
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showMethodology, setShowMethodology] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,6 +101,7 @@ export function V2Shell() {
   const onLoggedIn = (u: UserDto) => {
     setUser(u);
     setScreen({ name: "library" });
+    if (!isOnboarded()) setShowOnboarding(true);
   };
 
   const onLogout = async () => {
@@ -125,8 +130,15 @@ export function V2Shell() {
         onGoLibrary={() => setScreen({ name: "library" })}
         onGoAdmin={() => setScreen({ name: "admin" })}
         onGoSubscription={() => setScreen({ name: "subscription" })}
+        onShowMethodology={() => setShowMethodology(true)}
         activeScreen={screen.name}
       />
+      {showOnboarding && (
+        <OnboardingFlow onClose={() => setShowOnboarding(false)} />
+      )}
+      {showMethodology && (
+        <MethodologyScreen onClose={() => setShowMethodology(false)} />
+      )}
       {bootError && (
         <div className="border-b border-brain-border bg-brain-highlight-soft px-6 py-2 text-sm text-brain-text">
           {bootError}
@@ -191,6 +203,7 @@ function Header({
   onGoLibrary,
   onGoAdmin,
   onGoSubscription,
+  onShowMethodology,
   activeScreen,
 }: {
   user: UserDto | null;
@@ -198,6 +211,7 @@ function Header({
   onGoLibrary: () => void;
   onGoAdmin: () => void;
   onGoSubscription: () => void;
+  onShowMethodology: () => void;
   activeScreen: Screen["name"];
 }) {
   return (
@@ -227,6 +241,13 @@ function Header({
               />
             )}
           </nav>
+          <button
+            onClick={onShowMethodology}
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-brain-border text-sm text-brain-text-muted hover:bg-brain-surface-soft"
+            title="Brain180 방법론 소개"
+          >
+            ?
+          </button>
           <span className="text-brain-text-muted">
             {user.name}{" "}
             <span className="text-brain-text-soft">· {user.role}</span>

@@ -414,6 +414,15 @@ export function CognitiveMap({
                 비우기
               </button>
             )}
+            {canvas.nodes.length > 0 && (
+              <button
+                onClick={() => svgRef.current && downloadSvgAsPng(svgRef.current)}
+                className="rounded border border-brain-border px-2 py-1 hover:bg-brain-surface-soft"
+                title="PNG로 다운로드"
+              >
+                ↓ PNG
+              </button>
+            )}
             <SaveBadge state={saveState} />
           </div>
         </div>
@@ -597,6 +606,32 @@ function EdgeDialog({
       </div>
     </div>
   );
+}
+
+function downloadSvgAsPng(svgEl: SVGSVGElement, filename = "brain180-canvas.png") {
+  const rect = svgEl.getBoundingClientRect();
+  const w = Math.max(rect.width, 800);
+  const h = Math.max(rect.height, 600);
+  const serialized = new XMLSerializer().serializeToString(svgEl);
+  const blob = new Blob([serialized], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = w * 2;
+    canvas.height = h * 2;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#FAF7F2";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.scale(2, 2);
+    ctx.drawImage(img, 0, 0, w, h);
+    URL.revokeObjectURL(url);
+    const a = document.createElement("a");
+    a.href = canvas.toDataURL("image/png");
+    a.download = filename;
+    a.click();
+  };
+  img.src = url;
 }
 
 function SaveBadge({ state }: { state: "idle" | "saving" | "saved" | "error" }) {

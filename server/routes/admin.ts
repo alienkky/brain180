@@ -6,9 +6,19 @@
 import { randomBytes } from "node:crypto";
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
-import { and, eq, isNull, asc, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lt, asc, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { lessons, modules, textExcerpts, users } from "../db/schema.js";
+import {
+  apiUsageLogs,
+  canvasArtifacts,
+  learningSessions,
+  lessons,
+  modules,
+  textExcerpts,
+  tutorMessages,
+  tutorRatings,
+  users,
+} from "../db/schema.js";
 import { ok, fail } from "../lib/envelope.js";
 import { hashPassword } from "../lib/password.js";
 import { lucia } from "../lib/lucia.js";
@@ -596,10 +606,130 @@ adminRouter.delete(
   }),
 );
 
-// ── 503 mvp_cut stubs ───────────────────────────────────────────────
-const NOT_AVAIL = { error: "service_unavailable", reason: "mvp_cut" };
-adminRouter.get("/users", (_req, res) => res.status(503).json(NOT_AVAIL));
-adminRouter.post("/users/:id/suspend", (_req, res) =>
-  res.status(503).json(NOT_AVAIL),
+// ── Export / analytics ──────────────────────────────────────────────
+
+function toIso(d: Date | null | undefined): string {
+  return d ? d.toISOString() : "";
+}
+
+function csvRow(values: (string | number | boolean | null | undefined)[]): string {
+  return values
+    .map((v) => {
+      const s = v == null ? "" : String(v);
+      return `"${s.replace(/"/g, '""')}"`;
+    })
+    .join(",");
+}
+
+// GET /api/admin/export/sessions?from=ISO&to=ISO
+adminRouter.get(
+  "/export/sessions",
+  asyncHandler(async (req, res) => {
+    const from = req.query.from ? new Date(req.query.from as string) : new Date(0);
+    const to = req.query.to ? new Date(req.query.to as string) : new Date();
+    const rows = await db
+      .select({
+        id: learningSessions.id,
+        userId: learningSessions.userId,
+        lessonId: learningSessions.lessonId,
+        mode: learningSessions.mode,
+        startedAt: learningSessions.startedAt,
+        endedAt: learningSessions.endedAt,
+      })
+      .from(learningSessions)
+      .where(and(gte(learningSessions.startedAt, from), lt(learningSessions.startedAt, to)))
+      .orderBy(asc(learningSessions.startedAt));
+
+    const header = csvRow(["id", "user_id", "lesson_id", "mode", "started_at", "ended_at"]);
+    const lines = rows.map((r) =>
+      csvRow([r.id, r.userId, r.lessonId, r.mode, toIso(r.startedAt), toIso(r.endedAt)]),
+    );
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", "attachment; filename=sessions.csv");
+    res.send([header, ...lines].join("\r\n"));
+  }),
 );
-adminRouter.get("/api-usage", (_req, res) => res.status(503).json(NOT_AVAIL));
+
+// GET /api/admin/export/users — PII: email + name only, no password hashes
+adminRouter.get(
+  "/export/users",
+  asyncHandler(async (_req, res) => {
+    const rows = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        role: users.role,
+        status: users.status,
+        createdAt: users.createdAt,
+        lastLoginAt: users.lastLoginAt,
+      })
+      .from(users)
+      .where(isNull(users.deletedAt))
+      .orderBy(asc(users.createdAt));
+
+    const header = csvRow(["id", "name", "email", "role", "status", "created_at", "last_login_at"]);
+    const lines = rows.map((r) =>
+      csvRow([r.id, r.name, r.email, r.role, r.status, toIso(r.createdAt), toIso(r.lastLoginAt)]),
+    );
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", "attachment; filename=users.csv");
+    res.send([header, ...lines].join("\r\n"));
+  }),
+);
+
+// GET /api/admin/api-usage?days=7
+adminRouter.get(
+  "/api-usage",
+  asyncHandler(async (req, res) => {
+    const days = Math.min(90, parseInt(String(req.query.days ?? "7"), 10) || 7);
+    const since = new Date();
+    since.setUTCDate(since.getUTCDate() - days);
+    const rows = await db
+      .select({
+        provider: apiUsageLogs.provider,
+        model: apiUsageLogs.model,
+        calls: sql<number>`count(*)::int`,
+        totalIn: sql<number>`sum(${apiUsageLogs.tokensIn})::int`,
+        totalOut: sql<number>`sum(${apiUsageLogs.tokensOut})::int`,
+        errors: sql<number>`sum(case when ${apiUsageLogs.status}!='ok' then 1 else 0 end)::int`,
+      })
+      .from(apiUsageLogs)
+      .where(gte(apiUsageLogs.createdAt, since))
+      .groupBy(apiUsageLogs.provider, apiUsageLogs.model)
+      .orderBy(desc(sql`sum(${apiUsageLogs.tokensIn}+${apiUsageLogs.tokensOut})`));
+    ok(res, { period_days: days, rows });
+  }),
+);
+
+// GET /api/admin/users — list all non-deleted users (simple)
+adminRouter.get(
+  "/users",
+  asyncHandler(async (_req, res) => {
+    const rows = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        role: users.role,
+        status: users.status,
+        createdAt: users.createdAt,
+        lastLoginAt: users.lastLoginAt,
+      })
+      .from(users)
+      .where(isNull(users.deletedAt))
+      .orderBy(desc(users.createdAt));
+    ok(res, rows);
+  }),
+);
+
+// POST /api/admin/users/:id/suspend
+adminRouter.post(
+  "/users/:id/suspend",
+  asyncHandler(async (req, res) => {
+    const id = String(req.params["id"] ?? "");
+    if (!UUID_RE.test(id)) { fail(res, 400, "validation_error"); return; }
+    await db.update(users).set({ status: "suspended" as never }).where(eq(users.id, id));
+    ok(res, { id, status: "suspended" });
+  }),
+);
