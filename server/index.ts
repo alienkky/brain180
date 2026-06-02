@@ -10,6 +10,7 @@ import { errorHandler, notFound } from "./middleware/error.js";
 import { mountRoutes } from "./routes/index.js";
 import { closeDb, db } from "./db/client.js";
 import { installUsageLogWriter } from "./lib/usage-log.js";
+import { startScheduler } from "./jobs/index.js";
 import {
   attachTutorPromptToLessons,
   seedActiveTutorPrompt,
@@ -96,13 +97,14 @@ app.use(notFound);
 app.use(errorHandler);
 
 const server = await bootstrapDb()
-  .then(() =>
-    app.listen(env.PORT, () => {
+  .then(() => {
+    startScheduler();
+    return app.listen(env.PORT, () => {
       console.log(
         `[brain180 v2] listening on :${env.PORT} (env=${env.NODE_ENV})`,
       );
-    }),
-  )
+    });
+  })
   .catch((err) => {
     console.error("[brain180 v2] bootstrap failed — aborting startup");
     console.error(err);
