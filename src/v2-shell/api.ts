@@ -452,6 +452,7 @@ export const api = {
     message: string,
     canvasSnapshot?: CanvasJson | null,
     canvasMode?: "free" | "constrained" | "guided" | null,
+    canvasImageBase64?: string | null,
   ) =>
     call<TutorMessageDto>("/api/tutor/chat", {
       method: "POST",
@@ -461,6 +462,7 @@ export const api = {
         message,
         ...(canvasSnapshot ? { canvas_snapshot: canvasSnapshot } : {}),
         ...(canvasMode ? { canvas_mode: canvasMode } : {}),
+        ...(canvasImageBase64 ? { canvas_image_base64: canvasImageBase64 } : {}),
       }),
     }),
   billingPlans: () => call<PlanDto[]>("/api/billing/plans"),

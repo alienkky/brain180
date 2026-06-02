@@ -21,13 +21,14 @@ interface Props {
   initial: FreeCanvasJson | null;
   onSave: (next: FreeCanvasJson) => Promise<void> | void;
   onChange?: (next: FreeCanvasJson) => void;
+  onCanvasRef?: (getBase64: () => string | null) => void;
   disabled?: boolean;
 }
 
 const COLORS = ["#2A241D", "#B85C3F", "#C68A3D", "#6E8F82", "#6F8AA8", "#8F7FA8"];
 const WIDTHS = [2, 4, 8, 16];
 
-function FreeCanvasBase({ initial, onSave, onChange, disabled }: Props) {
+function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [tool, setTool] = useState<Tool>("pen");
   const [color, setColor] = useState(COLORS[0]);
@@ -70,6 +71,15 @@ function FreeCanvasBase({ initial, onSave, onChange, disabled }: Props) {
     setPathCount(paths.current.length);
     redraw();
   }, [initial, redraw]);
+
+  useEffect(() => {
+    if (!onCanvasRef) return;
+    onCanvasRef(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) return null;
+      return canvas.toDataURL("image/png").replace(/^data:image\/png;base64,/, "");
+    });
+  }, [onCanvasRef]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -276,3 +286,5 @@ function FreeCanvasBase({ initial, onSave, onChange, disabled }: Props) {
 export function FreeDrawCanvas(props: Props) {
   return <FreeCanvasBase {...props} />;
 }
+
+export type FreeDrawCanvasGetBase64 = () => string | null;

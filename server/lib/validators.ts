@@ -126,6 +126,8 @@ export const TutorChatBody = z.object({
   message: z.string().min(1).max(4000),
   canvas_snapshot: CanvasJson.optional(),
   canvas_mode: z.enum(["free", "constrained", "guided"]).optional(),
+  // base64-encoded PNG from FreeDrawCanvas (自由형 mode vision)
+  canvas_image_base64: z.string().max(5_000_000).optional(),
 });
 
 export const RateTutorBody = z.object({

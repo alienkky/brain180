@@ -31,7 +31,7 @@ import {
   tutorSystemPrompts,
 } from "../db/schema.js";
 import { ok, fail } from "../lib/envelope.js";
-import { UpstreamError } from "../lib/anthropic.js";
+import { UpstreamError, callAnthropic, type AnthropicMessageContent } from "../lib/anthropic.js";
 import { callTutorLLM, resolveTutorProvider } from "../lib/llm.js";
 import { parseBody, TutorChatBody, RateTutorBody } from "../lib/validators.js";
 import {
@@ -332,12 +332,35 @@ tutorRouter.post(
       .where(eq(tutorMessages.sessionId, session.id))
       .orderBy(asc(tutorMessages.createdAt));
 
-    const messages = history
+    const messages: Array<{ role: "user" | "assistant"; content: AnthropicMessageContent }> = history
       .filter((m): m is { role: "user" | "assistant"; content: string } =>
         m.role === "user" || m.role === "assistant",
       )
-      .map((m) => ({ role: m.role, content: m.content }));
-    messages.push({ role: "user" as const, content: body.message });
+      .map((m) => ({ role: m.role as "user" | "assistant", content: m.content as AnthropicMessageContent }));
+
+    // Build last user message — include canvas image for free-draw mode vision
+    const canvasImageB64 = body.canvas_image_base64;
+    if (canvasImageB64 && resolveTutorProvider() === "anthropic") {
+      // Vision message: image + text
+      messages.push({
+        role: "user" as const,
+        content: [
+          {
+            type: "image" as const,
+            source: { type: "base64" as const, media_type: "image/png" as const, data: canvasImageB64 },
+          },
+          { type: "text" as const, text: body.message },
+        ],
+      });
+    } else if (canvasImageB64) {
+      // Provider doesn't support vision — note the image and pass text
+      messages.push({
+        role: "user" as const,
+        content: `[자유형 캔버스 이미지 첨부됨 — 현재 튜터가 이미지를 직접 볼 수 없습니다]\n\n${body.message}`,
+      });
+    } else {
+      messages.push({ role: "user" as const, content: body.message });
+    }
 
     // Persist user row immediately so it survives upstream failure mid-call.
     const userInserted = await db
@@ -352,11 +375,23 @@ tutorRouter.post(
 
     let result;
     try {
-      result = await callTutorLLM({
-        userId,
-        system: systemMessage,
-        messages,
-      });
+      // For vision calls: if image present and provider is not Anthropic, try Anthropic
+      // as a secondary provider (it natively supports vision).
+      const useVision = !!canvasImageB64;
+      const effectiveProvider = useVision && resolveTutorProvider() !== "anthropic"
+        ? "anthropic-vision-fallback"
+        : null;
+      if (effectiveProvider === "anthropic-vision-fallback") {
+        const { hasFeature } = await import("../lib/env.js");
+        if (hasFeature("anthropic")) {
+          result = await callAnthropic({ userId, system: systemMessage, messages });
+        } else {
+          // No Anthropic key — fall back to regular call with text-only message
+          result = await callTutorLLM({ userId, system: systemMessage, messages });
+        }
+      } else {
+        result = await callTutorLLM({ userId, system: systemMessage, messages });
+      }
     } catch (err) {
       if (err instanceof UpstreamError) {
         fail(res, 502, "upstream_error", {

@@ -36,7 +36,7 @@ import {
   type UserDto,
 } from "./api";
 import { CognitiveMap, type CanvasMode } from "./CognitiveMap";
-import { FreeDrawCanvas, type FreeCanvasJson } from "./FreeDrawCanvas";
+import { FreeDrawCanvas, type FreeCanvasJson, type FreeDrawCanvasGetBase64 } from "./FreeDrawCanvas";
 import { EvaluationPanel } from "./EvaluationPanel";
 import { FeedbackPanel } from "./FeedbackPanel";
 import { PatternPanel } from "./PatternPanel";
@@ -661,6 +661,7 @@ function PracticeScreen({
   const [mode, setMode] = useState<SessionMode>("analyze");
   // 캔버스 모드 (ALI-81): null = 미선택 (진입 시 카드 표시)
   const [canvasMode, setCanvasMode] = useState<"free" | CanvasMode | null>(null);
+  const freeCanvasGetBase64 = useRef<FreeDrawCanvasGetBase64 | null>(null);
   const [revealText, setRevealText] = useState(false);
   const [initialCanvas, setInitialCanvas] = useState<CanvasJson | null>(null);
   const [canvasReady, setCanvasReady] = useState(false);
@@ -782,7 +783,9 @@ function PracticeScreen({
     };
     setMessages((prev) => [...prev, optimistic]);
     try {
-      await api.chat(session.id, lesson.id, message, snapshot, canvasMode ?? undefined);
+      // In free-draw mode, include canvas image for AI vision analysis
+      const imageBase64 = canvasMode === "free" ? freeCanvasGetBase64.current?.() ?? null : null;
+      await api.chat(session.id, lesson.id, message, snapshot, canvasMode ?? undefined, imageBase64);
       const fresh = await api.messages(session.id);
       setMessages(fresh);
     } catch (e: unknown) {
@@ -972,6 +975,7 @@ function PracticeScreen({
                 initial={initialCanvas as FreeCanvasJson | null}
                 onSave={onSaveCanvas}
                 onChange={onCanvasChange}
+                onCanvasRef={(fn) => { freeCanvasGetBase64.current = fn; }}
                 disabled={!session}
               />
             ) : (
