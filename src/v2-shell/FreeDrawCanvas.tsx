@@ -1,6 +1,6 @@
 // FreeDrawCanvas — ALI-81 자유형 캔버스 모드.
-// HTML Canvas 기반 자유 드로잉. 저장은 CanvasJson 의 paths 확장 필드로.
-// 제약형/단계형과 동일한 onSave / onChange 시그니처를 사용하여 PracticeScreen 이 통일된 방식으로 핸들링.
+// HTML Canvas 기반 자유 드로잉. 저장은 수동 버튼으로만 (자동 저장 제거 — 아이패드 드래그 간섭 방지).
+// onChange 는 즉시 호출 (튜터 비전용). onSave 는 "저장" 버튼 클릭 시만.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CanvasJson } from "./api";
@@ -34,11 +34,11 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
   const [color, setColor] = useState(COLORS[0]);
   const [width, setWidth] = useState(WIDTHS[1]);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [pathCount, setPathCount] = useState(0); // triggers re-render for undo button state
+  const [pathCount, setPathCount] = useState(0);
+  const [dirty, setDirty] = useState(false); // unsaved changes indicator
   const isDrawing = useRef(false);
   const paths = useRef<DrawPath[]>((initial?.paths ?? []).map((p) => ({ ...p })));
   const currentPath = useRef<DrawPath | null>(null);
-  const saveTimer = useRef<number | null>(null);
 
   const getCtx = () => canvasRef.current?.getContext("2d") ?? null;
 
@@ -62,13 +62,13 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
     if (!canvas || !ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     for (const path of paths.current) drawPath(ctx, path);
-    // Also draw the in-progress stroke so it survives re-renders
     if (currentPath.current) drawPath(ctx, currentPath.current);
   }, [drawPath]);
 
   useEffect(() => {
     paths.current = (initial?.paths ?? []).map((p) => ({ ...p }));
     setPathCount(paths.current.length);
+    setDirty(false);
     redraw();
   }, [initial, redraw]);
 
@@ -87,6 +87,10 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
         e.preventDefault();
         onUndo();
       }
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        void performSave();
+      }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -99,7 +103,6 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
     const ro = new ResizeObserver(() => {
       const newW = canvas.offsetWidth;
       const newH = canvas.offsetHeight;
-      // Only reset canvas (which clears it) if size actually changed
       if (canvas.width === newW && canvas.height === newH) return;
       canvas.width = newW;
       canvas.height = newH;
@@ -112,26 +115,34 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
     return () => ro.disconnect();
   }, [redraw]);
 
-  function scheduleSave() {
-    if (saveTimer.current) window.clearTimeout(saveTimer.current);
-    saveTimer.current = window.setTimeout(async () => {
-      setSaveState("saving");
-      const next: FreeCanvasJson = {
-        version: 1,
-        viewport: initial?.viewport ?? { x: 0, y: 0, zoom: 1 },
-        nodes: [],
-        edges: [],
-        paths: paths.current.map((p) => ({ ...p, points: [...p.points] })),
-      };
-      try {
-        await onSave(next);
-        setSaveState("saved");
-        onChange?.(next);
-        setTimeout(() => setSaveState("idle"), 1500);
-      } catch {
-        setSaveState("error");
-      }
-    }, 2000);
+  function buildSnapshot(): FreeCanvasJson {
+    return {
+      version: 1,
+      viewport: initial?.viewport ?? { x: 0, y: 0, zoom: 1 },
+      nodes: [],
+      edges: [],
+      paths: paths.current.map((p) => ({ ...p, points: [...p.points] })),
+    };
+  }
+
+  async function performSave() {
+    setSaveState("saving");
+    const next = buildSnapshot();
+    try {
+      await onSave(next);
+      onChange?.(next);
+      setSaveState("saved");
+      setDirty(false);
+      setTimeout(() => setSaveState("idle"), 2000);
+    } catch {
+      setSaveState("error");
+    }
+  }
+
+  function notifyChange() {
+    // Notify parent of current canvas state (for tutor vision) without saving to DB
+    const next = buildSnapshot();
+    onChange?.(next);
   }
 
   function getPoint(e: React.MouseEvent | React.TouchEvent): { x: number; y: number } | null {
@@ -183,7 +194,9 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
     if (currentPath.current.points.length >= 2) {
       paths.current.push(currentPath.current);
       setPathCount(paths.current.length);
-      scheduleSave();
+      setDirty(true);
+      // Notify parent immediately (for tutor vision) without triggering DB save
+      notifyChange();
     }
     currentPath.current = null;
   }
@@ -192,22 +205,34 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
     if (paths.current.length === 0) return;
     paths.current.pop();
     setPathCount(paths.current.length);
+    setDirty(true);
     redraw();
-    scheduleSave();
+    notifyChange();
   }
 
   function onClear() {
     paths.current = [];
     setPathCount(0);
+    setDirty(true);
     redraw();
-    scheduleSave();
+    notifyChange();
   }
 
-  const saveLabel = { idle: "", saving: "저장 중…", saved: "저장됨", error: "저장 실패" }[saveState];
+  const saveLabel = {
+    idle: dirty ? "● 미저장" : "",
+    saving: "저장 중…",
+    saved: "저장됨",
+    error: "저장 실패",
+  }[saveState];
+
+  const saveLabelColor = saveState === "error" ? "text-brain-danger"
+    : saveState === "saved" ? "text-brain-sage"
+    : dirty ? "text-brain-highlight"
+    : "text-brain-text-muted";
 
   return (
     <div className="flex h-full flex-col bg-brain-bg">
-      <div className="flex items-center gap-2 border-b border-brain-border bg-brain-surface px-4 py-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-brain-border bg-brain-surface px-4 py-2">
         <button
           className={`rounded px-3 py-1.5 text-xs font-medium ${tool === "pen" ? "bg-brain-accent text-white" : "bg-brain-surface-soft text-brain-text"}`}
           onClick={() => setTool("pen")}
@@ -263,9 +288,19 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
         >
           전체 지우기
         </button>
-        {saveLabel ? (
-          <span className="ml-auto text-xs text-brain-text-muted">{saveLabel}</span>
-        ) : null}
+        <div className="ml-auto flex items-center gap-3">
+          {saveLabel ? (
+            <span className={`text-xs ${saveLabelColor}`}>{saveLabel}</span>
+          ) : null}
+          <button
+            className="rounded bg-brain-accent px-4 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
+            onClick={() => void performSave()}
+            disabled={disabled || saveState === "saving"}
+            title="캔버스 저장 (Ctrl+S)"
+          >
+            {saveState === "saving" ? "저장 중…" : "저장"}
+          </button>
+        </div>
       </div>
       <canvas
         ref={canvasRef}
