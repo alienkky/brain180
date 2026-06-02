@@ -723,9 +723,11 @@ function PracticeScreen({
     setSession(null);
     setMessages([]);
     setInitialCanvas(null);
+    setCanvasMode(null);
     setCanvasReady(false);
     currentCanvas.current = null;
     setLiveCanvas(null);
+    freeCanvasGetBase64.current = null;
     setPhrases([]);
     clientRevision.current = 0;
     // Reverse mode: text starts hidden so student must reconstruct from the
@@ -753,9 +755,13 @@ function PracticeScreen({
         ]);
         if (cancelled) return;
         setMessages(msgs);
-        setInitialCanvas(artifact?.canvas_json ?? null);
-        currentCanvas.current = artifact?.canvas_json ?? null;
-        setLiveCanvas(artifact?.canvas_json ?? null);
+        const restoredCanvas = artifact?.canvas_json ?? null;
+        setInitialCanvas(restoredCanvas);
+        currentCanvas.current = restoredCanvas;
+        setLiveCanvas(restoredCanvas);
+        if (artifact?.mode) {
+          setCanvasMode(artifact.mode === "free" ? "free" : artifact.mode);
+        }
         setCanvasReady(true);
       } catch (e: unknown) {
         if (!cancelled) setError(toMessage(e));
