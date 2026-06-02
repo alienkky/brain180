@@ -623,6 +623,11 @@ type PracticeTab = "canvas" | "eval" | "pattern" | "feedback";
 
 const MODE_OPTIONS: { value: SessionMode; label: string; hint: string }[] = [
   {
+    value: "practice",
+    label: "연습",
+    hint: "자유 그리기: 본문은 참고, 캔버스 중심 코칭",
+  },
+  {
     value: "analyze",
     label: "분석",
     hint: "본문 → 캔버스: 텍스트에서 사고 구조를 추출",
@@ -630,12 +635,7 @@ const MODE_OPTIONS: { value: SessionMode; label: string; hint: string }[] = [
   {
     value: "reverse",
     label: "역해석",
-    hint: "캔버스 → 본문: 그래프를 먼저 본 뒤 본문을 추측",
-  },
-  {
-    value: "practice",
-    label: "연습",
-    hint: "자유 그리기: 본문은 참고, 캔버스 중심 코칭",
+    hint: "캔버스 → 본문: 본문을 숨긴 채 먼저 구조를 그린 뒤 원문과 비교",
   },
 ];
 
@@ -2206,7 +2206,7 @@ function ModePicker({
           disabled={disabled}
           title={m.hint}
           className={
-            "rounded-full px-3 py-1 text-xs transition " +
+            "rounded-full px-3 py-1 font-sans text-xs transition " +
             (m.value === active
               ? "bg-brain-accent text-white"
               : "border border-brain-border text-brain-text-muted hover:border-brain-accent hover:text-brain-text")
@@ -2232,7 +2232,7 @@ function TabButton({
     <button
       onClick={onClick}
       className={
-        "rounded-full px-3 py-1 font-display text-sm transition " +
+        "rounded-full px-3 py-1 font-sans text-sm transition " +
         (active
           ? "bg-brain-accent text-white"
           : "text-brain-text-muted hover:text-brain-text")

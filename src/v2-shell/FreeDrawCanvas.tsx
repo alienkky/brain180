@@ -145,21 +145,18 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
     onChange?.(next);
   }
 
-  function getPoint(e: React.MouseEvent | React.TouchEvent): { x: number; y: number } | null {
+  function getPoint(clientX: number, clientY: number): { x: number; y: number } | null {
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
-    if ("touches" in e) {
-      const touch = e.touches[0];
-      if (!touch) return null;
-      return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
-    }
-    return { x: (e as React.MouseEvent).clientX - rect.left, y: (e as React.MouseEvent).clientY - rect.top };
+    return { x: clientX - rect.left, y: clientY - rect.top };
   }
 
-  function onPointerDown(e: React.MouseEvent | React.TouchEvent) {
+  function onPointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
     if (disabled) return;
-    const pt = getPoint(e);
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const pt = getPoint(e.clientX, e.clientY);
     if (!pt) return;
     isDrawing.current = true;
     if (tool === "eraser") {
@@ -169,9 +166,10 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
     }
   }
 
-  function onPointerMove(e: React.MouseEvent | React.TouchEvent) {
+  function onPointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
     if (!isDrawing.current || !currentPath.current) return;
-    const pt = getPoint(e);
+    e.preventDefault();
+    const pt = getPoint(e.clientX, e.clientY);
     if (!pt) return;
     currentPath.current.points.push(pt);
     const ctx = getCtx();
@@ -188,8 +186,12 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
     ctx.stroke();
   }
 
-  function onPointerUp() {
+  function onPointerUp(e?: React.PointerEvent<HTMLCanvasElement>) {
     if (!isDrawing.current || !currentPath.current) return;
+    e?.preventDefault();
+    if (e?.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
     isDrawing.current = false;
     if (currentPath.current.points.length >= 2) {
       paths.current.push(currentPath.current);
@@ -305,14 +307,18 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
       <canvas
         ref={canvasRef}
         className="flex-1 cursor-crosshair touch-none"
-        style={{ display: "block" }}
-        onMouseDown={onPointerDown}
-        onMouseMove={onPointerMove}
-        onMouseUp={onPointerUp}
-        onMouseLeave={onPointerUp}
-        onTouchStart={onPointerDown}
-        onTouchMove={onPointerMove}
-        onTouchEnd={onPointerUp}
+        style={{
+          display: "block",
+          touchAction: "none",
+          overscrollBehavior: "none",
+          userSelect: "none",
+          WebkitUserSelect: "none",
+        }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onPointerLeave={onPointerUp}
       />
     </div>
   );
