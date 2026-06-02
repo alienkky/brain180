@@ -40,25 +40,29 @@ function FreeCanvasBase({ initial, onSave, onChange, disabled }: Props) {
 
   const getCtx = () => canvasRef.current?.getContext("2d") ?? null;
 
+  const drawPath = useCallback((ctx: CanvasRenderingContext2D, path: DrawPath) => {
+    if (path.points.length < 2) return;
+    ctx.beginPath();
+    ctx.strokeStyle = path.color;
+    ctx.lineWidth = path.width;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.moveTo(path.points[0].x, path.points[0].y);
+    for (let i = 1; i < path.points.length; i++) {
+      ctx.lineTo(path.points[i].x, path.points[i].y);
+    }
+    ctx.stroke();
+  }, []);
+
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
     const ctx = getCtx();
     if (!canvas || !ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    for (const path of paths.current) {
-      if (path.points.length < 2) continue;
-      ctx.beginPath();
-      ctx.strokeStyle = path.color;
-      ctx.lineWidth = path.width;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.moveTo(path.points[0].x, path.points[0].y);
-      for (let i = 1; i < path.points.length; i++) {
-        ctx.lineTo(path.points[i].x, path.points[i].y);
-      }
-      ctx.stroke();
-    }
-  }, []);
+    for (const path of paths.current) drawPath(ctx, path);
+    // Also draw the in-progress stroke so it survives re-renders
+    if (currentPath.current) drawPath(ctx, currentPath.current);
+  }, [drawPath]);
 
   useEffect(() => {
     paths.current = (initial?.paths ?? []).map((p) => ({ ...p }));
@@ -69,8 +73,12 @@ function FreeCanvasBase({ initial, onSave, onChange, disabled }: Props) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ro = new ResizeObserver(() => {
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
+      const newW = canvas.offsetWidth;
+      const newH = canvas.offsetHeight;
+      // Only reset canvas (which clears it) if size actually changed
+      if (canvas.width === newW && canvas.height === newH) return;
+      canvas.width = newW;
+      canvas.height = newH;
       redraw();
     });
     ro.observe(canvas);
@@ -99,7 +107,7 @@ function FreeCanvasBase({ initial, onSave, onChange, disabled }: Props) {
       } catch {
         setSaveState("error");
       }
-    }, 700);
+    }, 2000);
   }
 
   function getPoint(e: React.MouseEvent | React.TouchEvent): { x: number; y: number } | null {
