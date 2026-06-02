@@ -463,14 +463,6 @@ export const api = {
         ...(canvasMode ? { canvas_mode: canvasMode } : {}),
       }),
     }),
-  rateTutorMessage: (messageId: string, rating: number, feedback?: string) =>
-    call<TutorRatingDto>(`/api/tutor/messages/${messageId}/rate`, {
-      method: "POST",
-      body: JSON.stringify({
-        rating,
-        ...(feedback ? { feedback } : {}),
-      }),
-    }),
   billingPlans: () => call<PlanDto[]>("/api/billing/plans"),
   billingMeSubscription: () =>
     call<SubscriptionDto | null>("/api/billing/me/subscription"),

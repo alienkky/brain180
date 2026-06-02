@@ -25,13 +25,8 @@ interface Props {
   input: string;
   onInputChange: (next: string) => void;
   onSend: (e: React.FormEvent) => void;
-  onRateMessage: (
-    messageId: string,
-    rating: number,
-    feedback?: string,
-  ) => Promise<TutorRatingDto>;
+  onRateMessage?: (messageId: string, rating: number, feedback?: string) => Promise<TutorRatingDto>;
   onAskTutor?: (snapshot: CanvasJson) => void;
-  onRateMessage?: (messageId: string, rating: number, feedback?: string) => Promise<void>;
   liveCanvas?: CanvasJson | null;
   ratingToast?: string | null;
 }
@@ -48,7 +43,6 @@ export function TutorBubble({
   onSend,
   onRateMessage,
   onAskTutor,
-  onRateMessage,
   liveCanvas,
   ratingToast,
 }: Props) {
@@ -181,7 +175,7 @@ export function TutorBubble({
                   {m.model} · in {m.input_tokens} / out {m.output_tokens}
                 </div>
               )}
-              {m.role === "assistant" && !m.id.startsWith("pending-") && (
+              {m.role === "assistant" && !m.id.startsWith("pending-") && onRateMessage && (
                 <TutorRatingWidget message={m} onRate={onRateMessage} />
               )}
             </li>
@@ -354,54 +348,3 @@ function TutorRatingWidget({
   );
 }
 
-function TutorRatingControls({
-  messageId,
-  onRateMessage,
-}: {
-  messageId: string;
-  onRateMessage: (messageId: string, rating: number, feedback?: string) => Promise<void>;
-}) {
-  const [rated, setRated] = useState<number | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const rate = async (rating: number) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await onRateMessage(messageId, rating);
-      setRated(rating);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="mt-2 border-t border-brain-border/60 pt-1">
-      <div className="flex items-center gap-1 text-[11px] text-brain-text-muted">
-        <span>평가</span>
-        {[1, 2, 3, 4, 5].map((n) => (
-          <button
-            key={n}
-            type="button"
-            disabled={busy || rated !== null}
-            onClick={() => void rate(n)}
-            className={
-              "rounded px-1 text-[13px] " +
-              (rated !== null && n <= rated
-                ? "text-brain-highlight"
-                : "text-brain-text-muted hover:text-brain-accent")
-            }
-            title={`${n}점`}
-          >
-            ★
-          </button>
-        ))}
-        {rated && <span className="ml-1">저장됨</span>}
-      </div>
-      {error && <div className="mt-1 text-[10px] text-brain-danger">{error}</div>}
-    </div>
-  );
-}

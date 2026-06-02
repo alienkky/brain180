@@ -394,6 +394,7 @@ export function TextInteractive({
           style={{
             color: "var(--color-brain-text)",
             fontFamily: "var(--font-serif)",
+            whiteSpace: "pre-wrap",
           }}
         >
           {renderGroups.map((group, gi) => {
