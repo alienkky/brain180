@@ -229,9 +229,34 @@ export function CognitiveMap({
     dragRef.current = { id: n.id, dx: x - n.x, dy: y - n.y };
   };
 
+  const onNodeTouchStart = (e: React.TouchEvent, n: CanvasNode) => {
+    if (disabled) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const touch = e.touches[0];
+    if (!touch) return;
+    const { x, y } = screenToCanvas(touch.clientX, touch.clientY);
+    dragRef.current = { id: n.id, dx: x - n.x, dy: y - n.y };
+  };
+
   const onMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
     if (!dragRef.current) return;
     const { x, y } = screenToCanvas(e.clientX, e.clientY);
+    const { id, dx, dy } = dragRef.current;
+    setCanvas((c) => ({
+      ...c,
+      nodes: c.nodes.map((n) =>
+        n.id === id ? { ...n, x: x - dx, y: y - dy } : n,
+      ),
+    }));
+  };
+
+  const onTouchMove = (e: React.TouchEvent<SVGSVGElement>) => {
+    if (!dragRef.current) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    if (!touch) return;
+    const { x, y } = screenToCanvas(touch.clientX, touch.clientY);
     const { id, dx, dy } = dragRef.current;
     setCanvas((c) => ({
       ...c,
@@ -461,8 +486,10 @@ export function CognitiveMap({
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
           onMouseLeave={onMouseUp}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onMouseUp}
           className="h-full w-full"
-          style={{ cursor: paletteType ? "crosshair" : "default" }}
+          style={{ cursor: paletteType ? "crosshair" : "default", touchAction: "none" }}
         >
           {/* Per-relation arrow markers — v1 style colored arrows */}
           <defs>
@@ -543,9 +570,10 @@ export function CognitiveMap({
                 key={n.id}
                 transform={`translate(${n.x},${n.y})`}
                 onMouseDown={(e) => onNodeMouseDown(e, n)}
+                onTouchStart={(e) => onNodeTouchStart(e, n)}
                 onClick={(e) => onNodeClick(e, n)}
                 onDoubleClick={(e) => onNodeDoubleClick(e, n)}
-                style={{ cursor: "grab" }}
+                style={{ cursor: "grab", touchAction: "none" }}
               >
                 {/* Solid filled circle — v1 style */}
                 <circle
