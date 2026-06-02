@@ -51,6 +51,19 @@ export const ChangePasswordBody = z.object({
   new_password: Password,
 });
 
+export const VerifyEmailBody = z.object({
+  token: z.string().min(20).max(255),
+});
+
+export const ForgotPasswordBody = z.object({
+  email: Email,
+});
+
+export const ResetPasswordBody = z.object({
+  token: z.string().min(20).max(255),
+  new_password: Password,
+});
+
 // ─── Practice ────────────────────────────────────────────────────────
 
 export const SessionMode = z.enum(["analyze", "reverse", "practice"]);

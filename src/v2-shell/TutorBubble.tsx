@@ -11,7 +11,7 @@
 //   - "튜터에게 패턴 제안" 버튼은 캔버스 도구바에 이미 있으므로 중복 배치
 //     하지 않음. 본 버블은 *대화 자리* 만 책임.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CanvasJson, SessionDto, TutorMessageDto } from "./api";
 
 interface Props {
@@ -26,6 +26,7 @@ interface Props {
   onInputChange: (next: string) => void;
   onSend: (e: React.FormEvent) => void;
   onAskTutor?: (snapshot: CanvasJson) => void;
+  onRateMessage?: (messageId: string, rating: number, feedback?: string) => Promise<void>;
   liveCanvas?: CanvasJson | null;
 }
 
@@ -40,6 +41,7 @@ export function TutorBubble({
   onInputChange,
   onSend,
   onAskTutor,
+  onRateMessage,
   liveCanvas,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -171,6 +173,12 @@ export function TutorBubble({
                   {m.model} · in {m.input_tokens} / out {m.output_tokens}
                 </div>
               )}
+              {m.role === "assistant" && onRateMessage && (
+                <TutorRatingControls
+                  messageId={m.id}
+                  onRateMessage={onRateMessage}
+                />
+              )}
             </li>
           ))}
           {sending && (
@@ -227,6 +235,58 @@ export function TutorBubble({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function TutorRatingControls({
+  messageId,
+  onRateMessage,
+}: {
+  messageId: string;
+  onRateMessage: (messageId: string, rating: number, feedback?: string) => Promise<void>;
+}) {
+  const [rated, setRated] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const rate = async (rating: number) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await onRateMessage(messageId, rating);
+      setRated(rating);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-2 border-t border-brain-border/60 pt-1">
+      <div className="flex items-center gap-1 text-[11px] text-brain-text-muted">
+        <span>평가</span>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            disabled={busy || rated !== null}
+            onClick={() => void rate(n)}
+            className={
+              "rounded px-1 text-[13px] " +
+              (rated !== null && n <= rated
+                ? "text-brain-highlight"
+                : "text-brain-text-muted hover:text-brain-accent")
+            }
+            title={`${n}점`}
+          >
+            ★
+          </button>
+        ))}
+        {rated && <span className="ml-1">저장됨</span>}
+      </div>
+      {error && <div className="mt-1 text-[10px] text-brain-danger">{error}</div>}
     </div>
   );
 }

@@ -117,6 +117,16 @@ export interface ArtifactDto {
   saved_at: string;
 }
 
+export interface ArtifactGalleryDto {
+  artifact_id: string;
+  session_id: string;
+  saved_at: string;
+  mode: "free" | "constrained" | "guided";
+  node_count: number;
+  edge_count: number;
+  lesson: LessonDto;
+}
+
 export interface ProgressEntryDto {
   lesson_id: string;
   session_count: number;
@@ -131,6 +141,14 @@ export interface TutorMessageDto {
   model: string | null;
   input_tokens: number;
   output_tokens: number;
+  created_at: string;
+}
+
+export interface TutorRatingDto {
+  id: string;
+  message_id: string;
+  rating: number;
+  feedback: string | null;
   created_at: string;
 }
 
@@ -284,6 +302,24 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ email, password, name }),
     }),
+  verifyEmail: (token: string) =>
+    call<LoginData>("/api/auth/email/verify", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    }),
+  forgotPassword: (email: string) =>
+    call<{ ok: true; sent: boolean; token?: string; url?: string; reason?: string }>(
+      "/api/auth/password/forgot",
+      {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      },
+    ),
+  resetPassword: (token: string, newPassword: string) =>
+    call<{ ok: true }>("/api/auth/password/reset", {
+      method: "POST",
+      body: JSON.stringify({ token, new_password: newPassword }),
+    }),
   me: () => call<UserDto>("/api/auth/me"),
   logout: () => call<{ ok: true }>("/api/auth/logout", { method: "POST" }),
   modules: () => call<ModuleDto[]>("/api/library/modules"),
@@ -303,6 +339,7 @@ export const api = {
       { method: "DELETE" },
     ),
   progress: () => call<ProgressEntryDto[]>("/api/practice/me/progress"),
+  artifacts: () => call<ArtifactGalleryDto[]>("/api/practice/me/artifacts"),
   startSession: (lessonId: string, mode?: SessionMode) =>
     call<SessionDto>("/api/practice/sessions", {
       method: "POST",
@@ -311,6 +348,8 @@ export const api = {
         ...(mode ? { mode } : {}),
       }),
     }),
+  session: (sessionId: string) =>
+    call<SessionDto>(`/api/practice/sessions/${sessionId}`),
   messages: (sessionId: string) =>
     call<TutorMessageDto[]>(`/api/tutor/sessions/${sessionId}/messages`),
   getArtifact: (sessionId: string) =>
@@ -373,6 +412,14 @@ export const api = {
         lesson_id: lessonId,
         message,
         ...(canvasSnapshot ? { canvas_snapshot: canvasSnapshot } : {}),
+      }),
+    }),
+  rateTutorMessage: (messageId: string, rating: number, feedback?: string) =>
+    call<TutorRatingDto>(`/api/tutor/messages/${messageId}/rate`, {
+      method: "POST",
+      body: JSON.stringify({
+        rating,
+        ...(feedback ? { feedback } : {}),
       }),
     }),
   billingPlans: () => call<PlanDto[]>("/api/billing/plans"),

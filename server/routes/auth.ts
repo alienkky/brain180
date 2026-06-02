@@ -9,14 +9,25 @@
 
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
+import { createHash, randomBytes } from "node:crypto";
 import { db } from "../db/client.js";
-import { users } from "../db/schema.js";
+import { emailTokens, users } from "../db/schema.js";
 import { lucia } from "../lib/lucia.js";
 import { loadEnv } from "../lib/env.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
+import { DisabledFeatureError, sendEmail } from "../lib/email.js";
+import { UpstreamError } from "../lib/anthropic.js";
 import { ok, fail } from "../lib/envelope.js";
-import { parseBody, RegisterBody, LoginBody, ChangePasswordBody } from "../lib/validators.js";
+import {
+  parseBody,
+  RegisterBody,
+  LoginBody,
+  ChangePasswordBody,
+  VerifyEmailBody,
+  ForgotPasswordBody,
+  ResetPasswordBody,
+} from "../lib/validators.js";
 import { requireAuth } from "../middleware/auth.js";
 import { authRateLimit } from "../middleware/rate-limit.js";
 
@@ -75,6 +86,92 @@ function asyncHandler(
   };
 }
 
+type EmailPurpose = "verify" | "reset";
+
+function hashToken(raw: string): string {
+  return createHash("sha256").update(raw, "utf8").digest("hex");
+}
+
+function makeEmailToken(): { raw: string; stored: string } {
+  const raw = randomBytes(32).toString("base64url");
+  return { raw, stored: hashToken(raw) };
+}
+
+async function createEmailToken(userId: string, purpose: EmailPurpose, ttlHours: number) {
+  const token = makeEmailToken();
+  const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000);
+  await db.insert(emailTokens).values({
+    token: token.stored,
+    userId,
+    purpose,
+    expiresAt,
+  });
+  return { raw: token.raw, expiresAt };
+}
+
+function publicUrl(path: string): string {
+  const base = loadEnv().APP_BASE_URL.replace(/\/+$/, "");
+  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+async function sendAuthEmail(input: {
+  to: string;
+  subject: string;
+  title: string;
+  body: string;
+  actionUrl: string;
+}) {
+  const html = [
+    `<h2>${input.title}</h2>`,
+    `<p>${input.body}</p>`,
+    `<p><a href="${input.actionUrl}">${input.actionUrl}</a></p>`,
+    "<p>요청하지 않았다면 이 메일은 무시하셔도 됩니다.</p>",
+  ].join("");
+  try {
+    await sendEmail({
+      to: input.to,
+      subject: input.subject,
+      html,
+      text: `${input.title}\n\n${input.body}\n\n${input.actionUrl}`,
+    });
+    return { sent: true as const };
+  } catch (err) {
+    if (err instanceof DisabledFeatureError) {
+      return { sent: false as const, reason: "resend_disabled" };
+    }
+    if (err instanceof UpstreamError) {
+      return { sent: false as const, reason: `resend_${err.code}` };
+    }
+    throw err;
+  }
+}
+
+async function consumeToken(rawToken: string, purpose: EmailPurpose) {
+  const stored = hashToken(rawToken);
+  const rows = await db
+    .select({
+      token: emailTokens.token,
+      userId: emailTokens.userId,
+    })
+    .from(emailTokens)
+    .where(
+      and(
+        eq(emailTokens.token, stored),
+        eq(emailTokens.purpose, purpose),
+        isNull(emailTokens.consumedAt),
+        gt(emailTokens.expiresAt, new Date()),
+      ),
+    )
+    .limit(1);
+  const row = rows[0];
+  if (!row) return null;
+  await db
+    .update(emailTokens)
+    .set({ consumedAt: new Date() })
+    .where(eq(emailTokens.token, row.token));
+  return row;
+}
+
 // ── POST /api/auth/register ─────────────────────────────────────────
 authRouter.post(
   "/register",
@@ -122,11 +219,27 @@ authRouter.post(
       });
 
     const row = inserted[0]!;
+    const verify = await createEmailToken(row.id, "verify", 48);
+    const verifyPath = `/verify-email?token=${encodeURIComponent(verify.raw)}`;
+    const delivery = await sendAuthEmail({
+      to: row.email,
+      subject: "Brain180 이메일 인증",
+      title: "Brain180 이메일 인증",
+      body: "아래 링크를 열어 이메일 인증을 완료해주세요.",
+      actionUrl: publicUrl(verifyPath),
+    });
     const expiresAt = await issueSessionCookie(res, row.id);
 
     ok(res, {
       user: toUserDTO(row),
       session_expires_at: expiresAt.toISOString(),
+      email_verification: {
+        sent: delivery.sent,
+        expires_at: verify.expiresAt.toISOString(),
+        ...(delivery.sent
+          ? {}
+          : { token: verify.raw, url: verifyPath, reason: delivery.reason }),
+      },
     });
   }),
 );
@@ -272,12 +385,114 @@ authRouter.post(
 );
 
 // ── 503 mvp_cut stubs (no infra) ────────────────────────────────────
+authRouter.post(
+  "/email/verify",
+  authRateLimit,
+  asyncHandler(async (req, res) => {
+    const body = parseBody(VerifyEmailBody, req, res);
+    if (!body) return;
+
+    const token = await consumeToken(body.token, "verify");
+    if (!token) {
+      fail(res, 400, "invalid_or_expired_token");
+      return;
+    }
+
+    const updated = await db
+      .update(users)
+      .set({
+        emailVerifiedAt: new Date(),
+        status: "approved",
+        approvedAt: new Date(),
+      })
+      .where(eq(users.id, token.userId))
+      .returning({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        role: users.role,
+        status: users.status,
+        mustChangePassword: users.mustChangePassword,
+        createdAt: users.createdAt,
+      });
+    const row = updated[0];
+    if (!row) {
+      fail(res, 404, "not_found");
+      return;
+    }
+
+    const expiresAt = await issueSessionCookie(res, row.id);
+    ok(res, {
+      user: toUserDTO(row),
+      session_expires_at: expiresAt.toISOString(),
+    });
+  }),
+);
+
+authRouter.post(
+  "/password/forgot",
+  authRateLimit,
+  asyncHandler(async (req, res) => {
+    const body = parseBody(ForgotPasswordBody, req, res);
+    if (!body) return;
+
+    const email = body.email.toLowerCase();
+    const rows = await db
+      .select({ id: users.id, email: users.email })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+    const row = rows[0];
+    if (!row) {
+      ok(res, { ok: true, sent: false });
+      return;
+    }
+
+    const reset = await createEmailToken(row.id, "reset", 2);
+    const resetPath = `/reset-password?token=${encodeURIComponent(reset.raw)}`;
+    const delivery = await sendAuthEmail({
+      to: row.email,
+      subject: "Brain180 비밀번호 재설정",
+      title: "Brain180 비밀번호 재설정",
+      body: "아래 링크를 열어 새 비밀번호를 설정해주세요. 링크는 2시간 뒤 만료됩니다.",
+      actionUrl: publicUrl(resetPath),
+    });
+    ok(res, {
+      ok: true,
+      sent: delivery.sent,
+      ...(delivery.sent
+        ? {}
+        : { token: reset.raw, url: resetPath, reason: delivery.reason }),
+    });
+  }),
+);
+
+authRouter.post(
+  "/password/reset",
+  authRateLimit,
+  asyncHandler(async (req, res) => {
+    const body = parseBody(ResetPasswordBody, req, res);
+    if (!body) return;
+
+    const token = await consumeToken(body.token, "reset");
+    if (!token) {
+      fail(res, 400, "invalid_or_expired_token");
+      return;
+    }
+
+    const newHash = await hashPassword(body.new_password);
+    await db
+      .update(users)
+      .set({ passwordHash: newHash, mustChangePassword: false })
+      .where(eq(users.id, token.userId));
+    await lucia.invalidateUserSessions(token.userId);
+
+    ok(res, { ok: true });
+  }),
+);
+
 const NOT_AVAIL = { error: "service_unavailable", reason: "mvp_cut" };
 authRouter.get("/oauth/google", (_req, res) => res.status(503).json(NOT_AVAIL));
 authRouter.get("/oauth/google/callback", (_req, res) =>
-  res.status(503).json(NOT_AVAIL),
-);
-authRouter.post("/email/verify", (_req, res) => res.status(503).json(NOT_AVAIL));
-authRouter.post("/password/reset", (_req, res) =>
   res.status(503).json(NOT_AVAIL),
 );

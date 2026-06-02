@@ -15,6 +15,7 @@ import {
   type AdminModuleCreateInput,
   type AdminModuleDto,
   type AdminModuleUpdateInput,
+  type ArtifactGalleryDto,
   type CanvasCite,
   type CanvasJson,
   type CanvasNode,
@@ -39,11 +40,12 @@ import { PatternPanel } from "./PatternPanel";
 import { TextInteractive } from "./TextInteractive";
 import type { CircledPhrase } from "./TextInteractive";
 import { TutorBubble } from "./TutorBubble";
+import { LoginLanding } from "./LoginLanding";
 
 type Screen =
   | { name: "login" }
   | { name: "library" }
-  | { name: "practice"; lesson: LessonDto }
+  | { name: "practice"; lesson: LessonDto; resumeSessionId?: string }
   | { name: "compare"; left: LessonDto; right: LessonDto }
   | { name: "admin" }
   | { name: "subscription"; flash?: string | null };
@@ -62,11 +64,15 @@ export function V2Shell() {
 
   useEffect(() => {
     let cancelled = false;
-    api
-      .me()
+    (async () => {
+      const authReturn = await consumeAuthReturnUrl();
+      if (authReturn) return authReturn;
+      const user = await api.me();
+      return { user };
+    })()
       .then(async (u) => {
         if (cancelled) return;
-        setUser(u);
+        setUser(u.user);
         const flash = await consumeTossReturnUrl();
         setScreen(
           flash ? { name: "subscription", flash } : { name: "library" },
@@ -146,11 +152,19 @@ export function V2Shell() {
                 });
               }
             }}
+            onOpenArtifact={(item) =>
+              setScreen({
+                name: "practice",
+                lesson: item.lesson,
+                resumeSessionId: item.session_id,
+              })
+            }
           />
         )}
         {screen.name === "practice" && (
           <PracticeScreen
             lesson={screen.lesson}
+            resumeSessionId={screen.resumeSessionId}
             onBack={() => setScreen({ name: "library" })}
           />
         )}
@@ -280,6 +294,8 @@ function friendlyAuthError(e: unknown): string {
 }
 
 function LoginScreen({ onLoggedIn }: { onLoggedIn: (u: UserDto) => void }) {
+  return <LoginLanding onLoggedIn={onLoggedIn} />;
+
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -442,16 +458,19 @@ function LibraryScreen({
   onPinCompare,
   onClearPin,
   onStartCompare,
+  onOpenArtifact,
 }: {
   onPickLesson: (lesson: LessonDto) => void;
   comparePins: ComparePins;
   onPinCompare: (slot: "left" | "right", lesson: LessonDto) => void;
   onClearPin: (slot: "left" | "right") => void;
   onStartCompare: () => void;
+  onOpenArtifact: (item: ArtifactGalleryDto) => void;
 }) {
   const [modules, setModules] = useState<ModuleDto[] | null>(null);
   const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
   const [lessons, setLessons] = useState<LessonDto[] | null>(null);
+  const [artifacts, setArtifacts] = useState<ArtifactGalleryDto[] | null>(null);
   const [loadingLessons, setLoadingLessons] = useState(false);
   const [progress, setProgress] = useState<Map<string, ProgressEntryDto>>(
     () => new Map(),
@@ -460,14 +479,15 @@ function LibraryScreen({
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([api.modules(), api.progress()])
-      .then(([modRows, progRows]) => {
+    Promise.all([api.modules(), api.progress(), api.artifacts()])
+      .then(([modRows, progRows, artifactRows]) => {
         if (cancelled) return;
         setModules(modRows);
         if (modRows[0]) {
           setActiveModuleId(modRows[0].id);
         }
         setProgress(new Map(progRows.map((p) => [p.lesson_id, p])));
+        setArtifacts(artifactRows);
       })
       .catch((e: unknown) => !cancelled && setError(toMessage(e)));
     return () => {
@@ -510,6 +530,7 @@ function LibraryScreen({
       </aside>
       <section className="overflow-y-auto p-6">
         <ProgressSummary progress={progress} />
+        <ArtifactGallery artifacts={artifacts} onOpen={onOpenArtifact} />
         <CompareBar
           pins={comparePins}
           onClear={onClearPin}
@@ -596,9 +617,11 @@ const MODE_OPTIONS: { value: SessionMode; label: string; hint: string }[] = [
 
 function PracticeScreen({
   lesson,
+  resumeSessionId,
   onBack,
 }: {
   lesson: LessonDto;
+  resumeSessionId?: string;
   onBack: () => void;
 }) {
   const [text, setText] = useState<TextExcerptDto | null>(null);
@@ -646,9 +669,12 @@ function PracticeScreen({
         const textPromise = lesson.text_excerpt_id
           ? api.text(lesson.text_excerpt_id)
           : Promise.resolve(null);
+        const sessionPromise = resumeSessionId
+          ? api.session(resumeSessionId)
+          : api.startSession(lesson.id, mode);
         const [textRow, sess] = await Promise.all([
           textPromise,
-          api.startSession(lesson.id, mode),
+          sessionPromise,
         ]);
         if (cancelled) return;
         setText(textRow);
@@ -671,7 +697,7 @@ function PracticeScreen({
     return () => {
       cancelled = true;
     };
-  }, [lesson.id, lesson.text_excerpt_id, mode]);
+  }, [lesson.id, lesson.text_excerpt_id, mode, resumeSessionId]);
 
   const onSaveCanvas = useCallback(
     async (next: CanvasJson) => {
@@ -778,6 +804,13 @@ function PracticeScreen({
       setSending(false);
     }
   };
+
+  const onRateTutorMessage = useCallback(
+    async (messageId: string, rating: number, feedback?: string) => {
+      await api.rateTutorMessage(messageId, rating, feedback);
+    },
+    [],
+  );
 
   return (
     <div className="flex h-full flex-col md:grid md:grid-cols-[1fr_1fr] md:gap-0">
@@ -931,6 +964,7 @@ function PracticeScreen({
         onInputChange={setInput}
         onSend={send}
         onAskTutor={onAskTutor}
+        onRateMessage={onRateTutorMessage}
         liveCanvas={liveCanvas}
       />
     </div>
@@ -1751,6 +1785,55 @@ function ModulesByField({
   );
 }
 
+function ArtifactGallery({
+  artifacts,
+  onOpen,
+}: {
+  artifacts: ArtifactGalleryDto[] | null;
+  onOpen: (item: ArtifactGalleryDto) => void;
+}) {
+  if (!artifacts) {
+    return (
+      <div className="mb-4 rounded-xl border border-brain-border bg-brain-surface-soft px-4 py-3 text-sm text-brain-text-muted">
+        작업물을 불러오는 중...
+      </div>
+    );
+  }
+  if (artifacts.length === 0) return null;
+  return (
+    <section className="mb-4 rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="font-display text-lg">내 작업물</h2>
+          <p className="mt-1 text-xs text-brain-text-muted">최근 저장한 캔버스를 이어서 엽니다.</p>
+        </div>
+        <span className="rounded-full bg-brain-accent-soft px-2 py-0.5 text-xs text-brain-accent">
+          {artifacts.length}개
+        </span>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {artifacts.slice(0, 6).map((item) => (
+          <button
+            key={item.artifact_id}
+            type="button"
+            onClick={() => onOpen(item)}
+            className="rounded-lg border border-brain-border bg-brain-bg p-3 text-left transition hover:border-brain-accent hover:bg-brain-surface-soft"
+          >
+            <div className="line-clamp-1 font-display text-sm text-brain-text">
+              {item.lesson.title}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-brain-text-muted">
+              <span>노드 {item.node_count}</span>
+              <span>엣지 {item.edge_count}</span>
+              <span>{new Date(item.saved_at).toLocaleDateString("ko-KR")}</span>
+            </div>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function ProgressSummary({
   progress,
 }: {
@@ -2178,6 +2261,19 @@ declare global {
 }
 
 const TOSS_SDK_URL = "https://js.tosspayments.com/v1/payment";
+
+async function consumeAuthReturnUrl(): Promise<{ user: UserDto } | null> {
+  if (typeof window === "undefined") return null;
+  if (window.location.pathname !== "/verify-email") return null;
+  const token = new URLSearchParams(window.location.search).get("token");
+  if (!token) return null;
+  try {
+    const result = await api.verifyEmail(token);
+    return { user: result.user };
+  } finally {
+    window.history.replaceState({}, "", "/");
+  }
+}
 
 function loadTossSdk(): Promise<void> {
   if (typeof window === "undefined") return Promise.reject(new Error("no_window"));
