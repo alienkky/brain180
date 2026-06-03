@@ -416,7 +416,7 @@ export function TextInteractive({
                   onDoubleClick={() =>
                     handlePhraseDoubleClick(group.phrase)
                   }
-                  className="relative inline-flex items-center"
+                  className="inline-flex items-center"
                   style={{
                     border: `1.5px solid var(--color-brain-accent)`,
                     borderRadius: "9999px",
@@ -427,7 +427,7 @@ export function TextInteractive({
                       ? "0 0 0 3px rgba(184,92,63,0.15), 0 2px 8px rgba(184,92,63,0.20)"
                       : undefined,
                     padding: "1px 10px",
-                    margin: "0 10px 0 2px",
+                    margin: "0 2px",
                     verticalAlign: "middle",
                     color: "var(--color-brain-accent)",
                     cursor: "grab",
@@ -436,24 +436,9 @@ export function TextInteractive({
                     userSelect: "none",
                     lineHeight: 1.6,
                   }}
-                  title="더블클릭 = 캔버스 노드 · 클릭 = 원형 접선 표시 해제 · 드래그 = 캔버스로 드롭"
+                  title="더블클릭 = 캔버스 노드 · 클릭 = 동그라미 해제 · 드래그 = 캔버스로 드롭"
                 >
-                  <span>{group.items.map((w) => w.text).join("")}</span>
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      position: "absolute",
-                      right: "-8px",
-                      top: "50%",
-                      width: "8px",
-                      height: "1.5px",
-                      backgroundColor: "var(--color-brain-accent)",
-                      borderRadius: "9999px",
-                      transform: "translateY(-50%)",
-                      opacity: focused ? 1 : 0.85,
-                      pointerEvents: "none",
-                    }}
-                  />
+                  {group.items.map((w) => w.text).join("")}
                 </span>
               );
             }
@@ -480,45 +465,29 @@ export function TextInteractive({
                         onPointerUp={cancelLongPress}
                         onPointerCancel={cancelLongPress}
                         onClick={(e) => handleWordClick(w, e)}
-                        className={isAnchor ? "relative inline-flex items-center" : undefined}
+                        className="inline-block"
                         style={{
                           cursor: "pointer",
                           border: isAnchor
-                            ? `1.5px solid var(--color-brain-accent)`
-                            : undefined,
-                          borderRadius: isAnchor ? "9999px" : undefined,
+                            ? "1.5px dashed var(--color-brain-highlight)"
+                            : "1.5px solid transparent",
+                          borderRadius: isAnchor ? "9999px" : "2px",
                           backgroundColor: isAnchor
-                            ? "rgba(184,92,63,0.08)"
-                            : undefined,
+                            ? "rgba(198,138,61,0.10)"
+                            : "transparent",
                           color: isAnchor
-                            ? "var(--color-brain-accent)"
+                            ? "var(--color-brain-highlight)"
                             : undefined,
-                          padding: isAnchor ? "1px 10px" : undefined,
-                          margin: isAnchor ? "0 10px 0 2px" : undefined,
+                          padding: isAnchor ? "1px 7px" : "1px 2px",
+                          margin: undefined,
                           verticalAlign: isAnchor ? "middle" : undefined,
                           fontWeight: isAnchor ? 500 : undefined,
-                          lineHeight: isAnchor ? 1.6 : undefined,
+                          lineHeight: undefined,
                           userSelect: isAnchor ? "none" : undefined,
+                          transition: "all 0.15s ease",
                         }}
                       >
-                        <span>{w.text}</span>
-                        {isAnchor && (
-                          <span
-                            aria-hidden="true"
-                            style={{
-                              position: "absolute",
-                              right: "-8px",
-                              top: "50%",
-                              width: "8px",
-                              height: "1.5px",
-                              backgroundColor: "var(--color-brain-accent)",
-                              borderRadius: "9999px",
-                              transform: "translateY(-50%)",
-                              opacity: 0.85,
-                              pointerEvents: "none",
-                            }}
-                          />
-                        )}
+                        {w.text}
                       </span>
                     );
                   })}
@@ -547,49 +516,32 @@ export function TextInteractive({
                       onPointerCancel={cancelLongPress}
                       onClick={(e) => handleWordClick(w, e)}
                       data-cite-highlight={inFocus ? "true" : undefined}
-                      className={isAnchor ? "relative inline-flex items-center" : undefined}
+                      className="inline-block"
                       style={{
                         cursor: "pointer",
                         border: isAnchor
-                          ? `1.5px solid var(--color-brain-accent)`
-                          : undefined,
+                          ? "1.5px dashed var(--color-brain-highlight)"
+                          : "1.5px solid transparent",
                         backgroundColor: isAnchor
-                          ? "rgba(184,92,63,0.08)"
+                          ? "rgba(198,138,61,0.10)"
                           : inFocus
                           ? "rgba(198,138,61,0.55)"
-                          : undefined,
+                          : "transparent",
                         boxShadow: inFocus
                           ? "0 0 0 1px rgba(198,138,61,0.7)"
                           : undefined,
                         borderRadius: isAnchor ? "9999px" : inFocus ? "3px" : undefined,
-                        padding: isAnchor ? "1px 10px" : "0 1px",
-                        margin: isAnchor ? "0 10px 0 2px" : undefined,
+                        padding: isAnchor ? "1px 7px" : "1px 2px",
+                        margin: undefined,
                         verticalAlign: isAnchor ? "middle" : undefined,
-                        color: isAnchor ? "var(--color-brain-accent)" : undefined,
+                        color: isAnchor ? "var(--color-brain-highlight)" : undefined,
                         fontWeight: isAnchor ? 500 : inFocus ? 600 : undefined,
-                        lineHeight: isAnchor ? 1.6 : undefined,
+                        lineHeight: undefined,
                         userSelect: isAnchor ? "none" : undefined,
-                        transition: "all 0.2s ease",
+                        transition: "all 0.15s ease",
                       }}
                     >
-                      <span>{w.text}</span>
-                      {isAnchor && (
-                        <span
-                          aria-hidden="true"
-                          style={{
-                            position: "absolute",
-                            right: "-8px",
-                            top: "50%",
-                            width: "8px",
-                            height: "1.5px",
-                            backgroundColor: "var(--color-brain-accent)",
-                            borderRadius: "9999px",
-                            transform: "translateY(-50%)",
-                            opacity: 0.85,
-                            pointerEvents: "none",
-                          }}
-                        />
-                      )}
+                      {w.text}
                     </span>
                   );
                 })}
