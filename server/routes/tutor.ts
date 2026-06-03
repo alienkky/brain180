@@ -34,6 +34,7 @@ import { ok, fail } from "../lib/envelope.js";
 import { UpstreamError, callAnthropic, type AnthropicMessageContent } from "../lib/anthropic.js";
 import { hasFeature } from "../lib/env.js";
 import { callTutorLLM, resolveTutorProvider } from "../lib/llm.js";
+import { callOpenAIVision } from "../lib/openai-vision.js";
 import { parseBody, TutorChatBody, RateTutorBody } from "../lib/validators.js";
 import {
   requireApprovedUser,
@@ -460,8 +461,14 @@ tutorRouter.post(
       ? `${body.message}\n\n${freeCanvasPathContext}\n\n위 자유형 캔버스 경로 데이터와 첨부 이미지가 있으면 이미지를 함께 참고해서 답하세요.`
       : body.message;
     const provider = resolveTutorProvider();
-    const canUseVision = !!canvasImageB64 && (provider === "anthropic" || hasFeature("anthropic"));
-    if (canvasImageB64 && canUseVision) {
+    const visionProvider = canvasImageB64
+      ? hasFeature("anthropic")
+        ? "anthropic"
+        : hasFeature("openai")
+        ? "openai"
+        : null
+      : null;
+    if (canvasImageB64 && visionProvider) {
       // Vision message: image + text
       messages.push({
         role: "user" as const,
@@ -496,20 +503,17 @@ tutorRouter.post(
 
     let result;
     try {
-      // For vision calls: if image present and provider is not Anthropic, try Anthropic
-      // as a secondary provider (it natively supports vision).
-      const effectiveProvider = canUseVision && provider !== "anthropic"
-        ? "anthropic-vision-fallback"
-        : null;
-      if (effectiveProvider === "anthropic-vision-fallback") {
+      if (visionProvider === "anthropic" && provider !== "anthropic") {
         result = await callAnthropic({ userId, system: systemMessage, messages });
+      } else if (visionProvider === "openai") {
+        result = await callOpenAIVision({ userId, system: systemMessage, messages });
       } else {
         result = await callTutorLLM({ userId, system: systemMessage, messages });
       }
     } catch (err) {
       if (err instanceof UpstreamError) {
         fail(res, 502, "upstream_error", {
-          message: `${resolveTutorProvider()}_${err.code}`,
+          message: `${err.provider}_${err.code}`,
         });
         return;
       }
