@@ -37,7 +37,12 @@ import {
   type UserDto,
 } from "./api";
 import { CognitiveMap, type CanvasMode } from "./CognitiveMap";
-import { FreeDrawCanvas, type FreeCanvasJson, type FreeDrawCanvasGetBase64 } from "./FreeDrawCanvas";
+import {
+  FreeDrawCanvas,
+  freeCanvasToBase64,
+  type FreeCanvasJson,
+  type FreeDrawCanvasGetBase64,
+} from "./FreeDrawCanvas";
 import { EvaluationPanel } from "./EvaluationPanel";
 import { FeedbackPanel } from "./FeedbackPanel";
 import { PatternPanel } from "./PatternPanel";
@@ -835,9 +840,24 @@ function PracticeScreen({
     };
     setMessages((prev) => [...prev, optimistic]);
     try {
-      // In free-draw mode, include canvas image for AI vision analysis
-      const imageBase64 = canvasMode === "free" ? freeCanvasGetBase64.current?.() ?? null : null;
-      await api.chat(session.id, lesson.id, message, snapshot, canvasMode ?? undefined, imageBase64);
+      const effectiveSnapshot =
+        canvasMode === "free" ? snapshot ?? currentCanvas.current : snapshot;
+      const freeSnapshot =
+        canvasMode === "free" && effectiveSnapshot
+          ? (effectiveSnapshot as FreeCanvasJson)
+          : null;
+      const imageBase64 =
+        canvasMode === "free"
+          ? freeCanvasGetBase64.current?.() ?? freeCanvasToBase64(freeSnapshot)
+          : null;
+      await api.chat(
+        session.id,
+        lesson.id,
+        message,
+        effectiveSnapshot,
+        canvasMode ?? undefined,
+        imageBase64,
+      );
       const fresh = await api.messages(session.id);
       setMessages(fresh);
     } catch (e: unknown) {

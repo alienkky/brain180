@@ -102,11 +102,18 @@ export interface CanvasEdge {
   temporal_order?: number;
 }
 
+export interface CanvasPath {
+  color: string;
+  width: number;
+  points: { x: number; y: number }[];
+}
+
 export interface CanvasJson {
   version: 1;
   viewport: { x: number; y: number; zoom: number };
   nodes: CanvasNode[];
   edges: CanvasEdge[];
+  paths?: CanvasPath[];
 }
 
 export interface ArtifactDto {

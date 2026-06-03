@@ -28,6 +28,36 @@ interface Props {
 const COLORS = ["#2A241D", "#B85C3F", "#C68A3D", "#6E8F82", "#6F8AA8", "#8F7FA8"];
 const WIDTHS = [2, 4, 8, 16];
 
+function drawFreePath(ctx: CanvasRenderingContext2D, path: DrawPath) {
+  if (path.points.length < 2) return;
+  ctx.beginPath();
+  ctx.strokeStyle = path.color;
+  ctx.lineWidth = path.width;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.moveTo(path.points[0].x, path.points[0].y);
+  for (let i = 1; i < path.points.length; i++) {
+    ctx.lineTo(path.points[i].x, path.points[i].y);
+  }
+  ctx.stroke();
+}
+
+export function freeCanvasToBase64(snapshot: FreeCanvasJson | null | undefined): string | null {
+  const paths = snapshot?.paths ?? [];
+  if (paths.length === 0) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = 1200;
+  canvas.height = 720;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.fillStyle = "#FAF7F2";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  for (const path of paths) {
+    drawFreePath(ctx, path);
+  }
+  return canvas.toDataURL("image/png").replace(/^data:image\/png;base64,/, "");
+}
+
 function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [tool, setTool] = useState<Tool>("pen");
@@ -43,17 +73,7 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
   const getCtx = () => canvasRef.current?.getContext("2d") ?? null;
 
   const drawPath = useCallback((ctx: CanvasRenderingContext2D, path: DrawPath) => {
-    if (path.points.length < 2) return;
-    ctx.beginPath();
-    ctx.strokeStyle = path.color;
-    ctx.lineWidth = path.width;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.moveTo(path.points[0].x, path.points[0].y);
-    for (let i = 1; i < path.points.length; i++) {
-      ctx.lineTo(path.points[i].x, path.points[i].y);
-    }
-    ctx.stroke();
+    drawFreePath(ctx, path);
   }, []);
 
   const redraw = useCallback(() => {
