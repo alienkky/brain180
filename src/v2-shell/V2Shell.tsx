@@ -125,6 +125,12 @@ export function V2Shell() {
     if (!isOnboarded()) setShowOnboarding(true);
   };
 
+  const onGoHome = () => {
+    setShowOnboarding(false);
+    setShowMethodology(false);
+    setScreen(user ? { name: "library" } : { name: "login" });
+  };
+
   const onLogout = async () => {
     try {
       await api.logout();
@@ -148,6 +154,7 @@ export function V2Shell() {
       <Header
         user={user}
         onLogout={onLogout}
+        onGoHome={onGoHome}
         onGoLibrary={() => setScreen({ name: "library" })}
         onGoAdmin={() => setScreen({ name: "admin" })}
         onGoSubscription={() => setScreen({ name: "subscription" })}
@@ -224,6 +231,7 @@ export function V2Shell() {
 function Header({
   user,
   onLogout,
+  onGoHome,
   onGoLibrary,
   onGoAdmin,
   onGoSubscription,
@@ -233,6 +241,7 @@ function Header({
 }: {
   user: UserDto | null;
   onLogout: () => void;
+  onGoHome: () => void;
   onGoLibrary: () => void;
   onGoAdmin: () => void;
   onGoSubscription: () => void;
@@ -244,11 +253,8 @@ function Header({
     <header className="flex items-center justify-between border-b border-brain-border bg-brain-surface px-6 py-3 shadow-soft-1">
       <button
         type="button"
-        onClick={() => {
-          if (user) onGoLibrary();
-        }}
-        className="text-left transition hover:opacity-80 disabled:hover:opacity-100"
-        disabled={!user}
+        onClick={onGoHome}
+        className="text-left transition hover:opacity-80"
         aria-label="Brain180 dashboard"
       >
         {branding.logo_data_url ? (
