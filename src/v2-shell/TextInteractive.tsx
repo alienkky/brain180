@@ -443,13 +443,13 @@ export function TextInteractive({
                     aria-hidden="true"
                     style={{
                       position: "absolute",
-                      left: "50%",
-                      right: "-10px",
-                      bottom: "-2px",
+                      right: "-8px",
+                      top: "50%",
+                      width: "8px",
                       height: "1.5px",
                       backgroundColor: "var(--color-brain-accent)",
                       borderRadius: "9999px",
-                      transform: "translateY(50%)",
+                      transform: "translateY(-50%)",
                       opacity: focused ? 1 : 0.85,
                       pointerEvents: "none",
                     }}
@@ -480,15 +480,45 @@ export function TextInteractive({
                         onPointerUp={cancelLongPress}
                         onPointerCancel={cancelLongPress}
                         onClick={(e) => handleWordClick(w, e)}
+                        className={isAnchor ? "relative inline-flex items-center" : undefined}
                         style={{
                           cursor: "pointer",
-                          outline: isAnchor
-                            ? "2px solid var(--color-brain-accent)"
+                          border: isAnchor
+                            ? `1.5px solid var(--color-brain-accent)`
                             : undefined,
-                          borderRadius: isAnchor ? "3px" : undefined,
+                          borderRadius: isAnchor ? "9999px" : undefined,
+                          backgroundColor: isAnchor
+                            ? "rgba(184,92,63,0.08)"
+                            : undefined,
+                          color: isAnchor
+                            ? "var(--color-brain-accent)"
+                            : undefined,
+                          padding: isAnchor ? "1px 10px" : undefined,
+                          margin: isAnchor ? "0 10px 0 2px" : undefined,
+                          verticalAlign: isAnchor ? "middle" : undefined,
+                          fontWeight: isAnchor ? 500 : undefined,
+                          lineHeight: isAnchor ? 1.6 : undefined,
+                          userSelect: isAnchor ? "none" : undefined,
                         }}
                       >
-                        {w.text}
+                        <span>{w.text}</span>
+                        {isAnchor && (
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              position: "absolute",
+                              right: "-8px",
+                              top: "50%",
+                              width: "8px",
+                              height: "1.5px",
+                              backgroundColor: "var(--color-brain-accent)",
+                              borderRadius: "9999px",
+                              transform: "translateY(-50%)",
+                              opacity: 0.85,
+                              pointerEvents: "none",
+                            }}
+                          />
+                        )}
                       </span>
                     );
                   })}
@@ -517,24 +547,49 @@ export function TextInteractive({
                       onPointerCancel={cancelLongPress}
                       onClick={(e) => handleWordClick(w, e)}
                       data-cite-highlight={inFocus ? "true" : undefined}
+                      className={isAnchor ? "relative inline-flex items-center" : undefined}
                       style={{
                         cursor: "pointer",
-                        outline: isAnchor
-                          ? "2px solid var(--color-brain-accent)"
+                        border: isAnchor
+                          ? `1.5px solid var(--color-brain-accent)`
                           : undefined,
-                        backgroundColor: inFocus
+                        backgroundColor: isAnchor
+                          ? "rgba(184,92,63,0.08)"
+                          : inFocus
                           ? "rgba(198,138,61,0.55)"
                           : undefined,
                         boxShadow: inFocus
                           ? "0 0 0 1px rgba(198,138,61,0.7)"
                           : undefined,
-                        borderRadius: isAnchor || inFocus ? "3px" : undefined,
-                        padding: "0 1px",
-                        fontWeight: inFocus ? 600 : undefined,
+                        borderRadius: isAnchor ? "9999px" : inFocus ? "3px" : undefined,
+                        padding: isAnchor ? "1px 10px" : "0 1px",
+                        margin: isAnchor ? "0 10px 0 2px" : undefined,
+                        verticalAlign: isAnchor ? "middle" : undefined,
+                        color: isAnchor ? "var(--color-brain-accent)" : undefined,
+                        fontWeight: isAnchor ? 500 : inFocus ? 600 : undefined,
+                        lineHeight: isAnchor ? 1.6 : undefined,
+                        userSelect: isAnchor ? "none" : undefined,
                         transition: "all 0.2s ease",
                       }}
                     >
-                      {w.text}
+                      <span>{w.text}</span>
+                      {isAnchor && (
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            position: "absolute",
+                            right: "-8px",
+                            top: "50%",
+                            width: "8px",
+                            height: "1.5px",
+                            backgroundColor: "var(--color-brain-accent)",
+                            borderRadius: "9999px",
+                            transform: "translateY(-50%)",
+                            opacity: 0.85,
+                            pointerEvents: "none",
+                          }}
+                        />
+                      )}
                     </span>
                   );
                 })}
