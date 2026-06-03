@@ -434,7 +434,7 @@ export function CognitiveMap({
           </p>
         </div>
       )}
-      <div className="flex flex-col gap-2 border-b border-brain-border bg-brain-surface px-3 py-2">
+      <div className="flex flex-col gap-2 border-b border-brain-border bg-brain-surface px-3 py-2 max-md:order-last max-md:max-h-36 max-md:overflow-y-auto max-md:border-b-0 max-md:border-t">
         <div className="flex items-center gap-2">
           <span className="mr-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-brain-text-soft">
             {selectedNode ? "역할 다시" : "노드 만들기"}

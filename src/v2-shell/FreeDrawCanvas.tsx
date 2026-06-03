@@ -22,6 +22,7 @@ interface Props {
   onSave: (next: FreeCanvasJson) => Promise<void> | void;
   onChange?: (next: FreeCanvasJson) => void;
   onCanvasRef?: (getBase64: () => string | null) => void;
+  onAskTutor?: (snapshot: FreeCanvasJson) => void;
   disabled?: boolean;
 }
 
@@ -65,7 +66,7 @@ export function freeCanvasToBase64(snapshot: FreeCanvasJson | null | undefined):
   return canvas.toDataURL("image/png").replace(/^data:image\/png;base64,/, "");
 }
 
-function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Props) {
+function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, onAskTutor, disabled }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [tool, setTool] = useState<Tool>("pen");
   const [color, setColor] = useState(COLORS[0]);
@@ -317,7 +318,7 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
 
   return (
     <div className="flex h-full flex-col bg-brain-bg">
-      <div className="flex flex-wrap items-center gap-2 border-b border-brain-border bg-brain-surface px-4 py-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-brain-border bg-brain-surface px-4 py-2 max-md:order-last max-md:max-h-36 max-md:overflow-y-auto max-md:border-b-0 max-md:border-t max-md:px-3">
         <button
           className={`rounded px-3 py-1.5 text-xs font-medium ${tool === "pen" ? "bg-brain-accent text-white" : "bg-brain-surface-soft text-brain-text"}`}
           onClick={() => setTool("pen")}
@@ -393,7 +394,17 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
         >
           +
         </button>
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-2">
+          {onAskTutor && (
+            <button
+              className="rounded border border-brain-accent/60 px-2 py-1 text-xs text-brain-accent hover:bg-brain-accent-soft/50 disabled:opacity-50"
+              onClick={() => onAskTutor(buildSnapshot())}
+              disabled={disabled}
+              title="현재 자유형 캔버스 전체를 튜터에게 보내 제안을 받습니다"
+            >
+              튜터 제안
+            </button>
+          )}
           {saveLabel ? (
             <span className={`text-xs ${saveLabelColor}`}>{saveLabel}</span>
           ) : null}
