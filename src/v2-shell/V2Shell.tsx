@@ -870,8 +870,11 @@ function PracticeScreen({
   const onAskTutor = useCallback(
     async (snapshot: CanvasJson) => {
       if (!session || sending) return;
+      const freePathCount = snapshot.paths?.length ?? 0;
+      const hasCanvasContent =
+        snapshot.nodes.length > 0 || snapshot.edges.length > 0 || freePathCount > 0;
       const message =
-        snapshot.nodes.length === 0
+        !hasCanvasContent
           ? "현재 캔버스는 비어 있습니다. 이 본문에서 첫 번째로 추출해야 할 핵심 개념 노드를 한 개 제안해 주시고, 그 이유를 짧게 설명해 주세요."
           : "현재 인지 캔버스 상태를 함께 첨부했습니다. 다음으로 추가하면 좋을 노드 1~2개와 그 노드들을 기존 노드와 어떻게 연결하면 좋을지(관계 유형 포함)를 제안해 주세요. 학생이 직접 그릴 수 있도록 *이유와 방향*만 알려주시고 정답을 단정하지는 마세요.";
       setTutorOpen(true);
