@@ -220,7 +220,7 @@ export function CognitiveMap({
     return { x: (clientX - rect.left) / zoom, y: (clientY - rect.top) / zoom };
   };
 
-  const touchDistance = (touches: TouchList) => {
+  const touchDistance = (touches: React.TouchList) => {
     const a = touches[0];
     const b = touches[1];
     if (!a || !b) return null;
