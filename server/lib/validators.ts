@@ -102,6 +102,19 @@ export const CanvasEdge = z.object({
   temporal_order: z.number().int().min(0).max(10_000).optional(),
 });
 
+export const CanvasPath = z.object({
+  color: z.string().min(1).max(40),
+  width: z.number().positive().finite().max(100),
+  points: z
+    .array(
+      z.object({
+        x: z.number().finite(),
+        y: z.number().finite(),
+      }),
+    )
+    .max(10_000),
+});
+
 export const CanvasJson = z.object({
   version: z.literal(1),
   viewport: z.object({
@@ -111,6 +124,7 @@ export const CanvasJson = z.object({
   }),
   nodes: z.array(CanvasNode).max(500),
   edges: z.array(CanvasEdge).max(1000),
+  paths: z.array(CanvasPath).max(1000).optional(),
 });
 
 export const PutArtifactBody = z.object({

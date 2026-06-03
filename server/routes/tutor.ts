@@ -126,6 +126,77 @@ function formatCanvasState(snap: CanvasSnapshotShape | undefined): string {
   ].join("\n");
 }
 
+function formatFreeCanvasPathContext(snapshot: unknown): string | null {
+  const paths = snapshot && typeof snapshot === "object"
+    ? (snapshot as { paths?: unknown }).paths
+    : null;
+  if (!Array.isArray(paths) || paths.length === 0) return null;
+
+  let pointCount = 0;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  const colors = new Set<string>();
+  const widths = new Set<number>();
+
+  const compact = paths.slice(0, 40).map((rawPath, pathIndex) => {
+    const path = rawPath && typeof rawPath === "object"
+      ? rawPath as { color?: unknown; width?: unknown; points?: unknown }
+      : {};
+    const color = typeof path.color === "string" ? path.color : "unknown";
+    const width = typeof path.width === "number" ? path.width : 0;
+    const points = Array.isArray(path.points) ? path.points : [];
+    colors.add(color);
+    widths.add(width);
+    pointCount += points.length;
+
+    const numericPoints = points
+      .map((rawPoint) => {
+        const point = rawPoint && typeof rawPoint === "object"
+          ? rawPoint as { x?: unknown; y?: unknown }
+          : {};
+        return typeof point.x === "number" && typeof point.y === "number"
+          ? { x: point.x, y: point.y }
+          : null;
+      })
+      .filter((point): point is { x: number; y: number } => point !== null);
+
+    for (const point of numericPoints) {
+      minX = Math.min(minX, point.x);
+      minY = Math.min(minY, point.y);
+      maxX = Math.max(maxX, point.x);
+      maxY = Math.max(maxY, point.y);
+    }
+
+    const step = Math.max(1, Math.ceil(numericPoints.length / 24));
+    const sampled = numericPoints
+      .filter((_, index) => index % step === 0 || index === numericPoints.length - 1)
+      .map((point) => [Math.round(point.x), Math.round(point.y)]);
+
+    return {
+      index: pathIndex + 1,
+      color,
+      width,
+      points: numericPoints.length,
+      sampled,
+    };
+  });
+
+  const bounds = Number.isFinite(minX)
+    ? `bounds: x ${Math.round(minX)}-${Math.round(maxX)}, y ${Math.round(minY)}-${Math.round(maxY)}`
+    : "bounds: none";
+
+  return [
+    "[free-form canvas path data]",
+    `strokes: ${paths.length}, total_points: ${pointCount}`,
+    bounds,
+    `colors: ${Array.from(colors).join(", ") || "none"}`,
+    `widths: ${Array.from(widths).join(", ") || "none"}`,
+    `sampled_paths_json: ${JSON.stringify(compact)}`,
+  ].join("\n");
+}
+
 function formatLessonTutorNotes(sourceMeta: unknown): string {
   const meta =
     sourceMeta && typeof sourceMeta === "object"
@@ -382,6 +453,12 @@ tutorRouter.post(
     // If Kimi is the default provider but Anthropic is configured, build the
     // image message now and route this turn to Claude vision below.
     const canvasImageB64 = body.canvas_image_base64;
+    const freeCanvasPathContext = body.canvas_mode === "free"
+      ? formatFreeCanvasPathContext(body.canvas_snapshot)
+      : null;
+    const messageWithCanvasContext = freeCanvasPathContext
+      ? `${body.message}\n\n${freeCanvasPathContext}\n\n위 자유형 캔버스 경로 데이터와 첨부 이미지가 있으면 이미지를 함께 참고해서 답하세요.`
+      : body.message;
     const provider = resolveTutorProvider();
     const canUseVision = !!canvasImageB64 && (provider === "anthropic" || hasFeature("anthropic"));
     if (canvasImageB64 && canUseVision) {
@@ -393,17 +470,17 @@ tutorRouter.post(
             type: "image" as const,
             source: { type: "base64" as const, media_type: "image/png" as const, data: canvasImageB64 },
           },
-          { type: "text" as const, text: body.message },
+          { type: "text" as const, text: messageWithCanvasContext },
         ],
       });
     } else if (canvasImageB64) {
       // Provider doesn't support vision — note the image and pass text
       messages.push({
         role: "user" as const,
-        content: `[자유형 캔버스 이미지 첨부됨 — 현재 튜터가 이미지를 직접 볼 수 없습니다]\n\n${body.message}`,
+        content: `[자유형 캔버스 이미지 첨부됨 — 현재 튜터가 이미지를 직접 볼 수 없습니다]\n\n${messageWithCanvasContext}`,
       });
     } else {
-      messages.push({ role: "user" as const, content: body.message });
+      messages.push({ role: "user" as const, content: messageWithCanvasContext });
     }
 
     // Persist user row immediately so it survives upstream failure mid-call.
