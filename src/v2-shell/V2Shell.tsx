@@ -851,7 +851,7 @@ function PracticeScreen({
           : null;
       const imageBase64 =
         canvasMode === "free"
-          ? freeCanvasGetBase64.current?.() ?? freeCanvasToBase64(freeSnapshot)
+          ? freeCanvasToBase64(freeSnapshot) ?? freeCanvasGetBase64.current?.()
           : null;
       await api.chat(
         session.id,
@@ -1101,6 +1101,7 @@ function PracticeScreen({
                 onSave={onSaveCanvas}
                 onChange={onCanvasChange}
                 onCanvasRef={(fn) => { freeCanvasGetBase64.current = fn; }}
+                onAskTutor={onAskTutor}
                 disabled={!session}
               />
             ) : (
