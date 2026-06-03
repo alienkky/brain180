@@ -726,6 +726,9 @@ function PracticeScreen({
   const currentCanvas = useRef<CanvasJson | null>(null);
   const clientRevision = useRef(0);
   const textBodyRef = useRef<HTMLDivElement | null>(null);
+  const practiceLayoutRef = useRef<HTMLDivElement | null>(null);
+  const [textPanePercent, setTextPanePercent] = useState(50);
+  const resizingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -928,9 +931,46 @@ function PracticeScreen({
     [],
   );
 
+  const onSplitPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    resizingRef.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, []);
+
+  useEffect(() => {
+    const onPointerMove = (e: PointerEvent) => {
+      if (!resizingRef.current || !practiceLayoutRef.current) return;
+      const rect = practiceLayoutRef.current.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const next = ((e.clientX - rect.left) / rect.width) * 100;
+      setTextPanePercent(Math.min(70, Math.max(30, next)));
+    };
+    const onPointerUp = () => {
+      if (!resizingRef.current) return;
+      resizingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, []);
+
   return (
-    <div className="flex h-full flex-col md:grid md:grid-cols-[1fr_1fr] md:gap-0">
-      <section className="flex h-1/2 min-h-0 flex-col overflow-hidden border-b border-brain-border md:h-auto md:border-b-0 md:border-r">
+    <div
+      ref={practiceLayoutRef}
+      className="flex h-full flex-col md:grid md:gap-0"
+      style={{
+        gridTemplateColumns: `${textPanePercent}% 10px minmax(0, 1fr)`,
+      }}
+    >
+      <section className="flex h-1/2 min-h-0 flex-col overflow-hidden border-b border-brain-border md:h-auto md:border-b-0">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brain-border bg-brain-surface px-4 py-3 md:px-6">
           <button
             onClick={onBack}
@@ -1002,6 +1042,16 @@ function PracticeScreen({
           )}
         </div>
       </section>
+      <div
+        className="hidden cursor-col-resize items-center justify-center border-x border-brain-border bg-brain-surface-soft transition-colors hover:bg-brain-accent-soft/60 md:flex"
+        onPointerDown={onSplitPointerDown}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="본문과 캔버스 너비 조절"
+        title="드래그해서 본문과 캔버스 너비를 조절"
+      >
+        <div className="h-12 w-1 rounded-full bg-brain-border" />
+      </div>
       <section className="flex h-1/2 min-h-0 flex-col overflow-hidden bg-brain-surface-soft md:h-auto">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brain-border bg-brain-surface px-4 py-3 md:px-6">
           <div className="flex flex-wrap gap-1">
