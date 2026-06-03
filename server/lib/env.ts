@@ -41,6 +41,7 @@ const Schema = z.object({
   MOONSHOT_THINKING: z.enum(["enabled", "disabled"]).default("disabled"),
 
   OPENAI_API_KEY: z.string().optional(),
+  OPENAI_VISION_MODEL: z.string().default("gpt-4.1-mini"),
   GEMINI_API_KEY: z.string().optional(),
 
   RESEND_API_KEY: z.string().optional(),
