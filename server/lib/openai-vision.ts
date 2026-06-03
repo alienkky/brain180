@@ -72,11 +72,26 @@ export async function callOpenAIVision(call: AnthropicCall): Promise<AnthropicRe
 
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     { role: "system", content: call.system },
-    ...call.messages.map((message) => ({
-      role: message.role,
-      content: contentToOpenAI(message.content),
-    })),
   ];
+  for (const message of call.messages) {
+    if (message.role === "assistant") {
+      messages.push({
+        role: "assistant",
+        content:
+          typeof message.content === "string"
+            ? message.content
+            : message.content
+                .filter((block) => block.type === "text")
+                .map((block) => block.text)
+                .join("\n"),
+      });
+    } else {
+      messages.push({
+        role: "user",
+        content: contentToOpenAI(message.content),
+      });
+    }
+  }
 
   try {
     const res = await client().chat.completions.create({
@@ -110,9 +125,7 @@ export async function callOpenAIVision(call: AnthropicCall): Promise<AnthropicRe
   } catch (err) {
     const upstream =
       err instanceof UpstreamError ? err : null;
-    const { code } = upstream
-      ? { code: upstream.code, retryable: upstream.retryable }
-      : classifyError(err);
+    const { code } = upstream ? { code: upstream.code } : classifyError(err);
     void writeUsageLog({
       provider: "openai",
       model,
