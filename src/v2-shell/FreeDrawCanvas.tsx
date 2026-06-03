@@ -27,6 +27,13 @@ interface Props {
 
 const COLORS = ["#2A241D", "#B85C3F", "#C68A3D", "#6E8F82", "#6F8AA8", "#8F7FA8"];
 const WIDTHS = [2, 4, 8, 16];
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 2.5;
+const ZOOM_STEP = 0.1;
+
+function clampZoom(value: number): number {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
+}
 
 function drawFreePath(ctx: CanvasRenderingContext2D, path: DrawPath) {
   if (path.points.length < 2) return;
@@ -66,9 +73,12 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [pathCount, setPathCount] = useState(0);
   const [dirty, setDirty] = useState(false); // unsaved changes indicator
+  const [zoom, setZoomState] = useState(() => clampZoom(initial?.viewport?.zoom ?? 1));
   const isDrawing = useRef(false);
   const paths = useRef<DrawPath[]>((initial?.paths ?? []).map((p) => ({ ...p })));
   const currentPath = useRef<DrawPath | null>(null);
+  const pointerCache = useRef(new Map<number, { x: number; y: number }>());
+  const pinchDistance = useRef<number | null>(null);
 
   const getCtx = () => canvasRef.current?.getContext("2d") ?? null;
 
@@ -80,14 +90,17 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
     const canvas = canvasRef.current;
     const ctx = getCtx();
     if (!canvas || !ctx) return;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(zoom, 0, 0, zoom, 0, 0);
     for (const path of paths.current) drawPath(ctx, path);
     if (currentPath.current) drawPath(ctx, currentPath.current);
-  }, [drawPath]);
+  }, [drawPath, zoom]);
 
   useEffect(() => {
     paths.current = (initial?.paths ?? []).map((p) => ({ ...p }));
     setPathCount(paths.current.length);
+    setZoomState(clampZoom(initial?.viewport?.zoom ?? 1));
     setDirty(false);
     redraw();
   }, [initial, redraw]);
@@ -138,7 +151,7 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
   function buildSnapshot(): FreeCanvasJson {
     return {
       version: 1,
-      viewport: initial?.viewport ?? { x: 0, y: 0, zoom: 1 },
+      viewport: { ...(initial?.viewport ?? { x: 0, y: 0 }), zoom },
       nodes: [],
       edges: [],
       paths: paths.current.map((p) => ({ ...p, points: [...p.points] })),
@@ -169,13 +182,38 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
-    return { x: clientX - rect.left, y: clientY - rect.top };
+    return { x: (clientX - rect.left) / zoom, y: (clientY - rect.top) / zoom };
+  }
+
+  function setZoom(nextZoom: number) {
+    const next = clampZoom(nextZoom);
+    setZoomState(next);
+    setDirty(true);
+  }
+
+  function pointerDistance() {
+    const points = Array.from(pointerCache.current.values());
+    const a = points[0];
+    const b = points[1];
+    if (!a || !b) return null;
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+
+  function updatePointer(e: React.PointerEvent<HTMLCanvasElement>) {
+    pointerCache.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
   }
 
   function onPointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
     if (disabled) return;
     e.preventDefault();
+    updatePointer(e);
     e.currentTarget.setPointerCapture(e.pointerId);
+    if (pointerCache.current.size >= 2) {
+      isDrawing.current = false;
+      currentPath.current = null;
+      pinchDistance.current = pointerDistance();
+      return;
+    }
     const pt = getPoint(e.clientX, e.clientY);
     if (!pt) return;
     isDrawing.current = true;
@@ -187,6 +225,19 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
   }
 
   function onPointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
+    updatePointer(e);
+    if (pointerCache.current.size >= 2) {
+      e.preventDefault();
+      isDrawing.current = false;
+      currentPath.current = null;
+      const distance = pointerDistance();
+      if (!distance) return;
+      if (pinchDistance.current) {
+        setZoom(zoom * (distance / pinchDistance.current));
+      }
+      pinchDistance.current = distance;
+      return;
+    }
     if (!isDrawing.current || !currentPath.current) return;
     e.preventDefault();
     const pt = getPoint(e.clientX, e.clientY);
@@ -195,6 +246,7 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
     const ctx = getCtx();
     if (!ctx || currentPath.current.points.length < 2) return;
     const pts = currentPath.current.points;
+    ctx.setTransform(zoom, 0, 0, zoom, 0, 0);
     ctx.beginPath();
     ctx.strokeStyle = currentPath.current.color;
     ctx.lineWidth = currentPath.current.width;
@@ -207,11 +259,15 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
   }
 
   function onPointerUp(e?: React.PointerEvent<HTMLCanvasElement>) {
+    if (e) {
+      pointerCache.current.delete(e.pointerId);
+      if (pointerCache.current.size < 2) pinchDistance.current = null;
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+    }
     if (!isDrawing.current || !currentPath.current) return;
     e?.preventDefault();
-    if (e?.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    }
     isDrawing.current = false;
     if (currentPath.current.points.length >= 2) {
       paths.current.push(currentPath.current);
@@ -221,6 +277,13 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
       notifyChange();
     }
     currentPath.current = null;
+  }
+
+  function onWheel(e: React.WheelEvent<HTMLCanvasElement>) {
+    if (disabled) return;
+    if (!e.ctrlKey && Math.abs(e.deltaY) < 50) return;
+    e.preventDefault();
+    setZoom(zoom + (e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP));
   }
 
   function onUndo() {
@@ -310,6 +373,26 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
         >
           전체 지우기
         </button>
+        <div className="mx-1 h-5 w-px bg-brain-border" />
+        <button
+          className="rounded border border-brain-border px-2 py-1 text-xs text-brain-text-muted hover:bg-brain-surface-soft disabled:opacity-40"
+          onClick={() => setZoom(zoom - ZOOM_STEP)}
+          disabled={disabled || zoom <= MIN_ZOOM}
+          title="Zoom out"
+        >
+          -
+        </button>
+        <span className="min-w-10 text-center text-xs tabular-nums text-brain-text-muted">
+          {Math.round(zoom * 100)}%
+        </span>
+        <button
+          className="rounded border border-brain-border px-2 py-1 text-xs text-brain-text-muted hover:bg-brain-surface-soft disabled:opacity-40"
+          onClick={() => setZoom(zoom + ZOOM_STEP)}
+          disabled={disabled || zoom >= MAX_ZOOM}
+          title="Zoom in"
+        >
+          +
+        </button>
         <div className="ml-auto flex items-center gap-3">
           {saveLabel ? (
             <span className={`text-xs ${saveLabelColor}`}>{saveLabel}</span>
@@ -339,6 +422,7 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, disabled }: Pr
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         onPointerLeave={onPointerUp}
+        onWheel={onWheel}
       />
     </div>
   );

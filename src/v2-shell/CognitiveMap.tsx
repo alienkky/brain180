@@ -118,6 +118,14 @@ const EMPTY: CanvasJson = {
   edges: [],
 };
 
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 2.5;
+const ZOOM_STEP = 0.1;
+
+function clampZoom(value: number): number {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
+}
+
 export function CognitiveMap({
   initial,
   onSave,
@@ -140,6 +148,20 @@ export function CognitiveMap({
   const svgRef = useRef<SVGSVGElement | null>(null);
   const saveTimer = useRef<number | null>(null);
   const isFirstLoad = useRef(true);
+  const pinchDistance = useRef<number | null>(null);
+  const zoom = clampZoom(canvas.viewport?.zoom ?? 1);
+
+  const setZoom = (nextZoom: number) => {
+    const next = clampZoom(nextZoom);
+    setCanvas((c) => ({
+      ...c,
+      viewport: { ...(c.viewport ?? { x: 0, y: 0 }), zoom: next },
+    }));
+  };
+
+  const changeZoom = (delta: number) => {
+    setZoom(zoom + delta);
+  };
 
   // Reload when the parent swaps in a different initial (e.g. session change).
   useEffect(() => {
@@ -195,7 +217,14 @@ export function CognitiveMap({
     const svg = svgRef.current;
     if (!svg) return { x: clientX, y: clientY };
     const rect = svg.getBoundingClientRect();
-    return { x: clientX - rect.left, y: clientY - rect.top };
+    return { x: (clientX - rect.left) / zoom, y: (clientY - rect.top) / zoom };
+  };
+
+  const touchDistance = (touches: TouchList) => {
+    const a = touches[0];
+    const b = touches[1];
+    if (!a || !b) return null;
+    return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
   };
 
   const onCanvasClick = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -252,6 +281,17 @@ export function CognitiveMap({
   };
 
   const onTouchMove = (e: React.TouchEvent<SVGSVGElement>) => {
+    if (e.touches.length >= 2) {
+      e.preventDefault();
+      dragRef.current = null;
+      const distance = touchDistance(e.touches);
+      if (!distance) return;
+      if (pinchDistance.current) {
+        setZoom(zoom * (distance / pinchDistance.current));
+      }
+      pinchDistance.current = distance;
+      return;
+    }
     if (!dragRef.current) return;
     e.preventDefault();
     const touch = e.touches[0];
@@ -268,6 +308,22 @@ export function CognitiveMap({
 
   const onMouseUp = () => {
     dragRef.current = null;
+    pinchDistance.current = null;
+  };
+
+  const onTouchStartCanvas = (e: React.TouchEvent<SVGSVGElement>) => {
+    if (e.touches.length >= 2) {
+      e.preventDefault();
+      dragRef.current = null;
+      pinchDistance.current = touchDistance(e.touches);
+    }
+  };
+
+  const onWheelCanvas = (e: React.WheelEvent<SVGSVGElement>) => {
+    if (disabled) return;
+    if (!e.ctrlKey && Math.abs(e.deltaY) < 50) return;
+    e.preventDefault();
+    changeZoom(e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP);
   };
 
   const onNodeClick = (e: React.MouseEvent, n: CanvasNode) => {
@@ -457,6 +513,23 @@ export function CognitiveMap({
                 ↓ PNG
               </button>
             )}
+            <button
+              onClick={() => changeZoom(-ZOOM_STEP)}
+              disabled={disabled || zoom <= MIN_ZOOM}
+              className="rounded border border-brain-border px-2 py-1 hover:bg-brain-surface-soft disabled:opacity-40"
+              title="Zoom out"
+            >
+              -
+            </button>
+            <span className="min-w-10 text-center tabular-nums">{Math.round(zoom * 100)}%</span>
+            <button
+              onClick={() => changeZoom(ZOOM_STEP)}
+              disabled={disabled || zoom >= MAX_ZOOM}
+              className="rounded border border-brain-border px-2 py-1 hover:bg-brain-surface-soft disabled:opacity-40"
+              title="Zoom in"
+            >
+              +
+            </button>
             <SaveBadge state={saveState} />
           </div>
         </div>
@@ -486,8 +559,10 @@ export function CognitiveMap({
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
           onMouseLeave={onMouseUp}
+          onTouchStart={onTouchStartCanvas}
           onTouchMove={onTouchMove}
           onTouchEnd={onMouseUp}
+          onWheel={onWheelCanvas}
           className="h-full w-full"
           style={{ cursor: paletteType ? "crosshair" : "default", touchAction: "none" }}
         >
@@ -508,6 +583,7 @@ export function CognitiveMap({
               </marker>
             ))}
           </defs>
+          <g transform={`scale(${zoom})`}>
           {canvas.edges.map((e) => {
             const from = nodeIndex.get(e.from);
             const to = nodeIndex.get(e.to);
@@ -643,6 +719,7 @@ export function CognitiveMap({
               </g>
             );
           })}
+          </g>
         </svg>
         {canvas.nodes.length === 0 && !paletteType && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-brain-text-soft">
