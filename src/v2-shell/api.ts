@@ -11,6 +11,15 @@ export interface UserDto {
   role: "user" | "admin";
   status: "pending_approval" | "approved" | "rejected" | "suspended";
   must_change_password: boolean;
+  created_at: string;
+}
+
+export type AdminUserRole = "user" | "admin";
+export type AdminUserStatus = UserDto["status"];
+
+export interface AdminUserUpdateInput {
+  role?: AdminUserRole;
+  status?: AdminUserStatus;
 }
 
 export interface LoginData {
@@ -425,12 +434,21 @@ export const api = {
       }),
     }),
   adminPending: () => call<UserDto[]>("/api/admin/users/pending"),
+  adminUsers: () => call<UserDto[]>("/api/admin/users"),
   adminApprove: (userId: string) =>
     call<UserDto>(`/api/admin/users/${userId}/approve`, { method: "POST" }),
   adminReject: (userId: string, reason?: string) =>
     call<UserDto>(`/api/admin/users/${userId}/reject`, {
       method: "POST",
       body: JSON.stringify({ ...(reason ? { reason } : {}) }),
+    }),
+  adminUpdateUser: (userId: string, input: AdminUserUpdateInput) =>
+    call<UserDto>(`/api/admin/users/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        ...(input.role ? { role: input.role === "admin" ? "admin" : "student" } : {}),
+        ...(input.status ? { status: input.status } : {}),
+      }),
     }),
   adminModules: () => call<AdminModuleDto[]>("/api/admin/modules"),
   adminCreateModule: (input: AdminModuleCreateInput) =>

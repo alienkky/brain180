@@ -1227,7 +1227,7 @@ function AdminScreen({
       <div className="border-b border-brain-border bg-brain-surface px-6 py-3">
         <div className="mx-auto flex max-w-5xl items-center gap-2">
           <AdminTabButton active={tab === "users"} onClick={() => setTab("users")}>
-            가입 대기
+            가입자 관리
           </AdminTabButton>
           <AdminTabButton active={tab === "modules"} onClick={() => setTab("modules")}>
             모듈
@@ -1572,15 +1572,16 @@ function formatRating(value: number | null): string {
 }
 
 function AdminUsersPanel() {
-  const [pending, setPending] = useState<UserDto[] | null>(null);
+  const [users, setUsers] = useState<UserDto[] | null>(null);
+  const [filter, setFilter] = useState<"all" | UserDto["status"]>("all");
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setError(null);
     try {
-      const rows = await api.adminPending();
-      setPending(rows);
+      const rows = await api.adminUsers();
+      setUsers(rows);
     } catch (e: unknown) {
       setError(toMessage(e));
     }
@@ -1616,38 +1617,130 @@ function AdminUsersPanel() {
     }
   };
 
+  const updateStatus = async (u: UserDto, status: UserDto["status"]) => {
+    if (u.status === status) return;
+    setBusyId(u.id);
+    try {
+      await api.adminUpdateUser(u.id, { status });
+      await reload();
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const updateRole = async (u: UserDto, role: UserDto["role"]) => {
+    if (u.role === role) return;
+    const label = role === "admin" ? "관리자" : "일반 사용자";
+    if (!window.confirm(`${u.email} 권한을 ${label}(으)로 변경할까요?`)) return;
+    setBusyId(u.id);
+    try {
+      await api.adminUpdateUser(u.id, { role });
+      await reload();
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const visibleUsers = users?.filter((u) => filter === "all" || u.status === filter) ?? null;
+  const pendingCount = users?.filter((u) => u.status === "pending_approval").length ?? 0;
+
   return (
     <>
-      <h2 className="mb-1 font-display text-2xl">관리자 — 가입 승인 대기</h2>
-      <p className="mb-4 text-sm text-brain-text-muted">
-        승인 시 사용자는 즉시 로그인 가능. 거절 시 사유는 사용자에게 노출되지 않습니다.
-      </p>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="mb-1 font-display text-2xl">관리자 — 가입자 관리</h2>
+          <p className="text-sm text-brain-text-muted">
+            신규 가입자를 확인해 승인하고, 필요 시 관리자 권한으로 승급할 수 있습니다.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void reload()}
+          className="rounded border border-brain-border px-3 py-1 text-sm text-brain-text-muted hover:bg-brain-surface-soft"
+        >
+          새로고침
+        </button>
+      </div>
       {error && (
         <div className="mb-4 rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
           {error}
         </div>
       )}
-      {!pending && <p className="text-sm text-brain-text-muted">불러오는 중…</p>}
-      {pending && pending.length === 0 && (
-        <p className="text-sm text-brain-text-muted">대기 중인 사용자가 없습니다.</p>
+      <div className="mb-4 flex flex-wrap gap-2">
+        <UserFilterButton active={filter === "all"} onClick={() => setFilter("all")}>
+          전체 {users?.length ?? 0}
+        </UserFilterButton>
+        <UserFilterButton
+          active={filter === "pending_approval"}
+          onClick={() => setFilter("pending_approval")}
+        >
+          승인 대기 {pendingCount}
+        </UserFilterButton>
+        <UserFilterButton active={filter === "approved"} onClick={() => setFilter("approved")}>
+          승인됨
+        </UserFilterButton>
+        <UserFilterButton active={filter === "rejected"} onClick={() => setFilter("rejected")}>
+          거절
+        </UserFilterButton>
+        <UserFilterButton active={filter === "suspended"} onClick={() => setFilter("suspended")}>
+          정지
+        </UserFilterButton>
+      </div>
+      {!users && <p className="text-sm text-brain-text-muted">불러오는 중…</p>}
+      {visibleUsers && visibleUsers.length === 0 && (
+        <p className="text-sm text-brain-text-muted">표시할 가입자가 없습니다.</p>
       )}
       <ul className="space-y-3">
-        {pending?.map((u) => (
+        {visibleUsers?.map((u) => (
           <li
             key={u.id}
-            className="flex items-center justify-between rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1"
+            className="grid gap-4 rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1 md:grid-cols-[minmax(0,1fr)_auto]"
           >
             <div>
-              <div className="font-display text-base">{u.name}</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="font-display text-base">{u.name}</div>
+                <span className="rounded-full bg-brain-accent-soft px-2 py-0.5 text-[11px] text-brain-accent">
+                  {statusLabel(u.status)}
+                </span>
+                <span className="rounded-full bg-brain-surface-soft px-2 py-0.5 text-[11px] text-brain-text-muted">
+                  {u.role === "admin" ? "관리자" : "사용자"}
+                </span>
+              </div>
               <div className="text-sm text-brain-text-muted">{u.email}</div>
               <div className="mt-1 text-xs text-brain-text-soft">
-                역할 {u.role} · 상태 {u.status}
+                가입일 {new Date(u.created_at).toLocaleDateString("ko-KR")}
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2 md:justify-end">
+              <select
+                value={u.status}
+                onChange={(e) => void updateStatus(u, e.target.value as UserDto["status"])}
+                disabled={busyId === u.id}
+                className="rounded border border-brain-border bg-brain-bg px-2 py-1 text-sm text-brain-text disabled:opacity-50"
+                aria-label={`${u.email} 상태 변경`}
+              >
+                <option value="pending_approval">승인 대기</option>
+                <option value="approved">승인됨</option>
+                <option value="rejected">거절</option>
+                <option value="suspended">정지</option>
+              </select>
+              <select
+                value={u.role}
+                onChange={(e) => void updateRole(u, e.target.value as UserDto["role"])}
+                disabled={busyId === u.id}
+                className="rounded border border-brain-border bg-brain-bg px-2 py-1 text-sm text-brain-text disabled:opacity-50"
+                aria-label={`${u.email} 권한 변경`}
+              >
+                <option value="user">사용자</option>
+                <option value="admin">관리자</option>
+              </select>
               <button
                 onClick={() => approve(u)}
-                disabled={busyId === u.id}
+                disabled={busyId === u.id || u.status === "approved"}
                 className="rounded bg-brain-accent px-3 py-1 text-sm text-white hover:opacity-90 disabled:opacity-50"
               >
                 승인
@@ -1665,6 +1758,43 @@ function AdminUsersPanel() {
       </ul>
     </>
   );
+}
+
+function UserFilterButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full px-3 py-1 text-xs transition ${
+        active
+          ? "bg-brain-accent text-white shadow-soft-1"
+          : "border border-brain-border text-brain-text-muted hover:text-brain-text"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function statusLabel(status: UserDto["status"]): string {
+  switch (status) {
+    case "pending_approval":
+      return "승인 대기";
+    case "approved":
+      return "승인됨";
+    case "rejected":
+      return "거절";
+    case "suspended":
+      return "정지";
+  }
 }
 
 const AXIS_OPTIONS: { value: ModuleAxis; label: string }[] = [

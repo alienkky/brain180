@@ -165,6 +165,17 @@ export const RejectUserBody = z.object({
   reason: z.string().max(500).optional(),
 });
 
+export const AdminUserUpdateBody = z
+  .object({
+    role: z.enum(["student", "admin"]).optional(),
+    status: z
+      .enum(["pending_approval", "approved", "rejected", "suspended"])
+      .optional(),
+  })
+  .refine((body) => body.role !== undefined || body.status !== undefined, {
+    message: "empty_update",
+  });
+
 const ModuleAxis = z.enum(["cognitive", "value", "time"]);
 const AxisFocus = z
   .object({

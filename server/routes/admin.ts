@@ -25,6 +25,7 @@ import { lucia } from "../lib/lucia.js";
 import {
   AdminLessonCreateBody,
   AdminLessonUpdateBody,
+  AdminUserUpdateBody,
   AdminModuleCreateBody,
   AdminModuleUpdateBody,
   BrandingSettingsBody,
@@ -917,19 +918,73 @@ adminRouter.get(
   "/users",
   asyncHandler(async (_req, res) => {
     const rows = await db
-      .select({
-        id: users.id,
-        name: users.name,
-        email: users.email,
-        role: users.role,
-        status: users.status,
-        createdAt: users.createdAt,
-        lastLoginAt: users.lastLoginAt,
-      })
+      .select(baseUserSelect)
       .from(users)
       .where(isNull(users.deletedAt))
       .orderBy(desc(users.createdAt));
-    ok(res, rows);
+    ok(res, rows.map(toUserDTO));
+  }),
+);
+
+// PATCH /api/admin/users/:id — update approval status and admin role.
+adminRouter.patch(
+  "/users/:id",
+  asyncHandler(async (req, res) => {
+    const targetId = req.params.id;
+    if (typeof targetId !== "string" || !UUID_RE.test(targetId)) {
+      fail(res, 422, "validation_error", { message: "invalid_user_id" });
+      return;
+    }
+
+    const body = parseBody(AdminUserUpdateBody, req, res);
+    if (!body) return;
+
+    if (
+      targetId === req.user!.id &&
+      (body.role === "student" ||
+        body.status === "pending_approval" ||
+        body.status === "rejected" ||
+        body.status === "suspended")
+    ) {
+      fail(res, 409, "cannot_modify_self");
+      return;
+    }
+
+    const patch: Partial<typeof users.$inferInsert> = {};
+    if (body.role !== undefined) {
+      patch.role = body.role;
+    }
+    if (body.status !== undefined) {
+      patch.status = body.status;
+      patch.rejectedReason = null;
+      if (body.status === "approved") {
+        patch.approvedAt = new Date();
+        patch.approvedById = req.user!.id;
+      } else {
+        patch.approvedAt = null;
+        patch.approvedById = null;
+      }
+    }
+
+    if (body.role === "admin" && body.status === undefined) {
+      patch.status = "approved";
+      patch.approvedAt = new Date();
+      patch.approvedById = req.user!.id;
+      patch.rejectedReason = null;
+    }
+
+    const updated = await db
+      .update(users)
+      .set(patch)
+      .where(and(eq(users.id, targetId), isNull(users.deletedAt)))
+      .returning(baseUserSelect);
+
+    const row = updated[0];
+    if (!row) {
+      fail(res, 404, "not_found");
+      return;
+    }
+    ok(res, toUserDTO(row));
   }),
 );
 
@@ -939,7 +994,14 @@ adminRouter.post(
   asyncHandler(async (req, res) => {
     const id = String(req.params["id"] ?? "");
     if (!UUID_RE.test(id)) { fail(res, 400, "validation_error"); return; }
-    await db.update(users).set({ status: "suspended" as never }).where(eq(users.id, id));
-    ok(res, { id, status: "suspended" });
+    if (id === req.user!.id) { fail(res, 409, "cannot_modify_self"); return; }
+    const updated = await db
+      .update(users)
+      .set({ status: "suspended", approvedAt: null, approvedById: null })
+      .where(and(eq(users.id, id), isNull(users.deletedAt)))
+      .returning(baseUserSelect);
+    const row = updated[0];
+    if (!row) { fail(res, 404, "not_found"); return; }
+    ok(res, toUserDTO(row));
   }),
 );
