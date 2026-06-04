@@ -710,6 +710,196 @@ const MODE_OPTIONS: { value: SessionMode; label: string; hint: string }[] = [
   },
 ];
 
+type AxisAnalysisKey = NonNullable<CanvasNode["axis_tag"]>;
+
+const AXIS_ANALYSIS: {
+  key: AxisAnalysisKey;
+  label: string;
+  title: string;
+  empty: string;
+  accent: string;
+}[] = [
+  {
+    key: "cognition",
+    label: "인지",
+    title: "인지 구조",
+    empty: "본문에서 무엇을 개념으로 잡고 어떻게 구분하는지 정리합니다.",
+    accent: "border-brain-accent/60 bg-brain-accent-soft/30",
+  },
+  {
+    key: "value",
+    label: "가치",
+    title: "가치 구조",
+    empty: "글 안에서 무엇을 중요하게 보고 어떤 판단 기준을 쓰는지 정리합니다.",
+    accent: "border-brain-node-bridge/60 bg-brain-node-bridge/10",
+  },
+  {
+    key: "time",
+    label: "시간",
+    title: "시간 구조",
+    empty: "원인, 변화, 결과가 어떤 순서로 이어지는지 정리합니다.",
+    accent: "border-brain-sage/60 bg-brain-sage/10",
+  },
+];
+
+function cleanAnalysisLine(line: string): string {
+  return line.replace(/^[-*]\s+/, "").replace(/^#+\s*/, "").trim();
+}
+
+function extractAxisAnalysis(
+  source: string,
+  key: AxisAnalysisKey,
+): string {
+  const normalized = source.trim();
+  if (!normalized) return "";
+  const aliases: Record<AxisAnalysisKey, string[]> = {
+    cognition: ["인지 축", "인지 구조", "cognition"],
+    value: ["가치 축", "가치 구조", "value"],
+    time: ["시간 축", "시간 구조", "time"],
+  };
+  const lines = normalized.split(/\r?\n/);
+  const start = lines.findIndex((line) =>
+    aliases[key].some((alias) => line.toLowerCase().includes(alias.toLowerCase())),
+  );
+  if (start < 0) return "";
+  const next = lines.findIndex(
+    (line, index) =>
+      index > start &&
+      /^#{1,3}\s+/.test(line) &&
+      AXIS_ANALYSIS.some((axis) =>
+        axis.key !== key &&
+        aliases[axis.key].some((alias) =>
+          line.toLowerCase().includes(alias.toLowerCase()),
+        ),
+      ),
+  );
+  return lines
+    .slice(start + 1, next < 0 ? undefined : next)
+    .map(cleanAnalysisLine)
+    .filter(Boolean)
+    .join("\n");
+}
+
+function AxisAnalysisPanel({
+  lesson,
+  canvas,
+}: {
+  lesson: LessonDto;
+  canvas: CanvasJson | null;
+}) {
+  const analysis = lesson.cognitive_structure_analysis?.trim() ?? "";
+  const hasAnalysis =
+    Boolean(analysis) ||
+    Boolean(lesson.learner_questions?.trim()) ||
+    Boolean(lesson.tutor_reference_notes?.trim());
+  if (!hasAnalysis) return null;
+
+  return (
+    <section className="mt-6 border-t border-brain-border pt-5">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-brain-text-muted">
+            V1 분석 복원
+          </p>
+          <h4 className="font-display text-lg text-brain-text">
+            인지 · 가치 · 시간 3축 해석
+          </h4>
+        </div>
+        <p className="text-xs text-brain-text-muted">
+          캔버스 노드와 함께 본문 구조를 확인합니다.
+        </p>
+      </div>
+      <div className="grid gap-3 lg:grid-cols-3">
+        {AXIS_ANALYSIS.map((axis) => {
+          const axisText =
+            extractAxisAnalysis(analysis, axis.key) ||
+            (axis.key === "cognition" ? analysis : "") ||
+            axis.empty;
+          const axisNodes =
+            canvas?.nodes.filter((node) => node.axis_tag === axis.key) ?? [];
+          return (
+            <article
+              key={axis.key}
+              className={`rounded-lg border p-4 ${axis.accent}`}
+            >
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="rounded-full border border-brain-border bg-brain-surface px-2 py-0.5 text-xs font-semibold">
+                  {axis.label}
+                </span>
+                <span className="text-[11px] text-brain-text-muted">
+                  노드 {axisNodes.length}
+                </span>
+              </div>
+              <h5 className="mb-2 text-sm font-semibold text-brain-text">
+                {axis.title}
+              </h5>
+              <p className="whitespace-pre-line text-sm leading-6 text-brain-text">
+                {axisText}
+              </p>
+              {axisNodes.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {axisNodes.slice(0, 8).map((node) => (
+                    <span
+                      key={node.id}
+                      className="rounded-full border border-brain-border bg-brain-surface px-2 py-0.5 text-[11px] text-brain-text"
+                    >
+                      {node.label}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function ReverseMissionPanel({
+  canvas,
+  sending,
+  onAskReverseTutor,
+}: {
+  canvas: CanvasJson | null;
+  sending: boolean;
+  onAskReverseTutor: (snapshot: CanvasJson) => void;
+}) {
+  const hasCanvas = Boolean(
+    canvas &&
+      ((canvas.nodes?.length ?? 0) > 0 ||
+        (canvas.edges?.length ?? 0) > 0 ||
+        (canvas.paths?.length ?? 0) > 0),
+  );
+  return (
+    <section className="mt-5 rounded-lg border border-brain-border bg-brain-surface-soft p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-brain-text-muted">
+            역해석 훈련
+          </p>
+          <h4 className="font-display text-base text-brain-text">
+            노드에서 본문 구조를 다시 말해보기
+          </h4>
+        </div>
+        <button
+          type="button"
+          disabled={!canvas || !hasCanvas || sending}
+          onClick={() => canvas && onAskReverseTutor(canvas)}
+          className="rounded border border-brain-accent/60 px-3 py-1.5 text-sm text-brain-accent hover:bg-brain-accent-soft/50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          튜터에게 역해석 평가
+        </button>
+      </div>
+      <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm leading-6 text-brain-text-muted">
+        <li>본문을 보기 전에 캔버스 노드만 보고 핵심 흐름을 말합니다.</li>
+        <li>인지 · 가치 · 시간 중 빠진 축이 있는지 스스로 점검합니다.</li>
+        <li>튜터 평가를 받은 뒤 본문을 열어 실제 글과 비교합니다.</li>
+      </ol>
+    </section>
+  );
+}
+
 function PracticeScreen({
   lesson,
   resumeSessionId,
@@ -916,6 +1106,30 @@ function PracticeScreen({
     [session, lesson.id, sending],
   );
 
+  const onAskReverseTutor = useCallback(
+    async (snapshot: CanvasJson) => {
+      if (!session || sending) return;
+      const freePathCount = snapshot.paths?.length ?? 0;
+      const hasCanvasContent =
+        snapshot.nodes.length > 0 || snapshot.edges.length > 0 || freePathCount > 0;
+      if (!hasCanvasContent) return;
+      setTutorOpen(true);
+      setSending(true);
+      try {
+        await sendChat(
+          "역해석 훈련입니다. 본문 정답을 바로 말하지 말고, 현재 캔버스 노드와 연결만 보고 학습자가 글의 핵심 흐름을 얼마나 재구성했는지 평가해 주세요. 인지·가치·시간 3축 중 빠진 축, 과하게 해석한 축, 다음에 추가하면 좋은 노드 1~2개를 짧게 제안해 주세요.",
+          snapshot,
+        );
+      } catch {
+        /* sendChat already surfaced the error */
+      } finally {
+        setSending(false);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [session, lesson.id, sending],
+  );
+
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!session || !input.trim() || sending) return;
@@ -1057,6 +1271,19 @@ function PracticeScreen({
                     onClearFocus={() => setFocusCite(null)}
                   />
                 </div>
+              )}
+              {mode === "analyze" && (
+                <AxisAnalysisPanel
+                  lesson={lesson}
+                  canvas={liveCanvas ?? initialCanvas}
+                />
+              )}
+              {mode === "reverse" && (
+                <ReverseMissionPanel
+                  canvas={liveCanvas ?? initialCanvas}
+                  sending={sending}
+                  onAskReverseTutor={onAskReverseTutor}
+                />
               )}
             </article>
           )}

@@ -46,6 +46,9 @@ export interface LessonDto {
   tutor_system_prompt_id: string | null;
   objectives: string[];
   axis_focus: Record<string, unknown>;
+  cognitive_structure_analysis: string;
+  learner_questions: string;
+  tutor_reference_notes: string;
 }
 
 export interface TextExcerptDto {

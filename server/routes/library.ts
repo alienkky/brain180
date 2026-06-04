@@ -56,6 +56,9 @@ interface LessonDTO {
   tutor_system_prompt_id: string | null;
   objectives: string[];
   axis_focus: Record<string, unknown>;
+  cognitive_structure_analysis: string;
+  learner_questions: string;
+  tutor_reference_notes: string;
 }
 
 interface TextExcerptDTO {
@@ -86,8 +89,13 @@ async function lessonToDTO(row: {
   tutorSystemPromptId: string | null;
   objectives: unknown;
   axisFocus: unknown;
+  sourceMeta: unknown;
 }): Promise<LessonDTO> {
   const textExcerptId = await firstExcerptIdForLesson(row.id);
+  const sourceMeta =
+    row.sourceMeta && typeof row.sourceMeta === "object"
+      ? (row.sourceMeta as Record<string, unknown>)
+      : {};
   return {
     id: row.id,
     module_id: row.moduleId,
@@ -97,6 +105,18 @@ async function lessonToDTO(row: {
     tutor_system_prompt_id: row.tutorSystemPromptId,
     objectives: Array.isArray(row.objectives) ? (row.objectives as string[]) : [],
     axis_focus: (row.axisFocus ?? {}) as Record<string, unknown>,
+    cognitive_structure_analysis:
+      typeof sourceMeta.cognitive_structure_analysis === "string"
+        ? sourceMeta.cognitive_structure_analysis
+        : "",
+    learner_questions:
+      typeof sourceMeta.learner_questions === "string"
+        ? sourceMeta.learner_questions
+        : "",
+    tutor_reference_notes:
+      typeof sourceMeta.tutor_reference_notes === "string"
+        ? sourceMeta.tutor_reference_notes
+        : "",
   };
 }
 
@@ -162,6 +182,7 @@ libraryRouter.get(
         tutorSystemPromptId: lessons.tutorSystemPromptId,
         objectives: lessons.objectives,
         axisFocus: lessons.axisFocus,
+        sourceMeta: lessons.sourceMeta,
       })
       .from(lessons)
       .where(eq(lessons.moduleId, moduleId))
@@ -193,6 +214,7 @@ libraryRouter.get(
         tutorSystemPromptId: lessons.tutorSystemPromptId,
         objectives: lessons.objectives,
         axisFocus: lessons.axisFocus,
+        sourceMeta: lessons.sourceMeta,
       })
       .from(lessons)
       .where(eq(lessons.id, lessonId))
