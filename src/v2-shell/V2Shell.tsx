@@ -18,6 +18,7 @@ import {
   type AdminModuleCreateInput,
   type AdminModuleDto,
   type AdminModuleUpdateInput,
+  type AdminUserProgressDto,
   type ArtifactGalleryDto,
   type BrandingSettingsDto,
   type CanvasCite,
@@ -587,6 +588,19 @@ function LibraryScreen({
     };
   }, [activeModuleId]);
 
+  const deleteArtifact = async (item: ArtifactGalleryDto) => {
+    if (!window.confirm("이 저장된 읽기 내용을 목록에서 삭제할까요?")) return;
+    setError(null);
+    try {
+      await api.deleteArtifact(item.artifact_id);
+      setArtifacts((curr) =>
+        curr ? curr.filter((artifact) => artifact.artifact_id !== item.artifact_id) : curr,
+      );
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    }
+  };
+
   return (
     <div className="grid h-full grid-cols-[280px_1fr] gap-0">
       <aside className="overflow-y-auto border-r border-brain-border bg-brain-surface-soft p-4">
@@ -607,7 +621,11 @@ function LibraryScreen({
       </aside>
       <section className="overflow-y-auto p-6">
         <ProgressSummary progress={progress} />
-        <ArtifactGallery artifacts={artifacts} onOpen={onOpenArtifact} />
+        <ArtifactGallery
+          artifacts={artifacts}
+          onOpen={onOpenArtifact}
+          onDelete={deleteArtifact}
+        />
         <CompareBar
           pins={comparePins}
           onClear={onClearPin}
@@ -1808,6 +1826,10 @@ function AdminUsersPanel() {
   const [filter, setFilter] = useState<"all" | UserDto["status"]>("all");
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<UserDto | null>(null);
+  const [userProgress, setUserProgress] = useState<AdminUserProgressDto | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setError(null);
@@ -1877,6 +1899,35 @@ function AdminUsersPanel() {
     }
   };
 
+  const openUserDetail = async (u: UserDto) => {
+    setSelectedUser(u);
+    setUserProgress(null);
+    setTempPassword(null);
+    setDetailLoading(true);
+    setError(null);
+    try {
+      setUserProgress(await api.adminUserProgress(u.id));
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const resetUserPassword = async (u: UserDto) => {
+    if (!window.confirm(`${u.email} 임시 비밀번호를 새로 발급할까요?`)) return;
+    setBusyId(u.id);
+    setError(null);
+    try {
+      const result = await api.adminResetUserPassword(u.id);
+      setTempPassword(result.temp_password);
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const visibleUsers = users?.filter((u) => filter === "all" || u.status === filter) ?? null;
   const pendingCount = users?.filter((u) => u.status === "pending_approval").length ?? 0;
 
@@ -1923,6 +1974,22 @@ function AdminUsersPanel() {
         </UserFilterButton>
       </div>
       {!users && <p className="text-sm text-brain-text-muted">불러오는 중…</p>}
+      {selectedUser && (
+        <AdminUserDetailPanel
+          user={selectedUser}
+          progress={userProgress}
+          loading={detailLoading}
+          tempPassword={tempPassword}
+          busy={busyId === selectedUser.id}
+          onClose={() => {
+            setSelectedUser(null);
+            setUserProgress(null);
+            setTempPassword(null);
+          }}
+          onRefresh={() => void openUserDetail(selectedUser)}
+          onResetPassword={() => void resetUserPassword(selectedUser)}
+        />
+      )}
       {visibleUsers && visibleUsers.length === 0 && (
         <p className="text-sm text-brain-text-muted">표시할 가입자가 없습니다.</p>
       )}
@@ -1971,6 +2038,14 @@ function AdminUsersPanel() {
                 <option value="admin">관리자</option>
               </select>
               <button
+                type="button"
+                onClick={() => void openUserDetail(u)}
+                disabled={busyId === u.id}
+                className="rounded border border-brain-border px-3 py-1 text-sm text-brain-text-muted hover:bg-brain-surface-soft disabled:opacity-50"
+              >
+                진도 보기
+              </button>
+              <button
                 onClick={() => approve(u)}
                 disabled={busyId === u.id || u.status === "approved"}
                 className="rounded bg-brain-accent px-3 py-1 text-sm text-white hover:opacity-90 disabled:opacity-50"
@@ -1989,6 +2064,159 @@ function AdminUsersPanel() {
         ))}
       </ul>
     </>
+  );
+}
+
+function AdminUserDetailPanel({
+  user,
+  progress,
+  loading,
+  tempPassword,
+  busy,
+  onClose,
+  onRefresh,
+  onResetPassword,
+}: {
+  user: UserDto;
+  progress: AdminUserProgressDto | null;
+  loading: boolean;
+  tempPassword: string | null;
+  busy: boolean;
+  onClose: () => void;
+  onRefresh: () => void;
+  onResetPassword: () => void;
+}) {
+  const lastStartedAt = progress?.summary.last_started_at
+    ? Date.parse(progress.summary.last_started_at)
+    : null;
+
+  return (
+    <section className="mb-4 rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="font-display text-xl">{user.name}</h3>
+          <p className="text-sm text-brain-text-muted">{user.email}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={loading}
+            className="rounded border border-brain-border px-3 py-1 text-sm text-brain-text-muted hover:bg-brain-surface-soft disabled:opacity-50"
+          >
+            새로고침
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border border-brain-border px-3 py-1 text-sm text-brain-text-muted hover:bg-brain-surface-soft"
+          >
+            닫기
+          </button>
+        </div>
+      </div>
+
+      {loading && <p className="text-sm text-brain-text-muted">진도 상황을 불러오는 중입니다.</p>}
+
+      {progress && (
+        <div className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-4">
+            <AdminMetric label="진입 레슨" value={`${progress.summary.lesson_count}`} />
+            <AdminMetric label="학습 세션" value={`${progress.summary.session_count}`} />
+            <AdminMetric label="저장 내용" value={`${progress.summary.artifact_count}`} />
+            <AdminMetric
+              label="최근 활동"
+              value={lastStartedAt ? relativeTime(lastStartedAt) : "-"}
+            />
+          </div>
+
+          <div className="rounded-lg border border-brain-border bg-brain-surface-soft p-3">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="text-sm font-medium text-brain-text">비밀번호 재설정</div>
+              <button
+                type="button"
+                onClick={onResetPassword}
+                disabled={busy}
+                className="rounded bg-brain-accent px-3 py-1 text-sm text-white disabled:opacity-60"
+              >
+                임시 비밀번호 발급
+              </button>
+            </div>
+            {tempPassword && (
+              <div className="rounded border border-brain-accent/30 bg-brain-bg px-3 py-2">
+                <div className="mb-1 text-xs text-brain-text-muted">
+                  임시 비밀번호는 지금 한 번만 표시됩니다.
+                </div>
+                <code className="select-all text-sm text-brain-text">{tempPassword}</code>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h4 className="mb-2 font-display text-base">레슨별 진도</h4>
+            {progress.lessons.length === 0 && (
+              <p className="text-sm text-brain-text-muted">아직 진입한 레슨이 없습니다.</p>
+            )}
+            <ul className="max-h-48 space-y-2 overflow-y-auto pr-1">
+              {progress.lessons.map((lesson) => {
+                const last = lesson.last_started_at ? Date.parse(lesson.last_started_at) : null;
+                return (
+                  <li
+                    key={lesson.lesson_id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded border border-brain-border bg-brain-bg px-3 py-2 text-sm"
+                  >
+                    <div>
+                      <div className="font-medium text-brain-text">{lesson.lesson_title}</div>
+                      <div className="text-xs text-brain-text-muted">{lesson.module_title}</div>
+                    </div>
+                    <div className="text-right text-xs text-brain-text-muted">
+                      <div>{lesson.session_count}회</div>
+                      <div>{last ? relativeTime(last) : "-"}</div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="mb-2 font-display text-base">최근 세션</h4>
+            {progress.recent_sessions.length === 0 && (
+              <p className="text-sm text-brain-text-muted">최근 세션이 없습니다.</p>
+            )}
+            <ul className="max-h-56 space-y-2 overflow-y-auto pr-1">
+              {progress.recent_sessions.map((session) => (
+                <li
+                  key={session.session_id}
+                  className="rounded border border-brain-border bg-brain-bg px-3 py-2 text-sm"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-medium text-brain-text">{session.lesson_title}</div>
+                    <div className="text-xs text-brain-text-muted">
+                      {new Date(session.started_at).toLocaleString("ko-KR")}
+                    </div>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-brain-text-muted">
+                    <span>{session.module_title}</span>
+                    <span>mode {session.mode}</span>
+                    <span>저장 {session.artifact_count}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AdminMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-brain-border bg-brain-bg px-3 py-2">
+      <div className="text-xs text-brain-text-muted">{label}</div>
+      <div className="mt-1 font-display text-xl text-brain-text">{value}</div>
+    </div>
   );
 }
 
@@ -2751,9 +2979,11 @@ function ModulesByField({
 function ArtifactGallery({
   artifacts,
   onOpen,
+  onDelete,
 }: {
   artifacts: ArtifactGalleryDto[] | null;
   onOpen: (item: ArtifactGalleryDto) => void;
+  onDelete: (item: ArtifactGalleryDto) => void;
 }) {
   if (!artifacts) {
     return (
@@ -2774,8 +3004,9 @@ function ArtifactGallery({
           {artifacts.length}개
         </span>
       </div>
+      <div className="max-h-[420px] overflow-y-auto pr-1">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {artifacts.slice(0, 6).map((item) => (
+        {artifacts.map((item) => (
           <button
             key={item.artifact_id}
             type="button"
@@ -2789,9 +3020,28 @@ function ArtifactGallery({
               <span>노드 {item.node_count}</span>
               <span>엣지 {item.edge_count}</span>
               <span>{new Date(item.saved_at).toLocaleDateString("ko-KR")}</span>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDelete(item);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onDelete(item);
+                  }
+                }}
+                className="rounded border border-brain-danger/40 px-2 py-0.5 text-[11px] text-brain-danger hover:bg-brain-danger/10"
+              >
+                삭제
+              </span>
             </div>
           </button>
         ))}
+      </div>
       </div>
     </section>
   );

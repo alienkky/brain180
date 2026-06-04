@@ -1066,6 +1066,120 @@ adminRouter.get(
   }),
 );
 
+// GET /api/admin/users/:id/progress - user learning progress detail.
+adminRouter.get(
+  "/users/:id/progress",
+  asyncHandler(async (req, res) => {
+    const targetId = req.params.id;
+    if (typeof targetId !== "string" || !UUID_RE.test(targetId)) {
+      fail(res, 422, "validation_error", { message: "invalid_user_id" });
+      return;
+    }
+
+    const userRows = await db
+      .select(baseUserSelect)
+      .from(users)
+      .where(and(eq(users.id, targetId), isNull(users.deletedAt)))
+      .limit(1);
+    const user = userRows[0];
+    if (!user) {
+      fail(res, 404, "not_found");
+      return;
+    }
+
+    const summaryRows = await db
+      .select({
+        sessionCount: sql<number>`count(*)::int`,
+        lessonCount: sql<number>`count(distinct ${learningSessions.lessonId})::int`,
+        lastStartedAt: sql<Date | null>`max(${learningSessions.startedAt})`,
+      })
+      .from(learningSessions)
+      .where(and(eq(learningSessions.userId, targetId), isNull(learningSessions.deletedAt)));
+
+    const artifactRows = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(canvasArtifacts)
+      .innerJoin(learningSessions, eq(canvasArtifacts.sessionId, learningSessions.id))
+      .where(
+        and(
+          eq(learningSessions.userId, targetId),
+          isNull(learningSessions.deletedAt),
+          isNull(canvasArtifacts.deletedAt),
+        ),
+      );
+
+    const lessonRows = await db
+      .select({
+        lessonId: lessons.id,
+        lessonTitle: lessons.title,
+        moduleTitle: modules.title,
+        sessionCount: sql<number>`count(${learningSessions.id})::int`,
+        lastStartedAt: sql<Date | null>`max(${learningSessions.startedAt})`,
+      })
+      .from(learningSessions)
+      .innerJoin(lessons, eq(lessons.id, learningSessions.lessonId))
+      .innerJoin(modules, eq(modules.id, lessons.moduleId))
+      .where(and(eq(learningSessions.userId, targetId), isNull(learningSessions.deletedAt)))
+      .groupBy(lessons.id, lessons.title, modules.title)
+      .orderBy(desc(sql`max(${learningSessions.startedAt})`));
+
+    const recentRows = await db
+      .select({
+        sessionId: learningSessions.id,
+        lessonId: learningSessions.lessonId,
+        lessonTitle: lessons.title,
+        moduleTitle: modules.title,
+        mode: learningSessions.mode,
+        startedAt: learningSessions.startedAt,
+        endedAt: learningSessions.endedAt,
+        artifactCount: sql<number>`(
+          SELECT count(*)::int
+          FROM ${canvasArtifacts}
+          WHERE ${canvasArtifacts.sessionId} = ${learningSessions.id}
+            AND ${canvasArtifacts.deletedAt} IS NULL
+        )`,
+      })
+      .from(learningSessions)
+      .innerJoin(lessons, eq(lessons.id, learningSessions.lessonId))
+      .innerJoin(modules, eq(modules.id, lessons.moduleId))
+      .where(and(eq(learningSessions.userId, targetId), isNull(learningSessions.deletedAt)))
+      .orderBy(desc(learningSessions.startedAt))
+      .limit(30);
+
+    const summary = summaryRows[0];
+    ok(res, {
+      user: toUserDTO(user),
+      summary: {
+        session_count: Number(summary?.sessionCount ?? 0),
+        lesson_count: Number(summary?.lessonCount ?? 0),
+        artifact_count: Number(artifactRows[0]?.count ?? 0),
+        last_started_at: summary?.lastStartedAt
+          ? new Date(summary.lastStartedAt).toISOString()
+          : null,
+      },
+      lessons: lessonRows.map((row) => ({
+        lesson_id: row.lessonId,
+        lesson_title: row.lessonTitle,
+        module_title: row.moduleTitle,
+        session_count: Number(row.sessionCount),
+        last_started_at: row.lastStartedAt
+          ? new Date(row.lastStartedAt).toISOString()
+          : null,
+      })),
+      recent_sessions: recentRows.map((row) => ({
+        session_id: row.sessionId,
+        lesson_id: row.lessonId,
+        lesson_title: row.lessonTitle,
+        module_title: row.moduleTitle,
+        mode: row.mode,
+        started_at: row.startedAt.toISOString(),
+        ended_at: row.endedAt ? row.endedAt.toISOString() : null,
+        artifact_count: Number(row.artifactCount),
+      })),
+    });
+  }),
+);
+
 // PATCH /api/admin/users/:id — update approval status and admin role.
 adminRouter.patch(
   "/users/:id",

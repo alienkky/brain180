@@ -19,7 +19,7 @@
 
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
-import { and, eq, desc, sql } from "drizzle-orm";
+import { and, eq, desc, isNull, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { canvasArtifacts, learningSessions, lessons } from "../db/schema.js";
 import { ok, fail } from "../lib/envelope.js";
@@ -64,7 +64,7 @@ async function latestArtifactId(sessionId: string): Promise<string | null> {
   const rows = await db
     .select({ id: canvasArtifacts.id })
     .from(canvasArtifacts)
-    .where(eq(canvasArtifacts.sessionId, sessionId))
+    .where(and(eq(canvasArtifacts.sessionId, sessionId), isNull(canvasArtifacts.deletedAt)))
     .orderBy(desc(canvasArtifacts.savedAt))
     .limit(1);
   return rows[0]?.id ?? null;
@@ -135,7 +135,7 @@ practiceRouter.get(
         lastStartedAt: sql<Date | null>`max(${learningSessions.startedAt})`,
       })
       .from(learningSessions)
-      .where(eq(learningSessions.userId, req.user!.id))
+      .where(and(eq(learningSessions.userId, req.user!.id), isNull(learningSessions.deletedAt)))
       .groupBy(learningSessions.lessonId);
     const dto: ProgressEntryDTO[] = rows.map((r) => ({
       lesson_id: r.lessonId,
@@ -169,7 +169,13 @@ practiceRouter.get(
       .from(canvasArtifacts)
       .innerJoin(learningSessions, eq(canvasArtifacts.sessionId, learningSessions.id))
       .innerJoin(lessons, eq(learningSessions.lessonId, lessons.id))
-      .where(and(eq(learningSessions.userId, req.user!.id), sql`${canvasArtifacts.deletedAt} IS NULL`))
+      .where(
+        and(
+          eq(learningSessions.userId, req.user!.id),
+          isNull(learningSessions.deletedAt),
+          isNull(canvasArtifacts.deletedAt),
+        ),
+      )
       .orderBy(desc(canvasArtifacts.savedAt))
       .limit(20);
 
@@ -195,6 +201,43 @@ practiceRouter.get(
       };
     });
     ok(res, dto);
+  }),
+);
+
+practiceRouter.delete(
+  "/me/artifacts/:id",
+  userRateLimit,
+  asyncHandler(async (req, res) => {
+    const artifactId = req.params.id;
+    if (typeof artifactId !== "string" || !UUID_RE.test(artifactId)) {
+      fail(res, 422, "validation_error", { message: "invalid_artifact_id" });
+      return;
+    }
+
+    const rows = await db
+      .select({ id: canvasArtifacts.id })
+      .from(canvasArtifacts)
+      .innerJoin(learningSessions, eq(canvasArtifacts.sessionId, learningSessions.id))
+      .where(
+        and(
+          eq(canvasArtifacts.id, artifactId),
+          eq(learningSessions.userId, req.user!.id),
+          isNull(learningSessions.deletedAt),
+          isNull(canvasArtifacts.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!rows[0]) {
+      fail(res, 404, "not_found");
+      return;
+    }
+
+    await db
+      .update(canvasArtifacts)
+      .set({ deletedAt: new Date() })
+      .where(eq(canvasArtifacts.id, artifactId));
+
+    ok(res, { id: artifactId });
   }),
 );
 
@@ -336,7 +379,7 @@ practiceRouter.get(
         savedAt: canvasArtifacts.savedAt,
       })
       .from(canvasArtifacts)
-      .where(eq(canvasArtifacts.sessionId, owned.id))
+      .where(and(eq(canvasArtifacts.sessionId, owned.id), isNull(canvasArtifacts.deletedAt)))
       .orderBy(desc(canvasArtifacts.savedAt))
       .limit(1);
     const row = rows[0];

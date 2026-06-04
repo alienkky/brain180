@@ -151,6 +151,38 @@ export interface ProgressEntryDto {
   last_started_at: string | null;
 }
 
+export interface AdminUserProgressDto {
+  user: UserDto;
+  summary: {
+    session_count: number;
+    lesson_count: number;
+    artifact_count: number;
+    last_started_at: string | null;
+  };
+  lessons: {
+    lesson_id: string;
+    lesson_title: string;
+    module_title: string;
+    session_count: number;
+    last_started_at: string | null;
+  }[];
+  recent_sessions: {
+    session_id: string;
+    lesson_id: string;
+    lesson_title: string;
+    module_title: string;
+    mode: SessionMode;
+    started_at: string;
+    ended_at: string | null;
+    artifact_count: number;
+  }[];
+}
+
+export interface AdminResetPasswordDto {
+  user_id: string;
+  temp_password: string;
+}
+
 export interface TutorMessageDto {
   id: string;
   session_id: string;
@@ -439,6 +471,10 @@ export const api = {
     ),
   progress: () => call<ProgressEntryDto[]>("/api/practice/me/progress"),
   artifacts: () => call<ArtifactGalleryDto[]>("/api/practice/me/artifacts"),
+  deleteArtifact: (artifactId: string) =>
+    call<{ id: string }>(`/api/practice/me/artifacts/${artifactId}`, {
+      method: "DELETE",
+    }),
   startSession: (lessonId: string, mode?: SessionMode) =>
     call<SessionDto>("/api/practice/sessions", {
       method: "POST",
@@ -482,6 +518,12 @@ export const api = {
         ...(input.role ? { role: input.role === "admin" ? "admin" : "student" } : {}),
         ...(input.status ? { status: input.status } : {}),
       }),
+    }),
+  adminUserProgress: (userId: string) =>
+    call<AdminUserProgressDto>(`/api/admin/users/${userId}/progress`),
+  adminResetUserPassword: (userId: string) =>
+    call<AdminResetPasswordDto>(`/api/admin/users/${userId}/reset-password`, {
+      method: "POST",
     }),
   adminModules: () => call<AdminModuleDto[]>("/api/admin/modules"),
   adminCreateModule: (input: AdminModuleCreateInput) =>
