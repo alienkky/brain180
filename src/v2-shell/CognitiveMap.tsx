@@ -213,6 +213,35 @@ export function CognitiveMap({
     };
   }, [canvas, onSave, onChange, disabled]);
 
+  // Delete/Backspace removes the selected node (and its incident edges).
+  // Ignored while typing in form fields so label editing via window.prompt
+  // and any future inline inputs are not hijacked.
+  useEffect(() => {
+    if (disabled) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      const t = e.target as HTMLElement | null;
+      if (t) {
+        const tag = t.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t.isContentEditable) {
+          return;
+        }
+      }
+      if (!selectedNodeId) return;
+      e.preventDefault();
+      setCanvas((c) => ({
+        ...c,
+        nodes: c.nodes.filter((n) => n.id !== selectedNodeId),
+        edges: c.edges.filter(
+          (eg) => eg.from !== selectedNodeId && eg.to !== selectedNodeId,
+        ),
+      }));
+      setSelectedNodeId(null);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [selectedNodeId, disabled]);
+
   const screenToCanvas = (clientX: number, clientY: number) => {
     const svg = svgRef.current;
     if (!svg) return { x: clientX, y: clientY };
