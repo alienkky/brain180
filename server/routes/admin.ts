@@ -6,12 +6,13 @@
 import { randomBytes } from "node:crypto";
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
-import { and, desc, eq, gte, isNull, lt, asc, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, lt, asc, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import {
   apiUsageLogs,
   canvasArtifacts,
   learningSessions,
+  lessonFeedback,
   lessons,
   modules,
   textExcerpts,
@@ -24,6 +25,7 @@ import { hashPassword } from "../lib/password.js";
 import { lucia } from "../lib/lucia.js";
 import {
   AdminLessonCreateBody,
+  AdminLessonFeedbackUpdateBody,
   AdminLessonUpdateBody,
   AdminUserUpdateBody,
   AdminModuleCreateBody,
@@ -189,6 +191,144 @@ adminRouter.get(
 );
 
 // ── GET /api/admin/users/pending ────────────────────────────────────
+function lessonFeedbackStatusWhere(status: string) {
+  if (status === "visible") {
+    return and(isNull(lessonFeedback.deletedAt), eq(lessonFeedback.isHidden, false));
+  }
+  if (status === "hidden") {
+    return and(isNull(lessonFeedback.deletedAt), eq(lessonFeedback.isHidden, true));
+  }
+  if (status === "deleted") {
+    return isNotNull(lessonFeedback.deletedAt);
+  }
+  return sql`true`;
+}
+
+async function adminLessonFeedbackRow(feedbackId: string) {
+  const rows = await db
+    .select({
+      id: lessonFeedback.id,
+      lessonId: lessonFeedback.lessonId,
+      lessonTitle: lessons.title,
+      userId: lessonFeedback.userId,
+      userName: users.name,
+      userEmail: users.email,
+      displayName: lessonFeedback.displayName,
+      content: lessonFeedback.content,
+      rating: lessonFeedback.rating,
+      isHidden: lessonFeedback.isHidden,
+      hiddenAt: lessonFeedback.hiddenAt,
+      deletedAt: lessonFeedback.deletedAt,
+      adminReply: lessonFeedback.adminReply,
+      adminRepliedAt: lessonFeedback.adminRepliedAt,
+      adminRepliedBy: lessonFeedback.adminRepliedBy,
+      createdAt: lessonFeedback.createdAt,
+    })
+    .from(lessonFeedback)
+    .innerJoin(lessons, eq(lessons.id, lessonFeedback.lessonId))
+    .innerJoin(users, eq(users.id, lessonFeedback.userId))
+    .where(eq(lessonFeedback.id, feedbackId))
+    .limit(1);
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    id: r.id,
+    lesson_id: r.lessonId,
+    lesson_title: r.lessonTitle,
+    user_id: r.userId,
+    user_name: r.userName,
+    user_email: r.userEmail,
+    display_name: r.displayName,
+    content: r.content,
+    rating: r.rating,
+    is_hidden: r.isHidden,
+    hidden_at: r.hiddenAt ? r.hiddenAt.toISOString() : null,
+    deleted_at: r.deletedAt ? r.deletedAt.toISOString() : null,
+    admin_reply: r.adminReply,
+    admin_replied_at: r.adminRepliedAt ? r.adminRepliedAt.toISOString() : null,
+    admin_replied_by: r.adminRepliedBy,
+    created_at: r.createdAt.toISOString(),
+  };
+}
+
+adminRouter.get(
+  "/lesson-feedback",
+  asyncHandler(async (req, res) => {
+    const rawStatus = String(req.query.status ?? "all");
+    const status = ["all", "visible", "hidden", "deleted"].includes(rawStatus)
+      ? rawStatus
+      : "all";
+    const rawLimit = Number(req.query.limit ?? 100);
+    const limit = Number.isFinite(rawLimit)
+      ? Math.min(Math.max(Math.trunc(rawLimit), 1), 200)
+      : 100;
+
+    const rows = await db
+      .select({ id: lessonFeedback.id })
+      .from(lessonFeedback)
+      .where(lessonFeedbackStatusWhere(status))
+      .orderBy(desc(lessonFeedback.createdAt))
+      .limit(limit);
+
+    const items = [];
+    for (const row of rows) {
+      const item = await adminLessonFeedbackRow(row.id);
+      if (item) items.push(item);
+    }
+    ok(res, { items });
+  }),
+);
+
+adminRouter.patch(
+  "/lesson-feedback/:id",
+  asyncHandler(async (req, res) => {
+    const feedbackId = req.params.id;
+    if (typeof feedbackId !== "string" || !UUID_RE.test(feedbackId)) {
+      fail(res, 422, "validation_error", { message: "invalid_feedback_id" });
+      return;
+    }
+
+    const body = parseBody(AdminLessonFeedbackUpdateBody, req, res);
+    if (!body) return;
+
+    const now = new Date();
+    const changes: {
+      isHidden?: boolean;
+      hiddenAt?: Date | null;
+      deletedAt?: Date | null;
+      adminReply?: string | null;
+      adminRepliedAt?: Date | null;
+      adminRepliedBy?: string | null;
+    } = {};
+
+    if (body.hidden !== undefined) {
+      changes.isHidden = body.hidden;
+      changes.hiddenAt = body.hidden ? now : null;
+    }
+    if (body.deleted !== undefined) {
+      changes.deletedAt = body.deleted ? now : null;
+    }
+    if (body.admin_reply !== undefined) {
+      const reply = body.admin_reply?.trim() ?? "";
+      changes.adminReply = reply.length > 0 ? reply : null;
+      changes.adminRepliedAt = reply.length > 0 ? now : null;
+      changes.adminRepliedBy = reply.length > 0 ? req.user!.id : null;
+    }
+
+    const updated = await db
+      .update(lessonFeedback)
+      .set(changes)
+      .where(eq(lessonFeedback.id, feedbackId))
+      .returning({ id: lessonFeedback.id });
+    if (!updated[0]) {
+      fail(res, 404, "not_found");
+      return;
+    }
+
+    ok(res, await adminLessonFeedbackRow(feedbackId));
+  }),
+);
+
 adminRouter.get(
   "/users/pending",
   asyncHandler(async (_req, res) => {

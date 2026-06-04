@@ -198,6 +198,23 @@ export function FeedbackPanel({ lessonId }: Props) {
               >
                 {e.content}
               </p>
+              {e.admin_reply && (
+                <div className="mt-3 rounded border border-brain-accent/25 bg-brain-accent-soft/40 px-3 py-2">
+                  <div className="mb-1 text-[11px] font-semibold text-brain-accent">
+                    관리자 답변
+                  </div>
+                  <p
+                    className="text-[13px] leading-relaxed"
+                    style={{
+                      color: "var(--color-brain-text)",
+                      fontFamily: "var(--font-serif)",
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
+                    {e.admin_reply}
+                  </p>
+                </div>
+              )}
             </article>
           ))}
         </div>

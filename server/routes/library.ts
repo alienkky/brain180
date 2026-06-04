@@ -6,7 +6,7 @@
 
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
-import { eq, asc, desc, sql } from "drizzle-orm";
+import { and, eq, asc, desc, isNull, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import {
   lessonFeedback,
@@ -261,6 +261,8 @@ interface LessonFeedbackDTO {
   display_name: string;
   content: string;
   rating: number;
+  admin_reply: string | null;
+  admin_replied_at: string | null;
   created_at: string;
   // 본인이 작성한 글에만 true — 클라이언트가 *삭제* UI 분기에 사용 가능.
   is_mine: boolean;
@@ -283,10 +285,18 @@ libraryRouter.get(
         displayName: lessonFeedback.displayName,
         content: lessonFeedback.content,
         rating: lessonFeedback.rating,
+        adminReply: lessonFeedback.adminReply,
+        adminRepliedAt: lessonFeedback.adminRepliedAt,
         createdAt: lessonFeedback.createdAt,
       })
       .from(lessonFeedback)
-      .where(eq(lessonFeedback.lessonId, lessonId))
+      .where(
+        and(
+          eq(lessonFeedback.lessonId, lessonId),
+          eq(lessonFeedback.isHidden, false),
+          isNull(lessonFeedback.deletedAt),
+        ),
+      )
       .orderBy(desc(lessonFeedback.createdAt))
       .limit(100);
     const dto: LessonFeedbackDTO[] = rows.map((r) => ({
@@ -295,6 +305,8 @@ libraryRouter.get(
       display_name: r.displayName || "익명",
       content: r.content,
       rating: r.rating,
+      admin_reply: r.adminReply,
+      admin_replied_at: r.adminRepliedAt ? r.adminRepliedAt.toISOString() : null,
       created_at: r.createdAt.toISOString(),
       is_mine: r.userId === req.user!.id,
     }));
@@ -347,6 +359,8 @@ libraryRouter.post(
         displayName: lessonFeedback.displayName,
         content: lessonFeedback.content,
         rating: lessonFeedback.rating,
+        adminReply: lessonFeedback.adminReply,
+        adminRepliedAt: lessonFeedback.adminRepliedAt,
         createdAt: lessonFeedback.createdAt,
       });
     const row = inserted[0]!;
@@ -356,6 +370,8 @@ libraryRouter.post(
       display_name: row.displayName || "익명",
       content: row.content,
       rating: row.rating,
+      admin_reply: row.adminReply,
+      admin_replied_at: row.adminRepliedAt ? row.adminRepliedAt.toISOString() : null,
       created_at: row.createdAt.toISOString(),
       is_mine: true,
     };

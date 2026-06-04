@@ -687,11 +687,24 @@ export const lessonFeedback = pgTable(
     displayName: varchar("display_name", { length: 80 }).notNull().default(""),
     content: text("content").notNull(),
     rating: integer("rating").notNull().default(0),
+    isHidden: boolean("is_hidden").notNull().default(false),
+    hiddenAt: timestamp("hidden_at", { withTimezone: true }),
+    deletedAt,
+    adminReply: text("admin_reply"),
+    adminRepliedAt: timestamp("admin_replied_at", { withTimezone: true }),
+    adminRepliedBy: uuid("admin_replied_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
     createdAt,
   },
   (table) => ({
     lessonCreatedIdx: index("lesson_feedback_lesson_created_idx").on(
       table.lessonId,
+      table.createdAt,
+    ),
+    moderationIdx: index("lesson_feedback_moderation_idx").on(
+      table.deletedAt,
+      table.isHidden,
       table.createdAt,
     ),
     ratingCheck: check(

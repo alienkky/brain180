@@ -9,6 +9,8 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ReactN
 import {
   ApiError,
   api,
+  type AdminLessonFeedbackDto,
+  type AdminLessonFeedbackStatus,
   type AdminTutorRatingsDto,
   type AdminLessonCreateInput,
   type AdminLessonDto,
@@ -1212,7 +1214,7 @@ function CanvasModeSelector({ onSelect }: { onSelect: (m: "free" | CanvasMode) =
   );
 }
 
-type AdminTab = "users" | "modules" | "lessons" | "tutorQuality" | "brand";
+type AdminTab = "users" | "modules" | "lessons" | "feedback" | "tutorQuality" | "brand";
 
 function AdminScreen({
   branding,
@@ -1235,6 +1237,9 @@ function AdminScreen({
           <AdminTabButton active={tab === "lessons"} onClick={() => setTab("lessons")}>
             레슨
           </AdminTabButton>
+          <AdminTabButton active={tab === "feedback"} onClick={() => setTab("feedback")}>
+            학습자 피드백
+          </AdminTabButton>
           <AdminTabButton
             active={tab === "tutorQuality"}
             onClick={() => setTab("tutorQuality")}
@@ -1251,6 +1256,7 @@ function AdminScreen({
           {tab === "users" && <AdminUsersPanel />}
           {tab === "modules" && <AdminModulesPanel />}
           {tab === "lessons" && <AdminLessonsPanel />}
+          {tab === "feedback" && <AdminLessonFeedbackPanel />}
           {tab === "tutorQuality" && <AdminTutorRatingsPanel />}
           {tab === "brand" && (
             <AdminBrandPanel
@@ -1398,6 +1404,232 @@ function AdminBrandPanel({
           </button>
         </div>
       </div>
+    </section>
+  );
+}
+
+function AdminLessonFeedbackPanel() {
+  const [items, setItems] = useState<AdminLessonFeedbackDto[]>([]);
+  const [status, setStatus] = useState<AdminLessonFeedbackStatus>("all");
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await api.adminLessonFeedback(status, 120);
+      setItems(data.items);
+      setReplyDrafts((prev) => {
+        const next: Record<string, string> = {};
+        for (const item of data.items) {
+          next[item.id] = prev[item.id] ?? item.admin_reply ?? "";
+        }
+        return next;
+      });
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [status]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const update = async (
+    item: AdminLessonFeedbackDto,
+    input: Parameters<typeof api.adminUpdateLessonFeedback>[1],
+  ) => {
+    setBusyId(item.id);
+    setError(null);
+    try {
+      const next = await api.adminUpdateLessonFeedback(item.id, input);
+      setItems((curr) => curr.map((row) => (row.id === item.id ? next : row)));
+      setReplyDrafts((curr) => ({
+        ...curr,
+        [next.id]: next.admin_reply ?? "",
+      }));
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const remove = async (item: AdminLessonFeedbackDto) => {
+    if (!window.confirm("이 피드백을 관리자 화면에서 삭제 처리할까요?")) return;
+    await update(item, { deleted: true });
+  };
+
+  const statusButtons: { value: AdminLessonFeedbackStatus; label: string }[] = [
+    { value: "all", label: "전체" },
+    { value: "visible", label: "공개" },
+    { value: "hidden", label: "숨김" },
+    { value: "deleted", label: "삭제" },
+  ];
+
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-display text-2xl">학습자 피드백 관리</h2>
+          <p className="mt-1 text-sm text-brain-text-muted">
+            레슨별 학습자 피드백을 숨김, 삭제 처리하고 관리자 답변을 남깁니다.
+          </p>
+        </div>
+        <button
+          onClick={() => void reload()}
+          className="rounded border border-brain-border px-3 py-1 text-sm text-brain-text-muted hover:bg-brain-surface-soft"
+        >
+          새로고침
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {statusButtons.map((button) => (
+          <button
+            key={button.value}
+            type="button"
+            onClick={() => setStatus(button.value)}
+            className={`rounded-full px-3 py-1 text-sm transition ${
+              status === button.value
+                ? "bg-brain-accent text-white"
+                : "border border-brain-border text-brain-text-muted hover:bg-brain-surface-soft"
+            }`}
+          >
+            {button.label}
+          </button>
+        ))}
+      </div>
+
+      {error && (
+        <div className="rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
+          {error}
+        </div>
+      )}
+
+      {loading && (
+        <p className="text-sm text-brain-text-muted">불러오는 중입니다.</p>
+      )}
+      {!loading && items.length === 0 && (
+        <p className="rounded-xl border border-brain-border bg-brain-surface p-4 text-sm text-brain-text-muted">
+          표시할 학습자 피드백이 없습니다.
+        </p>
+      )}
+
+      <ul className="space-y-3">
+        {items.map((item) => {
+          const isDeleted = item.deleted_at !== null;
+          const isBusy = busyId === item.id;
+          return (
+            <li
+              key={item.id}
+              className="rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="font-display text-lg">{item.lesson_title}</div>
+                  <div className="mt-1 text-xs text-brain-text-muted">
+                    {item.display_name || item.user_name} · {item.user_email} ·{" "}
+                    {new Date(item.created_at).toLocaleString("ko-KR")}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {item.is_hidden && !isDeleted && (
+                    <span className="rounded-full bg-brain-accent-soft px-2 py-1 text-xs text-brain-accent">
+                      숨김
+                    </span>
+                  )}
+                  {isDeleted && (
+                    <span className="rounded-full bg-brain-danger/10 px-2 py-1 text-xs text-brain-danger">
+                      삭제됨
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-3 rounded bg-brain-surface-soft px-3 py-2">
+                {item.rating > 0 && (
+                  <div className="mb-1 text-sm text-brain-highlight">
+                    {"★".repeat(item.rating)}
+                    <span className="text-brain-border">{"★".repeat(5 - item.rating)}</span>
+                  </div>
+                )}
+                <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                  {item.content}
+                </p>
+              </div>
+
+              <div className="mt-3">
+                <label className="mb-1 block text-xs font-medium text-brain-text-muted">
+                  관리자 답변
+                </label>
+                <textarea
+                  value={replyDrafts[item.id] ?? ""}
+                  onChange={(event) =>
+                    setReplyDrafts((curr) => ({
+                      ...curr,
+                      [item.id]: event.target.value,
+                    }))
+                  }
+                  maxLength={1000}
+                  rows={3}
+                  className="w-full resize-none rounded border border-brain-border bg-brain-bg px-3 py-2 text-sm leading-relaxed outline-none focus:border-brain-accent"
+                />
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() =>
+                    void update(item, {
+                      admin_reply: (replyDrafts[item.id] ?? "").trim() || null,
+                    })
+                  }
+                  className="rounded bg-brain-accent px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
+                >
+                  답변 저장
+                </button>
+                {!isDeleted && (
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => void update(item, { hidden: !item.is_hidden })}
+                    className="rounded border border-brain-border px-3 py-1.5 text-sm text-brain-text-muted hover:bg-brain-surface-soft disabled:opacity-60"
+                  >
+                    {item.is_hidden ? "숨김 해제" : "숨김"}
+                  </button>
+                )}
+                {!isDeleted && (
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => void remove(item)}
+                    className="rounded border border-brain-danger/50 px-3 py-1.5 text-sm text-brain-danger hover:bg-brain-danger/10 disabled:opacity-60"
+                  >
+                    삭제
+                  </button>
+                )}
+                {isDeleted && (
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => void update(item, { deleted: false })}
+                    className="rounded border border-brain-border px-3 py-1.5 text-sm text-brain-text-muted hover:bg-brain-surface-soft disabled:opacity-60"
+                  >
+                    복구
+                  </button>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }

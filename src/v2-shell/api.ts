@@ -64,6 +64,8 @@ export interface LessonFeedbackDto {
   display_name: string;
   content: string;
   rating: number;
+  admin_reply: string | null;
+  admin_replied_at: string | null;
   created_at: string;
   is_mine: boolean;
 }
@@ -268,6 +270,37 @@ export interface AdminTutorRatingsDto {
     by_prompt_version: AdminTutorRatingAggregateDto[];
     distribution: { rating: number; count: number }[];
   };
+}
+
+export type AdminLessonFeedbackStatus = "all" | "visible" | "hidden" | "deleted";
+
+export interface AdminLessonFeedbackDto {
+  id: string;
+  lesson_id: string;
+  lesson_title: string;
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  display_name: string;
+  content: string;
+  rating: number;
+  is_hidden: boolean;
+  hidden_at: string | null;
+  deleted_at: string | null;
+  admin_reply: string | null;
+  admin_replied_at: string | null;
+  admin_replied_by: string | null;
+  created_at: string;
+}
+
+export interface AdminLessonFeedbackListDto {
+  items: AdminLessonFeedbackDto[];
+}
+
+export interface AdminLessonFeedbackUpdateInput {
+  hidden?: boolean;
+  deleted?: boolean;
+  admin_reply?: string | null;
 }
 
 export interface BrandingSettingsDto {
@@ -481,6 +514,18 @@ export const api = {
     call<void>(`/api/admin/lessons/${lessonId}`, { method: "DELETE" }),
   adminTutorRatings: (limit = 50) =>
     call<AdminTutorRatingsDto>(`/api/admin/tutor/ratings?limit=${limit}`),
+  adminLessonFeedback: (status: AdminLessonFeedbackStatus = "all", limit = 100) =>
+    call<AdminLessonFeedbackListDto>(
+      `/api/admin/lesson-feedback?status=${status}&limit=${limit}`,
+    ),
+  adminUpdateLessonFeedback: (
+    feedbackId: string,
+    input: AdminLessonFeedbackUpdateInput,
+  ) =>
+    call<AdminLessonFeedbackDto>(`/api/admin/lesson-feedback/${feedbackId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
   brandingSettings: () => call<BrandingSettingsDto>("/api/settings/branding"),
   adminBrandingSettings: () =>
     call<BrandingSettingsDto>("/api/admin/settings/branding"),
