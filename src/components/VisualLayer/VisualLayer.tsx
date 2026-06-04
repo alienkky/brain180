@@ -59,6 +59,7 @@ const EDGE_COLORS: Record<EdgeRelation, string> = {
   contrasts: "#B85C3F",
   transforms: "#8F7FA8",
   contains: "#6F8AA8",
+  other: "#9B8A7A",
 }
 
 const EDGE_STYLES: Record<EdgeRelation, string> = {
@@ -67,6 +68,7 @@ const EDGE_STYLES: Record<EdgeRelation, string> = {
   contrasts: "dotted",
   transforms: "solid",
   contains: "dashed",
+  other: "dotted",
 }
 
 function getNodeColor(ele: cytoscape.NodeSingular, perspective: Perspective): string {

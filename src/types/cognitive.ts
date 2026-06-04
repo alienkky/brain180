@@ -1,6 +1,13 @@
 export type NodeType = "root" | "anchor" | "bridge" | "branch"
 export type Dimensionality = 1 | 2 | 3 | 4
-export type EdgeRelation = "causes" | "supports" | "contrasts" | "transforms" | "contains"
+export type EdgeRelation = "causes" | "supports" | "contrasts" | "transforms" | "contains" | "other"
+
+export interface RelationLexiconEntry {
+  token: string
+  canonical: EdgeRelation
+  example?: string
+  glyph?: string
+}
 export type Field = "science" | "philosophy" | "literature" | "art" | "economics" | "eastern"
 export type CreatedBy = "system" | "user"
 export type Perspective = "cognitive" | "value" | "temporal"

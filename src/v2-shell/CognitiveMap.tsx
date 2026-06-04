@@ -18,6 +18,7 @@ import type {
   CanvasEdge,
   CanvasJson,
   CanvasNode,
+  RelationLexiconEntry,
 } from "./api";
 
 export type NodeType = CanvasNode["type"];
@@ -57,13 +58,39 @@ const NODE_TYPES: {
   },
 ];
 
-const RELATIONS: { value: Relation; label: string }[] = [
+// Fallback relation set used when the lesson does not (yet) carry a
+// curated relation lexicon. Once `relationLexicon` is provided by the
+// parent (Lesson DTO), the button row is regenerated from the author's
+// own connectives — see lexiconToRelations() below.
+const DEFAULT_RELATIONS: { value: Relation; label: string }[] = [
   { value: "causes", label: "원인 →" },
   { value: "supports", label: "지지 →" },
   { value: "contrasts", label: "대비 ↔" },
   { value: "transforms", label: "변형 →" },
   { value: "contains", label: "포함 ⊃" },
 ];
+
+// One entry in the dialog's button row. Carries both the canonical enum
+// (persisted as edge.relation) and the author-token label (persisted as
+// edge.label) so the edge dialog can write both with one click.
+interface RelationChoice {
+  value: Relation;
+  label: string;
+  token?: string;
+  example?: string;
+}
+
+function lexiconToRelationChoices(
+  lex: RelationLexiconEntry[] | undefined,
+): RelationChoice[] {
+  if (!lex || lex.length === 0) return DEFAULT_RELATIONS;
+  return lex.map((e) => ({
+    value: e.canonical,
+    label: e.glyph ?? e.token,
+    token: e.token,
+    example: e.example,
+  }));
+}
 
 // v1-matching edge colors and styles
 const EDGE_COLORS: { relation: Relation; color: string; style: "solid" | "dashed" | "dotted" }[] = [
@@ -72,6 +99,7 @@ const EDGE_COLORS: { relation: Relation; color: string; style: "solid" | "dashed
   { relation: "contrasts", color: "#B85C3F", style: "dotted" },
   { relation: "transforms",color: "#8F7FA8", style: "solid" },
   { relation: "contains",  color: "#6F8AA8", style: "dashed" },
+  { relation: "other",     color: "#9B8A7A", style: "dotted" },
 ];
 
 interface PendingEdge {
@@ -109,6 +137,10 @@ interface Props {
   injectCite?: CanvasCite | null;
   onCiteConsumed?: () => void;
   disabled?: boolean;
+  // Author-bound relation vocabulary for the currently loaded lesson. When
+  // present, the edge dialog renders one button per entry; when undefined
+  // or empty, falls back to DEFAULT_RELATIONS (5 generic logic terms).
+  relationLexicon?: RelationLexiconEntry[];
 }
 
 const EMPTY: CanvasJson = {
@@ -136,7 +168,12 @@ export function CognitiveMap({
   injectCite,
   onCiteConsumed,
   disabled,
+  relationLexicon,
 }: Props) {
+  const relationChoices = useMemo(
+    () => lexiconToRelationChoices(relationLexicon),
+    [relationLexicon],
+  );
   const [canvas, setCanvas] = useState<CanvasJson>(initial ?? EMPTY);
   const [paletteType, setPaletteType] = useState<NodeType | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -377,13 +414,14 @@ export function CognitiveMap({
     setCanvas((c) => ({ ...c, edges: c.edges.filter((e) => e.id !== edgeId) }));
   };
 
-  const onConfirmEdge = (relation: Relation) => {
+  const onConfirmEdge = (choice: RelationChoice) => {
     if (!pendingEdge) return;
     const edge: CanvasEdge = {
       id: cryptoRandomId(),
       from: pendingEdge.fromId,
       to: pendingEdge.toId,
-      relation,
+      relation: choice.value,
+      ...(choice.token ? { label: choice.token } : {}),
     };
     setCanvas((c) => ({ ...c, edges: [...c.edges, edge] }));
     setPendingEdge(null);
@@ -653,7 +691,7 @@ export function CognitiveMap({
                   fontSize={9.5}
                   fill={edgeColor}
                 >
-                  {relationLabel(e.relation)}
+                  {e.label ?? relationLabel(e.relation)}
                 </text>
               </g>
             );
@@ -757,6 +795,7 @@ export function CognitiveMap({
         )}
         {pendingEdge && (
           <EdgeDialog
+            choices={relationChoices}
             onPick={onConfirmEdge}
             onCancel={() => setPendingEdge(null)}
           />
@@ -767,24 +806,31 @@ export function CognitiveMap({
 }
 
 function EdgeDialog({
+  choices,
   onPick,
   onCancel,
 }: {
-  onPick: (r: Relation) => void;
+  choices: RelationChoice[];
+  onPick: (choice: RelationChoice) => void;
   onCancel: () => void;
 }) {
+  const cols = choices.length > 6 ? 3 : 2;
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-      <div className="rounded-2xl border border-brain-border bg-brain-surface p-5 shadow-soft-3">
+      <div className="rounded-2xl border border-brain-border bg-brain-surface p-5 shadow-soft-3 max-w-md">
         <h3 className="mb-3 font-display text-lg">관계 선택</h3>
-        <div className="grid grid-cols-2 gap-2">
-          {RELATIONS.map((r) => (
+        <div
+          className="grid gap-2"
+          style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+        >
+          {choices.map((c, i) => (
             <button
-              key={r.value}
-              onClick={() => onPick(r.value)}
+              key={`${c.value}:${c.token ?? c.label}:${i}`}
+              onClick={() => onPick(c)}
+              title={c.example ?? ""}
               className="rounded border border-brain-border bg-brain-bg px-3 py-2 text-sm hover:border-brain-accent"
             >
-              {r.label}
+              {c.label}
             </button>
           ))}
         </div>
@@ -846,6 +892,8 @@ function relationLabel(r: Relation): string {
       return "변형";
     case "contains":
       return "포함";
+    case "other":
+      return "관계";
   }
 }
 

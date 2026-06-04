@@ -59,6 +59,14 @@ export const tutorMessageRoleEnum = pgEnum("tutor_message_role", ["user", "assis
 export const reminderFrequencyEnum = pgEnum("reminder_frequency", ["daily", "weekly"]);
 export const reminderChannelEnum = pgEnum("reminder_channel", ["push", "email"]);
 export const apiProviderEnum = pgEnum("api_provider", ["claude", "openai", "kimi", "gemini", "ollama"]);
+export const lexiconSourceEnum = pgEnum("lexicon_source", ["manual", "kimi", "claude"]);
+
+export interface LessonRelationLexiconEntry {
+  token: string;
+  canonical: "causes" | "supports" | "contrasts" | "transforms" | "contains" | "other";
+  example?: string;
+  glyph?: string;
+}
 
 export const appSettings = pgTable("app_settings", {
   key: varchar("key", { length: 120 }).primaryKey(),
@@ -285,6 +293,12 @@ export const lessons = pgTable(
       { onDelete: "set null" },
     ),
     axisFocus: jsonb("axis_focus").$type<AxisWeights | Record<string, never>>().notNull().default({}),
+    relationLexicon: jsonb("relation_lexicon")
+      .$type<LessonRelationLexiconEntry[]>()
+      .notNull()
+      .default([]),
+    lexiconExtractedAt: timestamp("lexicon_extracted_at", { withTimezone: true }),
+    lexiconSource: lexiconSourceEnum("lexicon_source"),
     createdAt,
     updatedAt,
   },

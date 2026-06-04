@@ -98,8 +98,20 @@ export interface CanvasEdge {
   id: string;
   from: string;
   to: string;
-  relation: "causes" | "supports" | "contrasts" | "transforms" | "contains";
+  relation: "causes" | "supports" | "contrasts" | "transforms" | "contains" | "other";
+  // Author's actual connector word, shown in the canvas instead of the
+  // generic relation label. Filled from Lesson.relationLexicon when the
+  // student picks a token; null when the relation came from the legacy
+  // 5-button fallback.
+  label?: string;
   temporal_order?: number;
+}
+
+export interface RelationLexiconEntry {
+  token: string;
+  canonical: CanvasEdge["relation"];
+  example?: string;
+  glyph?: string;
 }
 
 export interface CanvasPath {

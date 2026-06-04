@@ -18,7 +18,10 @@ import {
   tutorMessages,
   tutorRatings,
   users,
+  type LessonRelationLexiconEntry,
 } from "../db/schema.js";
+import { extractLexicon, LexiconExtractionError } from "../ai/lexicon-extractor.js";
+import { UpstreamError } from "../lib/anthropic.js";
 import { ok, fail } from "../lib/envelope.js";
 import { hashPassword } from "../lib/password.js";
 import { lucia } from "../lib/lucia.js";
@@ -512,6 +515,9 @@ interface AdminLessonDTO {
   author: string;
   source: string;
   language: string;
+  relation_lexicon: LessonRelationLexiconEntry[];
+  lexicon_extracted_at: string | null;
+  lexicon_source: "manual" | "kimi" | "claude" | null;
 }
 
 interface LessonTutorMeta {
@@ -561,6 +567,9 @@ async function lessonDTO(id: string): Promise<AdminLessonDTO | null> {
       objectives: lessons.objectives,
       axisFocus: lessons.axisFocus,
       sourceMeta: lessons.sourceMeta,
+      relationLexicon: lessons.relationLexicon,
+      lexiconExtractedAt: lessons.lexiconExtractedAt,
+      lexiconSource: lessons.lexiconSource,
     })
     .from(lessons)
     .where(eq(lessons.id, id))
@@ -596,6 +605,13 @@ async function lessonDTO(id: string): Promise<AdminLessonDTO | null> {
     author: e?.author ?? "",
     source: e?.source ?? "",
     language: e?.language ?? "ko",
+    relation_lexicon: Array.isArray(l.relationLexicon)
+      ? (l.relationLexicon as LessonRelationLexiconEntry[])
+      : [],
+    lexicon_extracted_at: l.lexiconExtractedAt
+      ? l.lexiconExtractedAt.toISOString()
+      : null,
+    lexicon_source: l.lexiconSource ?? null,
   };
 }
 
@@ -813,6 +829,135 @@ adminRouter.delete(
       return;
     }
     res.status(204).end();
+  }),
+);
+
+// ── Lesson relation lexicon ─────────────────────────────────────────
+// POST /api/admin/lessons/:id/extract-lexicon
+//   Calls Kimi with the lesson's text body and returns a candidate lexicon
+//   for the admin to review. Does NOT persist — saving is a separate PATCH
+//   below so the admin can edit token/canonical/example before commit.
+
+const LEXICON_CANONICAL: ReadonlySet<LessonRelationLexiconEntry["canonical"]> =
+  new Set(["causes", "supports", "contrasts", "transforms", "contains", "other"]);
+
+function sanitizeLexicon(raw: unknown): LessonRelationLexiconEntry[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: LessonRelationLexiconEntry[] = [];
+  const seen = new Set<string>();
+  for (const row of raw.slice(0, 12)) {
+    if (typeof row !== "object" || row === null) continue;
+    const r = row as Record<string, unknown>;
+    const token = String(r.token ?? "").trim().slice(0, 30);
+    if (!token || seen.has(token)) continue;
+    seen.add(token);
+    const canonicalRaw = String(r.canonical ?? "") as LessonRelationLexiconEntry["canonical"];
+    const canonical = LEXICON_CANONICAL.has(canonicalRaw) ? canonicalRaw : "other";
+    const example = r.example !== undefined && r.example !== null
+      ? String(r.example).trim().slice(0, 200)
+      : undefined;
+    const glyph = r.glyph !== undefined && r.glyph !== null
+      ? String(r.glyph).trim().slice(0, 30)
+      : undefined;
+    out.push({
+      token,
+      canonical,
+      ...(example ? { example } : {}),
+      ...(glyph ? { glyph } : {}),
+    });
+  }
+  return out;
+}
+
+adminRouter.post(
+  "/lessons/:id/extract-lexicon",
+  asyncHandler(async (req, res) => {
+    const id = req.params.id;
+    if (typeof id !== "string" || !UUID_RE.test(id)) {
+      fail(res, 422, "validation_error", { message: "invalid_lesson_id" });
+      return;
+    }
+    const dto = await lessonDTO(id);
+    if (!dto) {
+      fail(res, 404, "not_found");
+      return;
+    }
+    if (!dto.body || dto.body.trim().length === 0) {
+      fail(res, 422, "validation_error", { message: "lesson_body_empty" });
+      return;
+    }
+
+    try {
+      const result = await extractLexicon({
+        userId: req.user!.id,
+        title: dto.title,
+        author: dto.author,
+        textBody: dto.body,
+      });
+      ok(res, {
+        lexicon: result.lexicon,
+        warnings: result.warnings,
+        lang: result.lang,
+        model: result.model,
+        usage: result.usage,
+        raw_response: result.rawResponse,
+      });
+    } catch (e) {
+      if (e instanceof LexiconExtractionError) {
+        fail(res, 502, "lexicon_extraction_failed", { message: e.code });
+        return;
+      }
+      if (e instanceof UpstreamError) {
+        fail(res, 502, "upstream_error", {
+          message: e.code,
+          details: { provider: e.provider, code: e.code },
+        });
+        return;
+      }
+      throw e;
+    }
+  }),
+);
+
+// PATCH /api/admin/lessons/:id/relation-lexicon
+//   Save the admin-curated lexicon. Body: { lexicon, source? }.
+//   source defaults to "manual" — set to "kimi" right after auto-extract if
+//   the admin commits without further edits, so the audit trail records the
+//   original origin.
+adminRouter.patch(
+  "/lessons/:id/relation-lexicon",
+  asyncHandler(async (req, res) => {
+    const id = req.params.id;
+    if (typeof id !== "string" || !UUID_RE.test(id)) {
+      fail(res, 422, "validation_error", { message: "invalid_lesson_id" });
+      return;
+    }
+    const body = (req.body ?? {}) as { lexicon?: unknown; source?: unknown };
+    const sanitized = sanitizeLexicon(body.lexicon);
+    if (sanitized === null) {
+      fail(res, 422, "validation_error", { message: "lexicon_must_be_array" });
+      return;
+    }
+    const sourceRaw = String(body.source ?? "manual");
+    const source: "manual" | "kimi" | "claude" =
+      sourceRaw === "kimi" || sourceRaw === "claude" ? sourceRaw : "manual";
+
+    const updated = await db
+      .update(lessons)
+      .set({
+        relationLexicon: sanitized,
+        lexiconExtractedAt: new Date(),
+        lexiconSource: source,
+        updatedAt: new Date(),
+      })
+      .where(eq(lessons.id, id))
+      .returning({ id: lessons.id });
+    if (updated.length === 0) {
+      fail(res, 404, "not_found");
+      return;
+    }
+    const dto = await lessonDTO(id);
+    ok(res, dto);
   }),
 );
 
