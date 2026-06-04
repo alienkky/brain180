@@ -690,7 +690,7 @@ function LibraryScreen({
   );
 }
 
-type PracticeTab = "canvas" | "eval" | "pattern" | "feedback";
+type PracticeTab = "canvas" | "axis" | "eval" | "pattern" | "feedback";
 
 const MODE_OPTIONS: { value: SessionMode; label: string; hint: string }[] = [
   {
@@ -795,7 +795,7 @@ function AxisAnalysisPanel({
   if (!hasAnalysis) return null;
 
   return (
-    <section className="mt-6 border-t border-brain-border pt-5">
+    <section className="h-full">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-brain-text-muted">
@@ -916,7 +916,7 @@ function PracticeScreen({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ratingToast, setRatingToast] = useState<string | null>(null);
-  const [tab, setTab] = useState<PracticeTab>("canvas");
+  const [tab, setTab] = useState<PracticeTab>("axis");
   // 튜터 버블 열림 상태 — v1 의 floating ChatPanel 패턴 복원.
   const [tutorOpen, setTutorOpen] = useState(false);
   const [mode, setMode] = useState<SessionMode>("analyze");
@@ -996,6 +996,13 @@ function PracticeScreen({
       cancelled = true;
     };
   }, [lesson.id, lesson.text_excerpt_id, mode, resumeSessionId]);
+
+  useEffect(() => {
+    setTab((current) => {
+      if (mode === "analyze") return "axis";
+      return current === "axis" ? "canvas" : current;
+    });
+  }, [mode]);
 
   const onSaveCanvas = useCallback(
     async (next: CanvasJson) => {
@@ -1272,12 +1279,6 @@ function PracticeScreen({
                   />
                 </div>
               )}
-              {mode === "analyze" && (
-                <AxisAnalysisPanel
-                  lesson={lesson}
-                  canvas={liveCanvas ?? initialCanvas}
-                />
-              )}
               {mode === "reverse" && (
                 <ReverseMissionPanel
                   canvas={liveCanvas ?? initialCanvas}
@@ -1306,6 +1307,11 @@ function PracticeScreen({
               active={tab === "canvas"}
               onClick={() => setTab("canvas")}
               label="인지 캔버스"
+            />
+            <TabButton
+              active={tab === "axis"}
+              onClick={() => setTab("axis")}
+              label="3축 분석"
             />
             <TabButton
               active={tab === "eval"}
@@ -1364,6 +1370,14 @@ function PracticeScreen({
                 disabled={!session}
               />
             )}
+          </div>
+        )}
+        {tab === "axis" && (
+          <div className="flex-1 overflow-y-auto p-4 md:p-5">
+            <AxisAnalysisPanel
+              lesson={lesson}
+              canvas={liveCanvas ?? initialCanvas}
+            />
           </div>
         )}
         {tab === "eval" && (
