@@ -74,12 +74,17 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, onAskTutor, di
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [pathCount, setPathCount] = useState(0);
   const [dirty, setDirty] = useState(false); // unsaved changes indicator
-  const [zoom, setZoomState] = useState(() => clampZoom(initial?.viewport?.zoom ?? 1));
+  const [viewport, setViewport] = useState(() => ({
+    x: initial?.viewport?.x ?? 0,
+    y: initial?.viewport?.y ?? 0,
+    zoom: clampZoom(initial?.viewport?.zoom ?? 1),
+  }));
   const isDrawing = useRef(false);
   const paths = useRef<DrawPath[]>((initial?.paths ?? []).map((p) => ({ ...p })));
   const currentPath = useRef<DrawPath | null>(null);
   const pointerCache = useRef(new Map<number, { x: number; y: number }>());
   const pinchDistance = useRef<number | null>(null);
+  const zoom = viewport.zoom;
 
   const getCtx = () => canvasRef.current?.getContext("2d") ?? null;
 
@@ -93,18 +98,25 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, onAskTutor, di
     if (!canvas || !ctx) return;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.setTransform(zoom, 0, 0, zoom, 0, 0);
+    ctx.setTransform(viewport.zoom, 0, 0, viewport.zoom, viewport.x, viewport.y);
     for (const path of paths.current) drawPath(ctx, path);
     if (currentPath.current) drawPath(ctx, currentPath.current);
-  }, [drawPath, zoom]);
+  }, [drawPath, viewport]);
 
   useEffect(() => {
     paths.current = (initial?.paths ?? []).map((p) => ({ ...p }));
     setPathCount(paths.current.length);
-    setZoomState(clampZoom(initial?.viewport?.zoom ?? 1));
+    setViewport({
+      x: initial?.viewport?.x ?? 0,
+      y: initial?.viewport?.y ?? 0,
+      zoom: clampZoom(initial?.viewport?.zoom ?? 1),
+    });
     setDirty(false);
+  }, [initial]);
+
+  useEffect(() => {
     redraw();
-  }, [initial, redraw]);
+  }, [redraw]);
 
   useEffect(() => {
     if (!onCanvasRef) return;
@@ -152,7 +164,7 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, onAskTutor, di
   function buildSnapshot(): FreeCanvasJson {
     return {
       version: 1,
-      viewport: { ...(initial?.viewport ?? { x: 0, y: 0 }), zoom },
+      viewport,
       nodes: [],
       edges: [],
       paths: paths.current.map((p) => ({ ...p, points: [...p.points] })),
@@ -183,12 +195,28 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, onAskTutor, di
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
-    return { x: (clientX - rect.left) / zoom, y: (clientY - rect.top) / zoom };
+    return {
+      x: (clientX - rect.left - viewport.x) / viewport.zoom,
+      y: (clientY - rect.top - viewport.y) / viewport.zoom,
+    };
   }
 
-  function setZoom(nextZoom: number) {
+  function setZoom(nextZoom: number, anchor?: { clientX: number; clientY: number }) {
     const next = clampZoom(nextZoom);
-    setZoomState(next);
+    setViewport((current) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return { ...current, zoom: next };
+      const rect = canvas.getBoundingClientRect();
+      const screenX = anchor ? anchor.clientX - rect.left : rect.width / 2;
+      const screenY = anchor ? anchor.clientY - rect.top : rect.height / 2;
+      const canvasX = (screenX - current.x) / current.zoom;
+      const canvasY = (screenY - current.y) / current.zoom;
+      return {
+        x: screenX - canvasX * next,
+        y: screenY - canvasY * next,
+        zoom: next,
+      };
+    });
     setDirty(true);
   }
 
@@ -234,7 +262,12 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, onAskTutor, di
       const distance = pointerDistance();
       if (!distance) return;
       if (pinchDistance.current) {
-        setZoom(zoom * (distance / pinchDistance.current));
+        const points = Array.from(pointerCache.current.values());
+        const [a, b] = points;
+        setZoom(zoom * (distance / pinchDistance.current), {
+          clientX: (a.x + b.x) / 2,
+          clientY: (a.y + b.y) / 2,
+        });
       }
       pinchDistance.current = distance;
       return;
@@ -247,7 +280,7 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, onAskTutor, di
     const ctx = getCtx();
     if (!ctx || currentPath.current.points.length < 2) return;
     const pts = currentPath.current.points;
-    ctx.setTransform(zoom, 0, 0, zoom, 0, 0);
+    ctx.setTransform(viewport.zoom, 0, 0, viewport.zoom, viewport.x, viewport.y);
     ctx.beginPath();
     ctx.strokeStyle = currentPath.current.color;
     ctx.lineWidth = currentPath.current.width;
@@ -284,7 +317,7 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, onAskTutor, di
     if (disabled) return;
     if (!e.ctrlKey && Math.abs(e.deltaY) < 50) return;
     e.preventDefault();
-    setZoom(zoom + (e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP));
+    setZoom(zoom + (e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP), e);
   }
 
   function onUndo() {

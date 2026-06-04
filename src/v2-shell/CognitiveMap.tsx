@@ -149,13 +149,36 @@ export function CognitiveMap({
   const saveTimer = useRef<number | null>(null);
   const isFirstLoad = useRef(true);
   const pinchDistance = useRef<number | null>(null);
-  const zoom = clampZoom(canvas.viewport?.zoom ?? 1);
+  const viewport = {
+    x: canvas.viewport?.x ?? 0,
+    y: canvas.viewport?.y ?? 0,
+    zoom: clampZoom(canvas.viewport?.zoom ?? 1),
+  };
+  const zoom = viewport.zoom;
 
-  const setZoom = (nextZoom: number) => {
+  const setZoom = (nextZoom: number, anchor?: { clientX: number; clientY: number }) => {
     const next = clampZoom(nextZoom);
     setCanvas((c) => ({
       ...c,
-      viewport: { ...(c.viewport ?? { x: 0, y: 0 }), zoom: next },
+      viewport: (() => {
+        const current = {
+          x: c.viewport?.x ?? 0,
+          y: c.viewport?.y ?? 0,
+          zoom: clampZoom(c.viewport?.zoom ?? 1),
+        };
+        const svg = svgRef.current;
+        if (!svg) return { ...current, zoom: next };
+        const rect = svg.getBoundingClientRect();
+        const screenX = anchor ? anchor.clientX - rect.left : rect.width / 2;
+        const screenY = anchor ? anchor.clientY - rect.top : rect.height / 2;
+        const canvasX = (screenX - current.x) / current.zoom;
+        const canvasY = (screenY - current.y) / current.zoom;
+        return {
+          x: screenX - canvasX * next,
+          y: screenY - canvasY * next,
+          zoom: next,
+        };
+      })(),
     }));
   };
 
@@ -217,7 +240,10 @@ export function CognitiveMap({
     const svg = svgRef.current;
     if (!svg) return { x: clientX, y: clientY };
     const rect = svg.getBoundingClientRect();
-    return { x: (clientX - rect.left) / zoom, y: (clientY - rect.top) / zoom };
+    return {
+      x: (clientX - rect.left - viewport.x) / viewport.zoom,
+      y: (clientY - rect.top - viewport.y) / viewport.zoom,
+    };
   };
 
   const touchDistance = (touches: React.TouchList) => {
@@ -287,7 +313,12 @@ export function CognitiveMap({
       const distance = touchDistance(e.touches);
       if (!distance) return;
       if (pinchDistance.current) {
-        setZoom(zoom * (distance / pinchDistance.current));
+        const a = e.touches[0];
+        const b = e.touches[1];
+        setZoom(zoom * (distance / pinchDistance.current), {
+          clientX: (a.clientX + b.clientX) / 2,
+          clientY: (a.clientY + b.clientY) / 2,
+        });
       }
       pinchDistance.current = distance;
       return;
@@ -323,7 +354,7 @@ export function CognitiveMap({
     if (disabled) return;
     if (!e.ctrlKey && Math.abs(e.deltaY) < 50) return;
     e.preventDefault();
-    changeZoom(e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP);
+    setZoom(zoom + (e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP), e);
   };
 
   const onNodeClick = (e: React.MouseEvent, n: CanvasNode) => {
@@ -583,7 +614,7 @@ export function CognitiveMap({
               </marker>
             ))}
           </defs>
-          <g transform={`scale(${zoom})`}>
+          <g transform={`translate(${viewport.x},${viewport.y}) scale(${zoom})`}>
           {canvas.edges.map((e) => {
             const from = nodeIndex.get(e.from);
             const to = nodeIndex.get(e.to);
