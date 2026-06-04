@@ -788,20 +788,6 @@ export function CognitiveMap({
                     {n.label}
                   </text>
                 )}
-                {n.cite && (
-                  <g pointerEvents="none">
-                    <circle cx={r - 6} cy={-(r - 6)} r={7} fill="rgba(255,255,255,0.9)" />
-                    <text
-                      x={r - 6}
-                      y={-(r - 9)}
-                      textAnchor="middle"
-                      fontSize={9}
-                      fill={color}
-                    >
-                      ¶
-                    </text>
-                  </g>
-                )}
               </g>
             );
           })}
