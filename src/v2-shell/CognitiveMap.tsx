@@ -153,9 +153,60 @@ const EMPTY: CanvasJson = {
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2.5;
 const ZOOM_STEP = 0.1;
+const INJECTED_NODE_GAP = 28;
 
 function clampZoom(value: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
+}
+
+function nodeRadius(label: string): number {
+  return Math.max(30, Math.min(48, 28 + label.length * 1.5));
+}
+
+function findOpenNodePosition(
+  nodes: CanvasNode[],
+  viewport: CanvasJson["viewport"] | undefined,
+  svg: SVGSVGElement | null,
+  label: string,
+): { x: number; y: number } {
+  const rect = svg?.getBoundingClientRect();
+  const width = rect?.width && rect.width > 0 ? rect.width : 900;
+  const height = rect?.height && rect.height > 0 ? rect.height : 600;
+  const vp = {
+    x: viewport?.x ?? 0,
+    y: viewport?.y ?? 0,
+    zoom: clampZoom(viewport?.zoom ?? 1),
+  };
+  const centerX = (width / 2 - vp.x) / vp.zoom;
+  const centerY = (height / 2 - vp.y) / vp.zoom;
+  const candidateRadius = nodeRadius(label);
+
+  const isClear = (x: number, y: number) =>
+    nodes.every((n) => {
+      const minDistance = candidateRadius + nodeRadius(n.label) + INJECTED_NODE_GAP;
+      return Math.hypot(n.x - x, n.y - y) >= minDistance;
+    });
+
+  if (nodes.length === 0 || isClear(centerX, centerY)) {
+    return { x: centerX, y: centerY };
+  }
+
+  const step = candidateRadius * 2 + INJECTED_NODE_GAP;
+  for (let ring = 1; ring <= 12; ring++) {
+    const radius = ring * step;
+    const steps = Math.max(8, ring * 8);
+    for (let i = 0; i < steps; i++) {
+      const angle = (i / steps) * 2 * Math.PI;
+      const x = centerX + Math.cos(angle) * radius;
+      const y = centerY + Math.sin(angle) * radius;
+      if (isClear(x, y)) return { x, y };
+    }
+  }
+
+  return {
+    x: centerX + (nodes.length % 5) * step,
+    y: centerY + Math.floor(nodes.length / 5) * step,
+  };
 }
 
 export function CognitiveMap({
@@ -186,13 +237,36 @@ export function CognitiveMap({
   const saveTimer = useRef<number | null>(null);
   const isFirstLoad = useRef(true);
   const pinchDistance = useRef<number | null>(null);
-  const zoom = clampZoom(canvas.viewport?.zoom ?? 1);
+  const viewport = {
+    x: canvas.viewport?.x ?? 0,
+    y: canvas.viewport?.y ?? 0,
+    zoom: clampZoom(canvas.viewport?.zoom ?? 1),
+  };
+  const zoom = viewport.zoom;
 
-  const setZoom = (nextZoom: number) => {
+  const setZoom = (nextZoom: number, anchor?: { clientX: number; clientY: number }) => {
     const next = clampZoom(nextZoom);
     setCanvas((c) => ({
       ...c,
-      viewport: { ...(c.viewport ?? { x: 0, y: 0 }), zoom: next },
+      viewport: (() => {
+        const current = {
+          x: c.viewport?.x ?? 0,
+          y: c.viewport?.y ?? 0,
+          zoom: clampZoom(c.viewport?.zoom ?? 1),
+        };
+        const svg = svgRef.current;
+        if (!svg) return { ...current, zoom: next };
+        const rect = svg.getBoundingClientRect();
+        const screenX = anchor ? anchor.clientX - rect.left : rect.width / 2;
+        const screenY = anchor ? anchor.clientY - rect.top : rect.height / 2;
+        const canvasX = (screenX - current.x) / current.zoom;
+        const canvasY = (screenY - current.y) / current.zoom;
+        return {
+          x: screenX - canvasX * next,
+          y: screenY - canvasY * next,
+          zoom: next,
+        };
+      })(),
     }));
   };
 
@@ -213,15 +287,19 @@ export function CognitiveMap({
   // target. Parent is expected to null out the prop after onCiteConsumed.
   useEffect(() => {
     if (!injectCite) return;
-    const node: CanvasNode = {
-      id: cryptoRandomId(),
-      type: "anchor",
-      label: injectCite.quote.slice(0, 24),
-      x: 80 + Math.random() * 120,
-      y: 80 + Math.random() * 120,
-      cite: injectCite,
-    };
-    setCanvas((c) => ({ ...c, nodes: [...c.nodes, node] }));
+    setCanvas((c) => {
+      const label = injectCite.quote.slice(0, 24);
+      const position = findOpenNodePosition(c.nodes, c.viewport, svgRef.current, label);
+      const node: CanvasNode = {
+        id: cryptoRandomId(),
+        type: "anchor",
+        label,
+        x: position.x,
+        y: position.y,
+        cite: injectCite,
+      };
+      return { ...c, nodes: [...c.nodes, node] };
+    });
     onCiteConsumed?.();
   }, [injectCite, onCiteConsumed]);
 
@@ -283,7 +361,10 @@ export function CognitiveMap({
     const svg = svgRef.current;
     if (!svg) return { x: clientX, y: clientY };
     const rect = svg.getBoundingClientRect();
-    return { x: (clientX - rect.left) / zoom, y: (clientY - rect.top) / zoom };
+    return {
+      x: (clientX - rect.left - viewport.x) / viewport.zoom,
+      y: (clientY - rect.top - viewport.y) / viewport.zoom,
+    };
   };
 
   const touchDistance = (touches: React.TouchList) => {
@@ -353,7 +434,12 @@ export function CognitiveMap({
       const distance = touchDistance(e.touches);
       if (!distance) return;
       if (pinchDistance.current) {
-        setZoom(zoom * (distance / pinchDistance.current));
+        const a = e.touches[0];
+        const b = e.touches[1];
+        setZoom(zoom * (distance / pinchDistance.current), {
+          clientX: (a.clientX + b.clientX) / 2,
+          clientY: (a.clientY + b.clientY) / 2,
+        });
       }
       pinchDistance.current = distance;
       return;
@@ -389,7 +475,7 @@ export function CognitiveMap({
     if (disabled) return;
     if (!e.ctrlKey && Math.abs(e.deltaY) < 50) return;
     e.preventDefault();
-    changeZoom(e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP);
+    setZoom(zoom + (e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP), e);
   };
 
   const onNodeClick = (e: React.MouseEvent, n: CanvasNode) => {
@@ -650,7 +736,7 @@ export function CognitiveMap({
               </marker>
             ))}
           </defs>
-          <g transform={`scale(${zoom})`}>
+          <g transform={`translate(${viewport.x},${viewport.y}) scale(${zoom})`}>
           {canvas.edges.map((e) => {
             const from = nodeIndex.get(e.from);
             const to = nodeIndex.get(e.to);
@@ -702,7 +788,7 @@ export function CognitiveMap({
             const selected = n.id === selectedNodeId;
             // Dynamic radius: wider for longer labels (like v1 nodeSize)
             const labelLen = n.label.length;
-            const r = Math.max(30, Math.min(48, 28 + labelLen * 1.5));
+            const r = nodeRadius(n.label);
             // Split label into up to 2 lines for long text
             const words = n.label.split(/\s+/);
             const mid = Math.ceil(words.length / 2);
@@ -768,20 +854,6 @@ export function CognitiveMap({
                   >
                     {n.label}
                   </text>
-                )}
-                {n.cite && (
-                  <g pointerEvents="none">
-                    <circle cx={r - 6} cy={-(r - 6)} r={7} fill="rgba(255,255,255,0.9)" />
-                    <text
-                      x={r - 6}
-                      y={-(r - 9)}
-                      textAnchor="middle"
-                      fontSize={9}
-                      fill={color}
-                    >
-                      ¶
-                    </text>
-                  </g>
                 )}
               </g>
             );

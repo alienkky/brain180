@@ -6,12 +6,13 @@
 import { randomBytes } from "node:crypto";
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
-import { and, desc, eq, gte, isNull, lt, asc, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, lt, asc, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import {
   apiUsageLogs,
   canvasArtifacts,
   learningSessions,
+  lessonFeedback,
   lessons,
   modules,
   textExcerpts,
@@ -27,7 +28,9 @@ import { hashPassword } from "../lib/password.js";
 import { lucia } from "../lib/lucia.js";
 import {
   AdminLessonCreateBody,
+  AdminLessonFeedbackUpdateBody,
   AdminLessonUpdateBody,
+  AdminUserUpdateBody,
   AdminModuleCreateBody,
   AdminModuleUpdateBody,
   BrandingSettingsBody,
@@ -191,6 +194,144 @@ adminRouter.get(
 );
 
 // ── GET /api/admin/users/pending ────────────────────────────────────
+function lessonFeedbackStatusWhere(status: string) {
+  if (status === "visible") {
+    return and(isNull(lessonFeedback.deletedAt), eq(lessonFeedback.isHidden, false));
+  }
+  if (status === "hidden") {
+    return and(isNull(lessonFeedback.deletedAt), eq(lessonFeedback.isHidden, true));
+  }
+  if (status === "deleted") {
+    return isNotNull(lessonFeedback.deletedAt);
+  }
+  return sql`true`;
+}
+
+async function adminLessonFeedbackRow(feedbackId: string) {
+  const rows = await db
+    .select({
+      id: lessonFeedback.id,
+      lessonId: lessonFeedback.lessonId,
+      lessonTitle: lessons.title,
+      userId: lessonFeedback.userId,
+      userName: users.name,
+      userEmail: users.email,
+      displayName: lessonFeedback.displayName,
+      content: lessonFeedback.content,
+      rating: lessonFeedback.rating,
+      isHidden: lessonFeedback.isHidden,
+      hiddenAt: lessonFeedback.hiddenAt,
+      deletedAt: lessonFeedback.deletedAt,
+      adminReply: lessonFeedback.adminReply,
+      adminRepliedAt: lessonFeedback.adminRepliedAt,
+      adminRepliedBy: lessonFeedback.adminRepliedBy,
+      createdAt: lessonFeedback.createdAt,
+    })
+    .from(lessonFeedback)
+    .innerJoin(lessons, eq(lessons.id, lessonFeedback.lessonId))
+    .innerJoin(users, eq(users.id, lessonFeedback.userId))
+    .where(eq(lessonFeedback.id, feedbackId))
+    .limit(1);
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    id: r.id,
+    lesson_id: r.lessonId,
+    lesson_title: r.lessonTitle,
+    user_id: r.userId,
+    user_name: r.userName,
+    user_email: r.userEmail,
+    display_name: r.displayName,
+    content: r.content,
+    rating: r.rating,
+    is_hidden: r.isHidden,
+    hidden_at: r.hiddenAt ? r.hiddenAt.toISOString() : null,
+    deleted_at: r.deletedAt ? r.deletedAt.toISOString() : null,
+    admin_reply: r.adminReply,
+    admin_replied_at: r.adminRepliedAt ? r.adminRepliedAt.toISOString() : null,
+    admin_replied_by: r.adminRepliedBy,
+    created_at: r.createdAt.toISOString(),
+  };
+}
+
+adminRouter.get(
+  "/lesson-feedback",
+  asyncHandler(async (req, res) => {
+    const rawStatus = String(req.query.status ?? "all");
+    const status = ["all", "visible", "hidden", "deleted"].includes(rawStatus)
+      ? rawStatus
+      : "all";
+    const rawLimit = Number(req.query.limit ?? 100);
+    const limit = Number.isFinite(rawLimit)
+      ? Math.min(Math.max(Math.trunc(rawLimit), 1), 200)
+      : 100;
+
+    const rows = await db
+      .select({ id: lessonFeedback.id })
+      .from(lessonFeedback)
+      .where(lessonFeedbackStatusWhere(status))
+      .orderBy(desc(lessonFeedback.createdAt))
+      .limit(limit);
+
+    const items = [];
+    for (const row of rows) {
+      const item = await adminLessonFeedbackRow(row.id);
+      if (item) items.push(item);
+    }
+    ok(res, { items });
+  }),
+);
+
+adminRouter.patch(
+  "/lesson-feedback/:id",
+  asyncHandler(async (req, res) => {
+    const feedbackId = req.params.id;
+    if (typeof feedbackId !== "string" || !UUID_RE.test(feedbackId)) {
+      fail(res, 422, "validation_error", { message: "invalid_feedback_id" });
+      return;
+    }
+
+    const body = parseBody(AdminLessonFeedbackUpdateBody, req, res);
+    if (!body) return;
+
+    const now = new Date();
+    const changes: {
+      isHidden?: boolean;
+      hiddenAt?: Date | null;
+      deletedAt?: Date | null;
+      adminReply?: string | null;
+      adminRepliedAt?: Date | null;
+      adminRepliedBy?: string | null;
+    } = {};
+
+    if (body.hidden !== undefined) {
+      changes.isHidden = body.hidden;
+      changes.hiddenAt = body.hidden ? now : null;
+    }
+    if (body.deleted !== undefined) {
+      changes.deletedAt = body.deleted ? now : null;
+    }
+    if (body.admin_reply !== undefined) {
+      const reply = body.admin_reply?.trim() ?? "";
+      changes.adminReply = reply.length > 0 ? reply : null;
+      changes.adminRepliedAt = reply.length > 0 ? now : null;
+      changes.adminRepliedBy = reply.length > 0 ? req.user!.id : null;
+    }
+
+    const updated = await db
+      .update(lessonFeedback)
+      .set(changes)
+      .where(eq(lessonFeedback.id, feedbackId))
+      .returning({ id: lessonFeedback.id });
+    if (!updated[0]) {
+      fail(res, 404, "not_found");
+      return;
+    }
+
+    ok(res, await adminLessonFeedbackRow(feedbackId));
+  }),
+);
+
 adminRouter.get(
   "/users/pending",
   asyncHandler(async (_req, res) => {
@@ -1062,19 +1203,187 @@ adminRouter.get(
   "/users",
   asyncHandler(async (_req, res) => {
     const rows = await db
-      .select({
-        id: users.id,
-        name: users.name,
-        email: users.email,
-        role: users.role,
-        status: users.status,
-        createdAt: users.createdAt,
-        lastLoginAt: users.lastLoginAt,
-      })
+      .select(baseUserSelect)
       .from(users)
       .where(isNull(users.deletedAt))
       .orderBy(desc(users.createdAt));
-    ok(res, rows);
+    ok(res, rows.map(toUserDTO));
+  }),
+);
+
+// GET /api/admin/users/:id/progress - user learning progress detail.
+adminRouter.get(
+  "/users/:id/progress",
+  asyncHandler(async (req, res) => {
+    const targetId = req.params.id;
+    if (typeof targetId !== "string" || !UUID_RE.test(targetId)) {
+      fail(res, 422, "validation_error", { message: "invalid_user_id" });
+      return;
+    }
+
+    const userRows = await db
+      .select(baseUserSelect)
+      .from(users)
+      .where(and(eq(users.id, targetId), isNull(users.deletedAt)))
+      .limit(1);
+    const user = userRows[0];
+    if (!user) {
+      fail(res, 404, "not_found");
+      return;
+    }
+
+    const summaryRows = await db
+      .select({
+        sessionCount: sql<number>`count(*)::int`,
+        lessonCount: sql<number>`count(distinct ${learningSessions.lessonId})::int`,
+        lastStartedAt: sql<Date | null>`max(${learningSessions.startedAt})`,
+      })
+      .from(learningSessions)
+      .where(and(eq(learningSessions.userId, targetId), isNull(learningSessions.deletedAt)));
+
+    const artifactRows = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(canvasArtifacts)
+      .innerJoin(learningSessions, eq(canvasArtifacts.sessionId, learningSessions.id))
+      .where(
+        and(
+          eq(learningSessions.userId, targetId),
+          isNull(learningSessions.deletedAt),
+          isNull(canvasArtifacts.deletedAt),
+        ),
+      );
+
+    const lessonRows = await db
+      .select({
+        lessonId: lessons.id,
+        lessonTitle: lessons.title,
+        moduleTitle: modules.title,
+        sessionCount: sql<number>`count(${learningSessions.id})::int`,
+        lastStartedAt: sql<Date | null>`max(${learningSessions.startedAt})`,
+      })
+      .from(learningSessions)
+      .innerJoin(lessons, eq(lessons.id, learningSessions.lessonId))
+      .innerJoin(modules, eq(modules.id, lessons.moduleId))
+      .where(and(eq(learningSessions.userId, targetId), isNull(learningSessions.deletedAt)))
+      .groupBy(lessons.id, lessons.title, modules.title)
+      .orderBy(desc(sql`max(${learningSessions.startedAt})`));
+
+    const recentRows = await db
+      .select({
+        sessionId: learningSessions.id,
+        lessonId: learningSessions.lessonId,
+        lessonTitle: lessons.title,
+        moduleTitle: modules.title,
+        mode: learningSessions.mode,
+        startedAt: learningSessions.startedAt,
+        endedAt: learningSessions.endedAt,
+        artifactCount: sql<number>`(
+          SELECT count(*)::int
+          FROM ${canvasArtifacts}
+          WHERE ${canvasArtifacts.sessionId} = ${learningSessions.id}
+            AND ${canvasArtifacts.deletedAt} IS NULL
+        )`,
+      })
+      .from(learningSessions)
+      .innerJoin(lessons, eq(lessons.id, learningSessions.lessonId))
+      .innerJoin(modules, eq(modules.id, lessons.moduleId))
+      .where(and(eq(learningSessions.userId, targetId), isNull(learningSessions.deletedAt)))
+      .orderBy(desc(learningSessions.startedAt))
+      .limit(30);
+
+    const summary = summaryRows[0];
+    ok(res, {
+      user: toUserDTO(user),
+      summary: {
+        session_count: Number(summary?.sessionCount ?? 0),
+        lesson_count: Number(summary?.lessonCount ?? 0),
+        artifact_count: Number(artifactRows[0]?.count ?? 0),
+        last_started_at: summary?.lastStartedAt
+          ? new Date(summary.lastStartedAt).toISOString()
+          : null,
+      },
+      lessons: lessonRows.map((row) => ({
+        lesson_id: row.lessonId,
+        lesson_title: row.lessonTitle,
+        module_title: row.moduleTitle,
+        session_count: Number(row.sessionCount),
+        last_started_at: row.lastStartedAt
+          ? new Date(row.lastStartedAt).toISOString()
+          : null,
+      })),
+      recent_sessions: recentRows.map((row) => ({
+        session_id: row.sessionId,
+        lesson_id: row.lessonId,
+        lesson_title: row.lessonTitle,
+        module_title: row.moduleTitle,
+        mode: row.mode,
+        started_at: row.startedAt.toISOString(),
+        ended_at: row.endedAt ? row.endedAt.toISOString() : null,
+        artifact_count: Number(row.artifactCount),
+      })),
+    });
+  }),
+);
+
+// PATCH /api/admin/users/:id — update approval status and admin role.
+adminRouter.patch(
+  "/users/:id",
+  asyncHandler(async (req, res) => {
+    const targetId = req.params.id;
+    if (typeof targetId !== "string" || !UUID_RE.test(targetId)) {
+      fail(res, 422, "validation_error", { message: "invalid_user_id" });
+      return;
+    }
+
+    const body = parseBody(AdminUserUpdateBody, req, res);
+    if (!body) return;
+
+    if (
+      targetId === req.user!.id &&
+      (body.role === "student" ||
+        body.status === "pending_approval" ||
+        body.status === "rejected" ||
+        body.status === "suspended")
+    ) {
+      fail(res, 409, "cannot_modify_self");
+      return;
+    }
+
+    const patch: Partial<typeof users.$inferInsert> = {};
+    if (body.role !== undefined) {
+      patch.role = body.role;
+    }
+    if (body.status !== undefined) {
+      patch.status = body.status;
+      patch.rejectedReason = null;
+      if (body.status === "approved") {
+        patch.approvedAt = new Date();
+        patch.approvedById = req.user!.id;
+      } else {
+        patch.approvedAt = null;
+        patch.approvedById = null;
+      }
+    }
+
+    if (body.role === "admin" && body.status === undefined) {
+      patch.status = "approved";
+      patch.approvedAt = new Date();
+      patch.approvedById = req.user!.id;
+      patch.rejectedReason = null;
+    }
+
+    const updated = await db
+      .update(users)
+      .set(patch)
+      .where(and(eq(users.id, targetId), isNull(users.deletedAt)))
+      .returning(baseUserSelect);
+
+    const row = updated[0];
+    if (!row) {
+      fail(res, 404, "not_found");
+      return;
+    }
+    ok(res, toUserDTO(row));
   }),
 );
 
@@ -1084,7 +1393,14 @@ adminRouter.post(
   asyncHandler(async (req, res) => {
     const id = String(req.params["id"] ?? "");
     if (!UUID_RE.test(id)) { fail(res, 400, "validation_error"); return; }
-    await db.update(users).set({ status: "suspended" as never }).where(eq(users.id, id));
-    ok(res, { id, status: "suspended" });
+    if (id === req.user!.id) { fail(res, 409, "cannot_modify_self"); return; }
+    const updated = await db
+      .update(users)
+      .set({ status: "suspended", approvedAt: null, approvedById: null })
+      .where(and(eq(users.id, id), isNull(users.deletedAt)))
+      .returning(baseUserSelect);
+    const row = updated[0];
+    if (!row) { fail(res, 404, "not_found"); return; }
+    ok(res, toUserDTO(row));
   }),
 );

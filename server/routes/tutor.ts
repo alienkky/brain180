@@ -127,6 +127,17 @@ function formatCanvasState(snap: CanvasSnapshotShape | undefined): string {
   ].join("\n");
 }
 
+function formatNodeCanvasPromptContext(snapshot: CanvasSnapshotShape | undefined): string | null {
+  if (!snapshot || snapshot.nodes.length === 0) return null;
+  return [
+    "## 현재 일반 노드 캔버스 구조",
+    formatCanvasState(snapshot),
+    "",
+    "위 노드와 관계 목록은 학생이 현재 캔버스에 직접 만든 구조입니다.",
+    "이미지를 볼 수 없다고 답하지 말고, 이 구조 데이터를 기준으로 다음에 추가하면 좋을 노드와 연결 관계를 제안하세요.",
+  ].join("\n");
+}
+
 function formatFreeCanvasPathContext(snapshot: unknown): string | null {
   const paths = snapshot && typeof snapshot === "object"
     ? (snapshot as { paths?: unknown }).paths
@@ -457,8 +468,12 @@ tutorRouter.post(
     const freeCanvasPathContext = body.canvas_mode === "free"
       ? formatFreeCanvasPathContext(body.canvas_snapshot)
       : null;
-    const messageWithCanvasContext = freeCanvasPathContext
-      ? `${body.message}\n\n${freeCanvasPathContext}\n\n위 자유형 캔버스 경로 데이터와 첨부 이미지가 있으면 이미지를 함께 참고해서 답하세요.`
+    const nodeCanvasContext = body.canvas_mode === "free"
+      ? null
+      : formatNodeCanvasPromptContext(body.canvas_snapshot);
+    const canvasPromptContext = freeCanvasPathContext ?? nodeCanvasContext;
+    const messageWithCanvasContext = canvasPromptContext
+      ? `${body.message}\n\n${canvasPromptContext}\n\n캔버스 구조 데이터가 첨부되어 있습니다. 이 데이터를 직접 참고해서 답하세요.`
       : body.message;
     const provider = resolveTutorProvider();
     const visionProvider = canvasImageB64

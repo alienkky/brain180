@@ -11,6 +11,15 @@ export interface UserDto {
   role: "user" | "admin";
   status: "pending_approval" | "approved" | "rejected" | "suspended";
   must_change_password: boolean;
+  created_at: string;
+}
+
+export type AdminUserRole = "user" | "admin";
+export type AdminUserStatus = UserDto["status"];
+
+export interface AdminUserUpdateInput {
+  role?: AdminUserRole;
+  status?: AdminUserStatus;
 }
 
 export interface LoginData {
@@ -37,6 +46,9 @@ export interface LessonDto {
   tutor_system_prompt_id: string | null;
   objectives: string[];
   axis_focus: Record<string, unknown>;
+  cognitive_structure_analysis: string;
+  learner_questions: string;
+  tutor_reference_notes: string;
 }
 
 export interface TextExcerptDto {
@@ -55,6 +67,8 @@ export interface LessonFeedbackDto {
   display_name: string;
   content: string;
   rating: number;
+  admin_reply: string | null;
+  admin_replied_at: string | null;
   created_at: string;
   is_mine: boolean;
 }
@@ -150,6 +164,38 @@ export interface ProgressEntryDto {
   lesson_id: string;
   session_count: number;
   last_started_at: string | null;
+}
+
+export interface AdminUserProgressDto {
+  user: UserDto;
+  summary: {
+    session_count: number;
+    lesson_count: number;
+    artifact_count: number;
+    last_started_at: string | null;
+  };
+  lessons: {
+    lesson_id: string;
+    lesson_title: string;
+    module_title: string;
+    session_count: number;
+    last_started_at: string | null;
+  }[];
+  recent_sessions: {
+    session_id: string;
+    lesson_id: string;
+    lesson_title: string;
+    module_title: string;
+    mode: SessionMode;
+    started_at: string;
+    ended_at: string | null;
+    artifact_count: number;
+  }[];
+}
+
+export interface AdminResetPasswordDto {
+  user_id: string;
+  temp_password: string;
 }
 
 export interface TutorMessageDto {
@@ -271,6 +317,37 @@ export interface AdminTutorRatingsDto {
     by_prompt_version: AdminTutorRatingAggregateDto[];
     distribution: { rating: number; count: number }[];
   };
+}
+
+export type AdminLessonFeedbackStatus = "all" | "visible" | "hidden" | "deleted";
+
+export interface AdminLessonFeedbackDto {
+  id: string;
+  lesson_id: string;
+  lesson_title: string;
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  display_name: string;
+  content: string;
+  rating: number;
+  is_hidden: boolean;
+  hidden_at: string | null;
+  deleted_at: string | null;
+  admin_reply: string | null;
+  admin_replied_at: string | null;
+  admin_replied_by: string | null;
+  created_at: string;
+}
+
+export interface AdminLessonFeedbackListDto {
+  items: AdminLessonFeedbackDto[];
+}
+
+export interface AdminLessonFeedbackUpdateInput {
+  hidden?: boolean;
+  deleted?: boolean;
+  admin_reply?: string | null;
 }
 
 export interface BrandingSettingsDto {
@@ -409,6 +486,10 @@ export const api = {
     ),
   progress: () => call<ProgressEntryDto[]>("/api/practice/me/progress"),
   artifacts: () => call<ArtifactGalleryDto[]>("/api/practice/me/artifacts"),
+  deleteArtifact: (artifactId: string) =>
+    call<{ id: string }>(`/api/practice/me/artifacts/${artifactId}`, {
+      method: "DELETE",
+    }),
   deleteArtifacts: (ids: string[]) =>
     call<{ deleted_count: number; deleted_ids: string[] }>(
       "/api/practice/me/artifacts/bulk-delete",
@@ -445,12 +526,27 @@ export const api = {
       }),
     }),
   adminPending: () => call<UserDto[]>("/api/admin/users/pending"),
+  adminUsers: () => call<UserDto[]>("/api/admin/users"),
   adminApprove: (userId: string) =>
     call<UserDto>(`/api/admin/users/${userId}/approve`, { method: "POST" }),
   adminReject: (userId: string, reason?: string) =>
     call<UserDto>(`/api/admin/users/${userId}/reject`, {
       method: "POST",
       body: JSON.stringify({ ...(reason ? { reason } : {}) }),
+    }),
+  adminUpdateUser: (userId: string, input: AdminUserUpdateInput) =>
+    call<UserDto>(`/api/admin/users/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        ...(input.role ? { role: input.role === "admin" ? "admin" : "student" } : {}),
+        ...(input.status ? { status: input.status } : {}),
+      }),
+    }),
+  adminUserProgress: (userId: string) =>
+    call<AdminUserProgressDto>(`/api/admin/users/${userId}/progress`),
+  adminResetUserPassword: (userId: string) =>
+    call<AdminResetPasswordDto>(`/api/admin/users/${userId}/reset-password`, {
+      method: "POST",
     }),
   adminModules: () => call<AdminModuleDto[]>("/api/admin/modules"),
   adminCreateModule: (input: AdminModuleCreateInput) =>
@@ -483,6 +579,18 @@ export const api = {
     call<void>(`/api/admin/lessons/${lessonId}`, { method: "DELETE" }),
   adminTutorRatings: (limit = 50) =>
     call<AdminTutorRatingsDto>(`/api/admin/tutor/ratings?limit=${limit}`),
+  adminLessonFeedback: (status: AdminLessonFeedbackStatus = "all", limit = 100) =>
+    call<AdminLessonFeedbackListDto>(
+      `/api/admin/lesson-feedback?status=${status}&limit=${limit}`,
+    ),
+  adminUpdateLessonFeedback: (
+    feedbackId: string,
+    input: AdminLessonFeedbackUpdateInput,
+  ) =>
+    call<AdminLessonFeedbackDto>(`/api/admin/lesson-feedback/${feedbackId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
   brandingSettings: () => call<BrandingSettingsDto>("/api/settings/branding"),
   adminBrandingSettings: () =>
     call<BrandingSettingsDto>("/api/admin/settings/branding"),

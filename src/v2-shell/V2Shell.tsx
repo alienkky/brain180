@@ -9,6 +9,8 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ReactN
 import {
   ApiError,
   api,
+  type AdminLessonFeedbackDto,
+  type AdminLessonFeedbackStatus,
   type AdminTutorRatingsDto,
   type AdminLessonCreateInput,
   type AdminLessonDto,
@@ -16,6 +18,7 @@ import {
   type AdminModuleCreateInput,
   type AdminModuleDto,
   type AdminModuleUpdateInput,
+  type AdminUserProgressDto,
   type ArtifactGalleryDto,
   type BrandingSettingsDto,
   type CanvasCite,
@@ -601,6 +604,19 @@ function LibraryScreen({
     [],
   );
 
+  const deleteArtifact = async (item: ArtifactGalleryDto) => {
+    if (!window.confirm("이 저장된 읽기 내용을 목록에서 삭제할까요?")) return;
+    setError(null);
+    try {
+      await api.deleteArtifact(item.artifact_id);
+      setArtifacts((curr) =>
+        curr ? curr.filter((artifact) => artifact.artifact_id !== item.artifact_id) : curr,
+      );
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    }
+  };
+
   return (
     <div className="grid h-full grid-cols-[280px_1fr] gap-0">
       <aside className="overflow-y-auto border-r border-brain-border bg-brain-surface-soft p-4">
@@ -625,6 +641,7 @@ function LibraryScreen({
           artifacts={artifacts}
           onOpen={onOpenArtifact}
           onBulkDelete={onBulkDeleteArtifacts}
+          onDelete={deleteArtifact}
         />
         <CompareBar
           pins={comparePins}
@@ -690,7 +707,7 @@ function LibraryScreen({
   );
 }
 
-type PracticeTab = "canvas" | "eval" | "pattern" | "feedback";
+type PracticeTab = "canvas" | "axis" | "eval" | "pattern" | "feedback";
 
 const MODE_OPTIONS: { value: SessionMode; label: string; hint: string }[] = [
   {
@@ -710,6 +727,253 @@ const MODE_OPTIONS: { value: SessionMode; label: string; hint: string }[] = [
   },
 ];
 
+type AxisAnalysisKey = NonNullable<CanvasNode["axis_tag"]>;
+
+const AXIS_ANALYSIS: {
+  key: AxisAnalysisKey;
+  label: string;
+  title: string;
+  empty: string;
+  accent: string;
+}[] = [
+  {
+    key: "cognition",
+    label: "인지",
+    title: "인지 구조",
+    empty: "본문에서 무엇을 개념으로 잡고 어떻게 구분하는지 정리합니다.",
+    accent: "border-brain-accent/60 bg-brain-accent-soft/30",
+  },
+  {
+    key: "value",
+    label: "가치",
+    title: "가치 구조",
+    empty: "글 안에서 무엇을 중요하게 보고 어떤 판단 기준을 쓰는지 정리합니다.",
+    accent: "border-brain-node-bridge/60 bg-brain-node-bridge/10",
+  },
+  {
+    key: "time",
+    label: "시간",
+    title: "시간 구조",
+    empty: "원인, 변화, 결과가 어떤 순서로 이어지는지 정리합니다.",
+    accent: "border-brain-sage/60 bg-brain-sage/10",
+  },
+];
+
+function cleanAnalysisLine(line: string): string {
+  return line.replace(/^[-*]\s+/, "").replace(/^#+\s*/, "").trim();
+}
+
+function extractAxisAnalysis(
+  source: string,
+  key: AxisAnalysisKey,
+): string {
+  const normalized = source.trim();
+  if (!normalized) return "";
+  const aliases: Record<AxisAnalysisKey, string[]> = {
+    cognition: ["인지 축", "인지 구조", "cognition"],
+    value: ["가치 축", "가치 구조", "value"],
+    time: ["시간 축", "시간 구조", "time"],
+  };
+  const lines = normalized.split(/\r?\n/);
+  const start = lines.findIndex((line) =>
+    aliases[key].some((alias) => line.toLowerCase().includes(alias.toLowerCase())),
+  );
+  if (start < 0) return "";
+  const next = lines.findIndex(
+    (line, index) =>
+      index > start &&
+      /^#{1,3}\s+/.test(line) &&
+      AXIS_ANALYSIS.some((axis) =>
+        axis.key !== key &&
+        aliases[axis.key].some((alias) =>
+          line.toLowerCase().includes(alias.toLowerCase()),
+        ),
+      ),
+  );
+  return lines
+    .slice(start + 1, next < 0 ? undefined : next)
+    .map(cleanAnalysisLine)
+    .filter(Boolean)
+    .join("\n");
+}
+
+function AxisAnalysisPanel({
+  lesson,
+  canvas,
+  text,
+}: {
+  lesson: LessonDto;
+  canvas: CanvasJson | null;
+  text: TextExcerptDto | null;
+}) {
+  const analysis = lesson.cognitive_structure_analysis?.trim() ?? "";
+  const hasAnalysis =
+    Boolean(analysis) ||
+    Boolean(lesson.learner_questions?.trim()) ||
+    Boolean(lesson.tutor_reference_notes?.trim());
+  if (!hasAnalysis) return null;
+
+  return (
+    <section className="h-full">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-brain-text-muted">
+            V1 분석 복원
+          </p>
+          <h4 className="font-display text-lg text-brain-text">
+            인지 · 가치 · 시간 3축 해석
+          </h4>
+        </div>
+        <p className="text-xs text-brain-text-muted">
+          캔버스 노드와 함께 본문 구조를 확인합니다.
+        </p>
+      </div>
+      <div className="grid gap-3 xl:grid-cols-3">
+        {AXIS_ANALYSIS.map((axis) => {
+          const axisText =
+            extractAxisAnalysis(analysis, axis.key) ||
+            (axis.key === "cognition" ? analysis : "") ||
+            axis.empty;
+          const axisNodes =
+            canvas?.nodes.filter((node) => node.axis_tag === axis.key) ?? [];
+          return (
+            <article
+              key={axis.key}
+              className={`rounded-lg border p-4 ${axis.accent}`}
+            >
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="rounded-full border border-brain-border bg-brain-surface px-2 py-0.5 text-xs font-semibold">
+                  {axis.label}
+                </span>
+                <span className="text-[11px] text-brain-text-muted">
+                  노드 {axisNodes.length}
+                </span>
+              </div>
+              <h5 className="mb-2 text-sm font-semibold text-brain-text">
+                {axis.title}
+              </h5>
+              <p className="whitespace-pre-line text-sm leading-6 text-brain-text">
+                {axisText}
+              </p>
+              <div className="mt-4 space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-brain-text-muted">
+                  노드와 본문 근거
+                </p>
+                {axisNodes.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-brain-border bg-brain-surface/70 p-3 text-xs leading-5 text-brain-text-muted">
+                    아직 이 축으로 분류된 노드가 없습니다. 본문에서 관련 문장을 더블탭해
+                    캔버스로 보내면 여기에서 본문 근거와 함께 표시됩니다.
+                  </div>
+                ) : (
+                  axisNodes.slice(0, 6).map((node) => (
+                    <AxisEvidenceCard
+                      key={node.id}
+                      node={node}
+                      body={text?.body ?? ""}
+                    />
+                  ))
+                )}
+              </div>
+              {axisNodes.length > 6 && (
+                <p className="mt-2 text-[11px] text-brain-text-muted">
+                  외 {axisNodes.length - 6}개 노드는 캔버스에서 계속 확인할 수 있습니다.
+                </p>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function citeExcerpt(body: string, node: CanvasNode): string {
+  const quote = node.cite?.quote?.trim();
+  if (quote) return quote;
+  if (!node.cite || !body) return "";
+  const start = Math.max(0, node.cite.start - 24);
+  const end = Math.min(body.length, node.cite.end + 24);
+  const prefix = start > 0 ? "…" : "";
+  const suffix = end < body.length ? "…" : "";
+  return `${prefix}${body.slice(start, end).trim()}${suffix}`;
+}
+
+function AxisEvidenceCard({
+  node,
+  body,
+}: {
+  node: CanvasNode;
+  body: string;
+}) {
+  const excerpt = citeExcerpt(body, node);
+  return (
+    <div className="rounded-md border border-brain-border bg-brain-surface p-3">
+      <div className="flex items-start justify-between gap-2">
+        <span className="rounded-full border border-brain-border bg-brain-surface-soft px-2 py-0.5 text-[11px] font-semibold text-brain-text">
+          {node.label}
+        </span>
+        <span className="shrink-0 text-[10px] text-brain-text-soft">
+          {node.type}
+        </span>
+      </div>
+      {excerpt ? (
+        <blockquote className="mt-2 border-l-2 border-brain-accent/50 pl-2 text-xs leading-5 text-brain-text-muted">
+          {excerpt}
+        </blockquote>
+      ) : (
+        <p className="mt-2 text-xs leading-5 text-brain-text-muted">
+          본문 근거가 연결되지 않은 노드입니다. 본문에서 문장을 선택해 보강하면
+          V1처럼 근거 문장과 함께 비교할 수 있습니다.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ReverseMissionPanel({
+  canvas,
+  sending,
+  onAskReverseTutor,
+}: {
+  canvas: CanvasJson | null;
+  sending: boolean;
+  onAskReverseTutor: (snapshot: CanvasJson) => void;
+}) {
+  const hasCanvas = Boolean(
+    canvas &&
+      ((canvas.nodes?.length ?? 0) > 0 ||
+        (canvas.edges?.length ?? 0) > 0 ||
+        (canvas.paths?.length ?? 0) > 0),
+  );
+  return (
+    <section className="mt-5 rounded-lg border border-brain-border bg-brain-surface-soft p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-brain-text-muted">
+            역해석 훈련
+          </p>
+          <h4 className="font-display text-base text-brain-text">
+            노드에서 본문 구조를 다시 말해보기
+          </h4>
+        </div>
+        <button
+          type="button"
+          disabled={!canvas || !hasCanvas || sending}
+          onClick={() => canvas && onAskReverseTutor(canvas)}
+          className="rounded border border-brain-accent/60 px-3 py-1.5 text-sm text-brain-accent hover:bg-brain-accent-soft/50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          튜터에게 역해석 평가
+        </button>
+      </div>
+      <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm leading-6 text-brain-text-muted">
+        <li>본문을 보기 전에 캔버스 노드만 보고 핵심 흐름을 말합니다.</li>
+        <li>인지 · 가치 · 시간 중 빠진 축이 있는지 스스로 점검합니다.</li>
+        <li>튜터 평가를 받은 뒤 본문을 열어 실제 글과 비교합니다.</li>
+      </ol>
+    </section>
+  );
+}
+
 function PracticeScreen({
   lesson,
   resumeSessionId,
@@ -726,7 +990,7 @@ function PracticeScreen({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ratingToast, setRatingToast] = useState<string | null>(null);
-  const [tab, setTab] = useState<PracticeTab>("canvas");
+  const [tab, setTab] = useState<PracticeTab>("axis");
   // 튜터 버블 열림 상태 — v1 의 floating ChatPanel 패턴 복원.
   const [tutorOpen, setTutorOpen] = useState(false);
   const [mode, setMode] = useState<SessionMode>("analyze");
@@ -806,6 +1070,13 @@ function PracticeScreen({
       cancelled = true;
     };
   }, [lesson.id, lesson.text_excerpt_id, mode, resumeSessionId]);
+
+  useEffect(() => {
+    setTab((current) => {
+      if (mode === "analyze") return "axis";
+      return current === "axis" ? "canvas" : current;
+    });
+  }, [mode]);
 
   const onSaveCanvas = useCallback(
     async (next: CanvasJson) => {
@@ -912,6 +1183,30 @@ function PracticeScreen({
     },
     // sendChat closes over session/lesson; React's exhaustive-deps isn't strict here
     // because sendChat is recreated each render but only used inside this callback.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [session, lesson.id, sending],
+  );
+
+  const onAskReverseTutor = useCallback(
+    async (snapshot: CanvasJson) => {
+      if (!session || sending) return;
+      const freePathCount = snapshot.paths?.length ?? 0;
+      const hasCanvasContent =
+        snapshot.nodes.length > 0 || snapshot.edges.length > 0 || freePathCount > 0;
+      if (!hasCanvasContent) return;
+      setTutorOpen(true);
+      setSending(true);
+      try {
+        await sendChat(
+          "역해석 훈련입니다. 본문 정답을 바로 말하지 말고, 현재 캔버스 노드와 연결만 보고 학습자가 글의 핵심 흐름을 얼마나 재구성했는지 평가해 주세요. 인지·가치·시간 3축 중 빠진 축, 과하게 해석한 축, 다음에 추가하면 좋은 노드 1~2개를 짧게 제안해 주세요.",
+          snapshot,
+        );
+      } catch {
+        /* sendChat already surfaced the error */
+      } finally {
+        setSending(false);
+      }
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [session, lesson.id, sending],
   );
@@ -1058,6 +1353,13 @@ function PracticeScreen({
                   />
                 </div>
               )}
+              {mode === "reverse" && (
+                <ReverseMissionPanel
+                  canvas={liveCanvas ?? initialCanvas}
+                  sending={sending}
+                  onAskReverseTutor={onAskReverseTutor}
+                />
+              )}
             </article>
           )}
         </div>
@@ -1079,6 +1381,11 @@ function PracticeScreen({
               active={tab === "canvas"}
               onClick={() => setTab("canvas")}
               label="인지 캔버스"
+            />
+            <TabButton
+              active={tab === "axis"}
+              onClick={() => setTab("axis")}
+              label="3축 분석"
             />
             <TabButton
               active={tab === "eval"}
@@ -1137,6 +1444,15 @@ function PracticeScreen({
                 disabled={!session}
               />
             )}
+          </div>
+        )}
+        {tab === "axis" && (
+          <div className="flex-1 overflow-y-auto p-4 md:p-5">
+            <AxisAnalysisPanel
+              lesson={lesson}
+              canvas={liveCanvas ?? initialCanvas}
+              text={text}
+            />
           </div>
         )}
         {tab === "eval" && (
@@ -1232,7 +1548,7 @@ function CanvasModeSelector({ onSelect }: { onSelect: (m: "free" | CanvasMode) =
   );
 }
 
-type AdminTab = "users" | "modules" | "lessons" | "tutorQuality" | "brand";
+type AdminTab = "users" | "modules" | "lessons" | "feedback" | "tutorQuality" | "brand";
 
 function AdminScreen({
   branding,
@@ -1247,13 +1563,16 @@ function AdminScreen({
       <div className="border-b border-brain-border bg-brain-surface px-6 py-3">
         <div className="mx-auto flex max-w-5xl items-center gap-2">
           <AdminTabButton active={tab === "users"} onClick={() => setTab("users")}>
-            가입 대기
+            가입자 관리
           </AdminTabButton>
           <AdminTabButton active={tab === "modules"} onClick={() => setTab("modules")}>
             모듈
           </AdminTabButton>
           <AdminTabButton active={tab === "lessons"} onClick={() => setTab("lessons")}>
             레슨
+          </AdminTabButton>
+          <AdminTabButton active={tab === "feedback"} onClick={() => setTab("feedback")}>
+            학습자 피드백
           </AdminTabButton>
           <AdminTabButton
             active={tab === "tutorQuality"}
@@ -1271,6 +1590,7 @@ function AdminScreen({
           {tab === "users" && <AdminUsersPanel />}
           {tab === "modules" && <AdminModulesPanel />}
           {tab === "lessons" && <AdminLessonsPanel />}
+          {tab === "feedback" && <AdminLessonFeedbackPanel />}
           {tab === "tutorQuality" && <AdminTutorRatingsPanel />}
           {tab === "brand" && (
             <AdminBrandPanel
@@ -1418,6 +1738,232 @@ function AdminBrandPanel({
           </button>
         </div>
       </div>
+    </section>
+  );
+}
+
+function AdminLessonFeedbackPanel() {
+  const [items, setItems] = useState<AdminLessonFeedbackDto[]>([]);
+  const [status, setStatus] = useState<AdminLessonFeedbackStatus>("all");
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await api.adminLessonFeedback(status, 120);
+      setItems(data.items);
+      setReplyDrafts((prev) => {
+        const next: Record<string, string> = {};
+        for (const item of data.items) {
+          next[item.id] = prev[item.id] ?? item.admin_reply ?? "";
+        }
+        return next;
+      });
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [status]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const update = async (
+    item: AdminLessonFeedbackDto,
+    input: Parameters<typeof api.adminUpdateLessonFeedback>[1],
+  ) => {
+    setBusyId(item.id);
+    setError(null);
+    try {
+      const next = await api.adminUpdateLessonFeedback(item.id, input);
+      setItems((curr) => curr.map((row) => (row.id === item.id ? next : row)));
+      setReplyDrafts((curr) => ({
+        ...curr,
+        [next.id]: next.admin_reply ?? "",
+      }));
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const remove = async (item: AdminLessonFeedbackDto) => {
+    if (!window.confirm("이 피드백을 관리자 화면에서 삭제 처리할까요?")) return;
+    await update(item, { deleted: true });
+  };
+
+  const statusButtons: { value: AdminLessonFeedbackStatus; label: string }[] = [
+    { value: "all", label: "전체" },
+    { value: "visible", label: "공개" },
+    { value: "hidden", label: "숨김" },
+    { value: "deleted", label: "삭제" },
+  ];
+
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-display text-2xl">학습자 피드백 관리</h2>
+          <p className="mt-1 text-sm text-brain-text-muted">
+            레슨별 학습자 피드백을 숨김, 삭제 처리하고 관리자 답변을 남깁니다.
+          </p>
+        </div>
+        <button
+          onClick={() => void reload()}
+          className="rounded border border-brain-border px-3 py-1 text-sm text-brain-text-muted hover:bg-brain-surface-soft"
+        >
+          새로고침
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {statusButtons.map((button) => (
+          <button
+            key={button.value}
+            type="button"
+            onClick={() => setStatus(button.value)}
+            className={`rounded-full px-3 py-1 text-sm transition ${
+              status === button.value
+                ? "bg-brain-accent text-white"
+                : "border border-brain-border text-brain-text-muted hover:bg-brain-surface-soft"
+            }`}
+          >
+            {button.label}
+          </button>
+        ))}
+      </div>
+
+      {error && (
+        <div className="rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
+          {error}
+        </div>
+      )}
+
+      {loading && (
+        <p className="text-sm text-brain-text-muted">불러오는 중입니다.</p>
+      )}
+      {!loading && items.length === 0 && (
+        <p className="rounded-xl border border-brain-border bg-brain-surface p-4 text-sm text-brain-text-muted">
+          표시할 학습자 피드백이 없습니다.
+        </p>
+      )}
+
+      <ul className="space-y-3">
+        {items.map((item) => {
+          const isDeleted = item.deleted_at !== null;
+          const isBusy = busyId === item.id;
+          return (
+            <li
+              key={item.id}
+              className="rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="font-display text-lg">{item.lesson_title}</div>
+                  <div className="mt-1 text-xs text-brain-text-muted">
+                    {item.display_name || item.user_name} · {item.user_email} ·{" "}
+                    {new Date(item.created_at).toLocaleString("ko-KR")}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {item.is_hidden && !isDeleted && (
+                    <span className="rounded-full bg-brain-accent-soft px-2 py-1 text-xs text-brain-accent">
+                      숨김
+                    </span>
+                  )}
+                  {isDeleted && (
+                    <span className="rounded-full bg-brain-danger/10 px-2 py-1 text-xs text-brain-danger">
+                      삭제됨
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-3 rounded bg-brain-surface-soft px-3 py-2">
+                {item.rating > 0 && (
+                  <div className="mb-1 text-sm text-brain-highlight">
+                    {"★".repeat(item.rating)}
+                    <span className="text-brain-border">{"★".repeat(5 - item.rating)}</span>
+                  </div>
+                )}
+                <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                  {item.content}
+                </p>
+              </div>
+
+              <div className="mt-3">
+                <label className="mb-1 block text-xs font-medium text-brain-text-muted">
+                  관리자 답변
+                </label>
+                <textarea
+                  value={replyDrafts[item.id] ?? ""}
+                  onChange={(event) =>
+                    setReplyDrafts((curr) => ({
+                      ...curr,
+                      [item.id]: event.target.value,
+                    }))
+                  }
+                  maxLength={1000}
+                  rows={3}
+                  className="w-full resize-none rounded border border-brain-border bg-brain-bg px-3 py-2 text-sm leading-relaxed outline-none focus:border-brain-accent"
+                />
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() =>
+                    void update(item, {
+                      admin_reply: (replyDrafts[item.id] ?? "").trim() || null,
+                    })
+                  }
+                  className="rounded bg-brain-accent px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
+                >
+                  답변 저장
+                </button>
+                {!isDeleted && (
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => void update(item, { hidden: !item.is_hidden })}
+                    className="rounded border border-brain-border px-3 py-1.5 text-sm text-brain-text-muted hover:bg-brain-surface-soft disabled:opacity-60"
+                  >
+                    {item.is_hidden ? "숨김 해제" : "숨김"}
+                  </button>
+                )}
+                {!isDeleted && (
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => void remove(item)}
+                    className="rounded border border-brain-danger/50 px-3 py-1.5 text-sm text-brain-danger hover:bg-brain-danger/10 disabled:opacity-60"
+                  >
+                    삭제
+                  </button>
+                )}
+                {isDeleted && (
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => void update(item, { deleted: false })}
+                    className="rounded border border-brain-border px-3 py-1.5 text-sm text-brain-text-muted hover:bg-brain-surface-soft disabled:opacity-60"
+                  >
+                    복구
+                  </button>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }
@@ -1592,15 +2138,20 @@ function formatRating(value: number | null): string {
 }
 
 function AdminUsersPanel() {
-  const [pending, setPending] = useState<UserDto[] | null>(null);
+  const [users, setUsers] = useState<UserDto[] | null>(null);
+  const [filter, setFilter] = useState<"all" | UserDto["status"]>("all");
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<UserDto | null>(null);
+  const [userProgress, setUserProgress] = useState<AdminUserProgressDto | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setError(null);
     try {
-      const rows = await api.adminPending();
-      setPending(rows);
+      const rows = await api.adminUsers();
+      setUsers(rows);
     } catch (e: unknown) {
       setError(toMessage(e));
     }
@@ -1636,38 +2187,183 @@ function AdminUsersPanel() {
     }
   };
 
+  const updateStatus = async (u: UserDto, status: UserDto["status"]) => {
+    if (u.status === status) return;
+    setBusyId(u.id);
+    try {
+      await api.adminUpdateUser(u.id, { status });
+      await reload();
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const updateRole = async (u: UserDto, role: UserDto["role"]) => {
+    if (u.role === role) return;
+    const label = role === "admin" ? "관리자" : "일반 사용자";
+    if (!window.confirm(`${u.email} 권한을 ${label}(으)로 변경할까요?`)) return;
+    setBusyId(u.id);
+    try {
+      await api.adminUpdateUser(u.id, { role });
+      await reload();
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const openUserDetail = async (u: UserDto) => {
+    setSelectedUser(u);
+    setUserProgress(null);
+    setTempPassword(null);
+    setDetailLoading(true);
+    setError(null);
+    try {
+      setUserProgress(await api.adminUserProgress(u.id));
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const resetUserPassword = async (u: UserDto) => {
+    if (!window.confirm(`${u.email} 임시 비밀번호를 새로 발급할까요?`)) return;
+    setBusyId(u.id);
+    setError(null);
+    try {
+      const result = await api.adminResetUserPassword(u.id);
+      setTempPassword(result.temp_password);
+    } catch (e: unknown) {
+      setError(toMessage(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const visibleUsers = users?.filter((u) => filter === "all" || u.status === filter) ?? null;
+  const pendingCount = users?.filter((u) => u.status === "pending_approval").length ?? 0;
+
   return (
     <>
-      <h2 className="mb-1 font-display text-2xl">관리자 — 가입 승인 대기</h2>
-      <p className="mb-4 text-sm text-brain-text-muted">
-        승인 시 사용자는 즉시 로그인 가능. 거절 시 사유는 사용자에게 노출되지 않습니다.
-      </p>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="mb-1 font-display text-2xl">관리자 — 가입자 관리</h2>
+          <p className="text-sm text-brain-text-muted">
+            신규 가입자를 확인해 승인하고, 필요 시 관리자 권한으로 승급할 수 있습니다.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void reload()}
+          className="rounded border border-brain-border px-3 py-1 text-sm text-brain-text-muted hover:bg-brain-surface-soft"
+        >
+          새로고침
+        </button>
+      </div>
       {error && (
         <div className="mb-4 rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
           {error}
         </div>
       )}
-      {!pending && <p className="text-sm text-brain-text-muted">불러오는 중…</p>}
-      {pending && pending.length === 0 && (
-        <p className="text-sm text-brain-text-muted">대기 중인 사용자가 없습니다.</p>
+      <div className="mb-4 flex flex-wrap gap-2">
+        <UserFilterButton active={filter === "all"} onClick={() => setFilter("all")}>
+          전체 {users?.length ?? 0}
+        </UserFilterButton>
+        <UserFilterButton
+          active={filter === "pending_approval"}
+          onClick={() => setFilter("pending_approval")}
+        >
+          승인 대기 {pendingCount}
+        </UserFilterButton>
+        <UserFilterButton active={filter === "approved"} onClick={() => setFilter("approved")}>
+          승인됨
+        </UserFilterButton>
+        <UserFilterButton active={filter === "rejected"} onClick={() => setFilter("rejected")}>
+          거절
+        </UserFilterButton>
+        <UserFilterButton active={filter === "suspended"} onClick={() => setFilter("suspended")}>
+          정지
+        </UserFilterButton>
+      </div>
+      {!users && <p className="text-sm text-brain-text-muted">불러오는 중…</p>}
+      {selectedUser && (
+        <AdminUserDetailPanel
+          user={selectedUser}
+          progress={userProgress}
+          loading={detailLoading}
+          tempPassword={tempPassword}
+          busy={busyId === selectedUser.id}
+          onClose={() => {
+            setSelectedUser(null);
+            setUserProgress(null);
+            setTempPassword(null);
+          }}
+          onRefresh={() => void openUserDetail(selectedUser)}
+          onResetPassword={() => void resetUserPassword(selectedUser)}
+        />
+      )}
+      {visibleUsers && visibleUsers.length === 0 && (
+        <p className="text-sm text-brain-text-muted">표시할 가입자가 없습니다.</p>
       )}
       <ul className="space-y-3">
-        {pending?.map((u) => (
+        {visibleUsers?.map((u) => (
           <li
             key={u.id}
-            className="flex items-center justify-between rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1"
+            className="grid gap-4 rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1 md:grid-cols-[minmax(0,1fr)_auto]"
           >
             <div>
-              <div className="font-display text-base">{u.name}</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="font-display text-base">{u.name}</div>
+                <span className="rounded-full bg-brain-accent-soft px-2 py-0.5 text-[11px] text-brain-accent">
+                  {statusLabel(u.status)}
+                </span>
+                <span className="rounded-full bg-brain-surface-soft px-2 py-0.5 text-[11px] text-brain-text-muted">
+                  {u.role === "admin" ? "관리자" : "사용자"}
+                </span>
+              </div>
               <div className="text-sm text-brain-text-muted">{u.email}</div>
               <div className="mt-1 text-xs text-brain-text-soft">
-                역할 {u.role} · 상태 {u.status}
+                가입일 {new Date(u.created_at).toLocaleDateString("ko-KR")}
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2 md:justify-end">
+              <select
+                value={u.status}
+                onChange={(e) => void updateStatus(u, e.target.value as UserDto["status"])}
+                disabled={busyId === u.id}
+                className="rounded border border-brain-border bg-brain-bg px-2 py-1 text-sm text-brain-text disabled:opacity-50"
+                aria-label={`${u.email} 상태 변경`}
+              >
+                <option value="pending_approval">승인 대기</option>
+                <option value="approved">승인됨</option>
+                <option value="rejected">거절</option>
+                <option value="suspended">정지</option>
+              </select>
+              <select
+                value={u.role}
+                onChange={(e) => void updateRole(u, e.target.value as UserDto["role"])}
+                disabled={busyId === u.id}
+                className="rounded border border-brain-border bg-brain-bg px-2 py-1 text-sm text-brain-text disabled:opacity-50"
+                aria-label={`${u.email} 권한 변경`}
+              >
+                <option value="user">사용자</option>
+                <option value="admin">관리자</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => void openUserDetail(u)}
+                disabled={busyId === u.id}
+                className="rounded border border-brain-border px-3 py-1 text-sm text-brain-text-muted hover:bg-brain-surface-soft disabled:opacity-50"
+              >
+                진도 보기
+              </button>
               <button
                 onClick={() => approve(u)}
-                disabled={busyId === u.id}
+                disabled={busyId === u.id || u.status === "approved"}
                 className="rounded bg-brain-accent px-3 py-1 text-sm text-white hover:opacity-90 disabled:opacity-50"
               >
                 승인
@@ -1685,6 +2381,196 @@ function AdminUsersPanel() {
       </ul>
     </>
   );
+}
+
+function AdminUserDetailPanel({
+  user,
+  progress,
+  loading,
+  tempPassword,
+  busy,
+  onClose,
+  onRefresh,
+  onResetPassword,
+}: {
+  user: UserDto;
+  progress: AdminUserProgressDto | null;
+  loading: boolean;
+  tempPassword: string | null;
+  busy: boolean;
+  onClose: () => void;
+  onRefresh: () => void;
+  onResetPassword: () => void;
+}) {
+  const lastStartedAt = progress?.summary.last_started_at
+    ? Date.parse(progress.summary.last_started_at)
+    : null;
+
+  return (
+    <section className="mb-4 rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="font-display text-xl">{user.name}</h3>
+          <p className="text-sm text-brain-text-muted">{user.email}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={loading}
+            className="rounded border border-brain-border px-3 py-1 text-sm text-brain-text-muted hover:bg-brain-surface-soft disabled:opacity-50"
+          >
+            새로고침
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border border-brain-border px-3 py-1 text-sm text-brain-text-muted hover:bg-brain-surface-soft"
+          >
+            닫기
+          </button>
+        </div>
+      </div>
+
+      {loading && <p className="text-sm text-brain-text-muted">진도 상황을 불러오는 중입니다.</p>}
+
+      {progress && (
+        <div className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-4">
+            <AdminMetric label="진입 레슨" value={`${progress.summary.lesson_count}`} />
+            <AdminMetric label="학습 세션" value={`${progress.summary.session_count}`} />
+            <AdminMetric label="저장 내용" value={`${progress.summary.artifact_count}`} />
+            <AdminMetric
+              label="최근 활동"
+              value={lastStartedAt ? relativeTime(lastStartedAt) : "-"}
+            />
+          </div>
+
+          <div className="rounded-lg border border-brain-border bg-brain-surface-soft p-3">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="text-sm font-medium text-brain-text">비밀번호 재설정</div>
+              <button
+                type="button"
+                onClick={onResetPassword}
+                disabled={busy}
+                className="rounded bg-brain-accent px-3 py-1 text-sm text-white disabled:opacity-60"
+              >
+                임시 비밀번호 발급
+              </button>
+            </div>
+            {tempPassword && (
+              <div className="rounded border border-brain-accent/30 bg-brain-bg px-3 py-2">
+                <div className="mb-1 text-xs text-brain-text-muted">
+                  임시 비밀번호는 지금 한 번만 표시됩니다.
+                </div>
+                <code className="select-all text-sm text-brain-text">{tempPassword}</code>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h4 className="mb-2 font-display text-base">레슨별 진도</h4>
+            {progress.lessons.length === 0 && (
+              <p className="text-sm text-brain-text-muted">아직 진입한 레슨이 없습니다.</p>
+            )}
+            <ul className="max-h-48 space-y-2 overflow-y-auto pr-1">
+              {progress.lessons.map((lesson) => {
+                const last = lesson.last_started_at ? Date.parse(lesson.last_started_at) : null;
+                return (
+                  <li
+                    key={lesson.lesson_id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded border border-brain-border bg-brain-bg px-3 py-2 text-sm"
+                  >
+                    <div>
+                      <div className="font-medium text-brain-text">{lesson.lesson_title}</div>
+                      <div className="text-xs text-brain-text-muted">{lesson.module_title}</div>
+                    </div>
+                    <div className="text-right text-xs text-brain-text-muted">
+                      <div>{lesson.session_count}회</div>
+                      <div>{last ? relativeTime(last) : "-"}</div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="mb-2 font-display text-base">최근 세션</h4>
+            {progress.recent_sessions.length === 0 && (
+              <p className="text-sm text-brain-text-muted">최근 세션이 없습니다.</p>
+            )}
+            <ul className="max-h-56 space-y-2 overflow-y-auto pr-1">
+              {progress.recent_sessions.map((session) => (
+                <li
+                  key={session.session_id}
+                  className="rounded border border-brain-border bg-brain-bg px-3 py-2 text-sm"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-medium text-brain-text">{session.lesson_title}</div>
+                    <div className="text-xs text-brain-text-muted">
+                      {new Date(session.started_at).toLocaleString("ko-KR")}
+                    </div>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-brain-text-muted">
+                    <span>{session.module_title}</span>
+                    <span>mode {session.mode}</span>
+                    <span>저장 {session.artifact_count}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AdminMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-brain-border bg-brain-bg px-3 py-2">
+      <div className="text-xs text-brain-text-muted">{label}</div>
+      <div className="mt-1 font-display text-xl text-brain-text">{value}</div>
+    </div>
+  );
+}
+
+function UserFilterButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full px-3 py-1 text-xs transition ${
+        active
+          ? "bg-brain-accent text-white shadow-soft-1"
+          : "border border-brain-border text-brain-text-muted hover:text-brain-text"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function statusLabel(status: UserDto["status"]): string {
+  switch (status) {
+    case "pending_approval":
+      return "승인 대기";
+    case "approved":
+      return "승인됨";
+    case "rejected":
+      return "거절";
+    case "suspended":
+      return "정지";
+  }
 }
 
 const AXIS_OPTIONS: { value: ModuleAxis; label: string }[] = [
@@ -2410,10 +3296,12 @@ function ArtifactGallery({
   artifacts,
   onOpen,
   onBulkDelete,
+  onDelete,
 }: {
   artifacts: ArtifactGalleryDto[] | null;
   onOpen: (item: ArtifactGalleryDto) => void;
   onBulkDelete: (ids: string[]) => Promise<void>;
+  onDelete: (item: ArtifactGalleryDto) => void;
 }) {
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -2435,7 +3323,7 @@ function ArtifactGallery({
   }
   if (artifacts.length === 0) return null;
 
-  const visible = artifacts.slice(0, 6);
+  const visible = artifacts;
   const allVisibleSelected =
     visible.length > 0 && visible.every((v) => selected.has(v.artifact_id));
 
@@ -2522,6 +3410,7 @@ function ArtifactGallery({
           )}
         </div>
       </div>
+      <div className="max-h-[420px] overflow-y-auto pr-1">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {visible.map((item) => {
           const isSelected = selected.has(item.artifact_id);
@@ -2563,10 +3452,31 @@ function ArtifactGallery({
                 <span>노드 {item.node_count}</span>
                 <span>엣지 {item.edge_count}</span>
                 <span>{new Date(item.saved_at).toLocaleDateString("ko-KR")}</span>
+                {!selectMode && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onDelete(item);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onDelete(item);
+                      }
+                    }}
+                    className="rounded border border-brain-danger/40 px-2 py-0.5 text-[11px] text-brain-danger hover:bg-brain-danger/10"
+                  >
+                    삭제
+                  </span>
+                )}
               </div>
             </button>
           );
         })}
+      </div>
       </div>
     </section>
   );

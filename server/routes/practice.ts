@@ -64,7 +64,7 @@ async function latestArtifactId(sessionId: string): Promise<string | null> {
   const rows = await db
     .select({ id: canvasArtifacts.id })
     .from(canvasArtifacts)
-    .where(eq(canvasArtifacts.sessionId, sessionId))
+    .where(and(eq(canvasArtifacts.sessionId, sessionId), isNull(canvasArtifacts.deletedAt)))
     .orderBy(desc(canvasArtifacts.savedAt))
     .limit(1);
   return rows[0]?.id ?? null;
@@ -135,7 +135,7 @@ practiceRouter.get(
         lastStartedAt: sql<Date | null>`max(${learningSessions.startedAt})`,
       })
       .from(learningSessions)
-      .where(eq(learningSessions.userId, req.user!.id))
+      .where(and(eq(learningSessions.userId, req.user!.id), isNull(learningSessions.deletedAt)))
       .groupBy(learningSessions.lessonId);
     const dto: ProgressEntryDTO[] = rows.map((r) => ({
       lesson_id: r.lessonId,
@@ -169,7 +169,13 @@ practiceRouter.get(
       .from(canvasArtifacts)
       .innerJoin(learningSessions, eq(canvasArtifacts.sessionId, learningSessions.id))
       .innerJoin(lessons, eq(learningSessions.lessonId, lessons.id))
-      .where(and(eq(learningSessions.userId, req.user!.id), sql`${canvasArtifacts.deletedAt} IS NULL`))
+      .where(
+        and(
+          eq(learningSessions.userId, req.user!.id),
+          isNull(learningSessions.deletedAt),
+          isNull(canvasArtifacts.deletedAt),
+        ),
+      )
       .orderBy(desc(canvasArtifacts.savedAt))
       .limit(20);
 
@@ -198,14 +204,51 @@ practiceRouter.get(
   }),
 );
 
+// DELETE /api/practice/me/artifacts/:id
+//   Soft-deletes a single artifact owned by the caller (sets deletedAt).
+practiceRouter.delete(
+  "/me/artifacts/:id",
+  userRateLimit,
+  asyncHandler(async (req, res) => {
+    const artifactId = req.params.id;
+    if (typeof artifactId !== "string" || !UUID_RE.test(artifactId)) {
+      fail(res, 422, "validation_error", { message: "invalid_artifact_id" });
+      return;
+    }
+
+    const rows = await db
+      .select({ id: canvasArtifacts.id })
+      .from(canvasArtifacts)
+      .innerJoin(learningSessions, eq(canvasArtifacts.sessionId, learningSessions.id))
+      .where(
+        and(
+          eq(canvasArtifacts.id, artifactId),
+          eq(learningSessions.userId, req.user!.id),
+          isNull(learningSessions.deletedAt),
+          isNull(canvasArtifacts.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!rows[0]) {
+      fail(res, 404, "not_found");
+      return;
+    }
+
+    await db
+      .update(canvasArtifacts)
+      .set({ deletedAt: new Date() })
+      .where(eq(canvasArtifacts.id, artifactId));
+
+    ok(res, { id: artifactId });
+  }),
+);
+
 // POST /api/practice/me/artifacts/bulk-delete
 //   Body: { artifact_ids: string[] }
-//   Soft-deletes the caller's own artifacts (sets deletedAt). Artifacts
-//   owned by another user are silently skipped, so the response only
-//   reports the count actually removed — the client should refresh the
-//   gallery from the response.
-const UUID_RE_LOCAL = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
+//   Soft-deletes the caller's own artifacts. Artifacts owned by another
+//   user are silently skipped, so the response only reports the ids
+//   actually removed — the client should prune the visible grid using
+//   `deleted_ids` without a refetch.
 practiceRouter.post(
   "/me/artifacts/bulk-delete",
   userRateLimit,
@@ -219,7 +262,7 @@ practiceRouter.post(
       new Set(
         body.artifact_ids
           .filter((v): v is string => typeof v === "string")
-          .filter((v) => UUID_RE_LOCAL.test(v)),
+          .filter((v) => UUID_RE.test(v)),
       ),
     ).slice(0, 100);
     if (ids.length === 0) {
@@ -235,6 +278,7 @@ practiceRouter.post(
         and(
           inArray(canvasArtifacts.id, ids),
           eq(learningSessions.userId, req.user!.id),
+          isNull(learningSessions.deletedAt),
           isNull(canvasArtifacts.deletedAt),
         ),
       );
@@ -391,7 +435,7 @@ practiceRouter.get(
         savedAt: canvasArtifacts.savedAt,
       })
       .from(canvasArtifacts)
-      .where(eq(canvasArtifacts.sessionId, owned.id))
+      .where(and(eq(canvasArtifacts.sessionId, owned.id), isNull(canvasArtifacts.deletedAt)))
       .orderBy(desc(canvasArtifacts.savedAt))
       .limit(1);
     const row = rows[0];
