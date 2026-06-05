@@ -409,6 +409,14 @@ export const api = {
     ),
   progress: () => call<ProgressEntryDto[]>("/api/practice/me/progress"),
   artifacts: () => call<ArtifactGalleryDto[]>("/api/practice/me/artifacts"),
+  deleteArtifacts: (ids: string[]) =>
+    call<{ deleted_count: number; deleted_ids: string[] }>(
+      "/api/practice/me/artifacts/bulk-delete",
+      {
+        method: "POST",
+        body: JSON.stringify({ artifact_ids: ids }),
+      },
+    ),
   startSession: (lessonId: string, mode?: SessionMode) =>
     call<SessionDto>("/api/practice/sessions", {
       method: "POST",

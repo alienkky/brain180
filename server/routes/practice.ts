@@ -19,7 +19,7 @@
 
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
-import { and, eq, desc, sql } from "drizzle-orm";
+import { and, eq, desc, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { canvasArtifacts, learningSessions, lessons } from "../db/schema.js";
 import { ok, fail } from "../lib/envelope.js";
@@ -195,6 +195,61 @@ practiceRouter.get(
       };
     });
     ok(res, dto);
+  }),
+);
+
+// POST /api/practice/me/artifacts/bulk-delete
+//   Body: { artifact_ids: string[] }
+//   Soft-deletes the caller's own artifacts (sets deletedAt). Artifacts
+//   owned by another user are silently skipped, so the response only
+//   reports the count actually removed — the client should refresh the
+//   gallery from the response.
+const UUID_RE_LOCAL = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+practiceRouter.post(
+  "/me/artifacts/bulk-delete",
+  userRateLimit,
+  asyncHandler(async (req, res) => {
+    const body = (req.body ?? {}) as { artifact_ids?: unknown };
+    if (!Array.isArray(body.artifact_ids)) {
+      fail(res, 422, "validation_error", { message: "artifact_ids_must_be_array" });
+      return;
+    }
+    const ids = Array.from(
+      new Set(
+        body.artifact_ids
+          .filter((v): v is string => typeof v === "string")
+          .filter((v) => UUID_RE_LOCAL.test(v)),
+      ),
+    ).slice(0, 100);
+    if (ids.length === 0) {
+      ok(res, { deleted_count: 0, deleted_ids: [] });
+      return;
+    }
+
+    const owned = await db
+      .select({ id: canvasArtifacts.id })
+      .from(canvasArtifacts)
+      .innerJoin(learningSessions, eq(canvasArtifacts.sessionId, learningSessions.id))
+      .where(
+        and(
+          inArray(canvasArtifacts.id, ids),
+          eq(learningSessions.userId, req.user!.id),
+          isNull(canvasArtifacts.deletedAt),
+        ),
+      );
+    const ownedIds = owned.map((r) => r.id);
+    if (ownedIds.length === 0) {
+      ok(res, { deleted_count: 0, deleted_ids: [] });
+      return;
+    }
+
+    await db
+      .update(canvasArtifacts)
+      .set({ deletedAt: new Date() })
+      .where(inArray(canvasArtifacts.id, ownedIds));
+
+    ok(res, { deleted_count: ownedIds.length, deleted_ids: ownedIds });
   }),
 );
 

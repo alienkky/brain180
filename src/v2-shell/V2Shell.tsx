@@ -585,6 +585,22 @@ function LibraryScreen({
     };
   }, [activeModuleId]);
 
+  const onBulkDeleteArtifacts = useCallback(
+    async (ids: string[]) => {
+      if (ids.length === 0) return;
+      try {
+        const result = await api.deleteArtifacts(ids);
+        const removed = new Set(result.deleted_ids);
+        setArtifacts((prev) =>
+          prev ? prev.filter((a) => !removed.has(a.artifact_id)) : prev,
+        );
+      } catch (e: unknown) {
+        setError(toMessage(e));
+      }
+    },
+    [],
+  );
+
   return (
     <div className="grid h-full grid-cols-[280px_1fr] gap-0">
       <aside className="overflow-y-auto border-r border-brain-border bg-brain-surface-soft p-4">
@@ -605,7 +621,11 @@ function LibraryScreen({
       </aside>
       <section className="overflow-y-auto p-6">
         <ProgressSummary progress={progress} />
-        <ArtifactGallery artifacts={artifacts} onOpen={onOpenArtifact} />
+        <ArtifactGallery
+          artifacts={artifacts}
+          onOpen={onOpenArtifact}
+          onBulkDelete={onBulkDeleteArtifacts}
+        />
         <CompareBar
           pins={comparePins}
           onClear={onClearPin}
@@ -2389,10 +2409,23 @@ function ModulesByField({
 function ArtifactGallery({
   artifacts,
   onOpen,
+  onBulkDelete,
 }: {
   artifacts: ArtifactGalleryDto[] | null;
   onOpen: (item: ArtifactGalleryDto) => void;
+  onBulkDelete: (ids: string[]) => Promise<void>;
 }) {
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
+
+  // Drop selection state whenever the underlying artifact list changes — e.g.
+  // after a bulk delete completes the parent passes a fresh array, and we
+  // do not want stale ids lingering on a card that has since been replaced.
+  useEffect(() => {
+    setSelected(new Set());
+  }, [artifacts]);
+
   if (!artifacts) {
     return (
       <div className="mb-4 rounded-xl border border-brain-border bg-brain-surface-soft px-4 py-3 text-sm text-brain-text-muted">
@@ -2401,6 +2434,47 @@ function ArtifactGallery({
     );
   }
   if (artifacts.length === 0) return null;
+
+  const visible = artifacts.slice(0, 6);
+  const allVisibleSelected =
+    visible.length > 0 && visible.every((v) => selected.has(v.artifact_id));
+
+  const toggle = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (allVisibleSelected) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(visible.map((v) => v.artifact_id)));
+    }
+  };
+
+  const cancelSelect = () => {
+    setSelectMode(false);
+    setSelected(new Set());
+  };
+
+  const confirmDelete = async () => {
+    if (selected.size === 0) return;
+    const ok = window.confirm(`선택한 ${selected.size}개 작업물을 삭제할까요?`);
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      await onBulkDelete(Array.from(selected));
+      setSelectMode(false);
+      setSelected(new Set());
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <section className="mb-4 rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -2408,28 +2482,91 @@ function ArtifactGallery({
           <h2 className="font-display text-lg">내 작업물</h2>
           <p className="mt-1 text-xs text-brain-text-muted">최근 저장한 캔버스를 이어서 엽니다.</p>
         </div>
-        <span className="rounded-full bg-brain-accent-soft px-2 py-0.5 text-xs text-brain-accent">
-          {artifacts.length}개
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-brain-accent-soft px-2 py-0.5 text-xs text-brain-accent">
+            {artifacts.length}개
+          </span>
+          {!selectMode ? (
+            <button
+              type="button"
+              onClick={() => setSelectMode(true)}
+              className="rounded border border-brain-border bg-brain-bg px-2 py-0.5 text-xs text-brain-text-muted hover:border-brain-accent"
+            >
+              선택
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={toggleAll}
+                className="rounded border border-brain-border bg-brain-bg px-2 py-0.5 text-xs text-brain-text-muted hover:border-brain-accent"
+              >
+                {allVisibleSelected ? "전체 해제" : "전체 선택"}
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={selected.size === 0 || deleting}
+                className="rounded bg-brain-danger px-2 py-0.5 text-xs text-white disabled:opacity-50"
+              >
+                {deleting ? "삭제 중…" : `삭제 (${selected.size})`}
+              </button>
+              <button
+                type="button"
+                onClick={cancelSelect}
+                className="rounded border border-brain-border bg-brain-bg px-2 py-0.5 text-xs text-brain-text-muted hover:border-brain-accent"
+              >
+                취소
+              </button>
+            </>
+          )}
+        </div>
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {artifacts.slice(0, 6).map((item) => (
-          <button
-            key={item.artifact_id}
-            type="button"
-            onClick={() => onOpen(item)}
-            className="rounded-lg border border-brain-border bg-brain-bg p-3 text-left transition hover:border-brain-accent hover:bg-brain-surface-soft"
-          >
-            <div className="line-clamp-1 font-display text-sm text-brain-text">
-              {item.lesson.title}
-            </div>
-            <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-brain-text-muted">
-              <span>노드 {item.node_count}</span>
-              <span>엣지 {item.edge_count}</span>
-              <span>{new Date(item.saved_at).toLocaleDateString("ko-KR")}</span>
-            </div>
-          </button>
-        ))}
+        {visible.map((item) => {
+          const isSelected = selected.has(item.artifact_id);
+          const baseClass =
+            "relative rounded-lg border bg-brain-bg p-3 text-left transition";
+          const stateClass = selectMode
+            ? isSelected
+              ? "border-brain-accent bg-brain-surface-soft"
+              : "border-brain-border hover:border-brain-accent"
+            : "border-brain-border hover:border-brain-accent hover:bg-brain-surface-soft";
+          const onClick = () => {
+            if (selectMode) toggle(item.artifact_id);
+            else onOpen(item);
+          };
+          return (
+            <button
+              key={item.artifact_id}
+              type="button"
+              onClick={onClick}
+              className={`${baseClass} ${stateClass}`}
+            >
+              {selectMode && (
+                <span
+                  aria-hidden
+                  className={
+                    "absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded border " +
+                    (isSelected
+                      ? "border-brain-accent bg-brain-accent text-white"
+                      : "border-brain-border bg-brain-bg text-transparent")
+                  }
+                >
+                  ✓
+                </span>
+              )}
+              <div className="line-clamp-1 font-display text-sm text-brain-text">
+                {item.lesson.title}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-brain-text-muted">
+                <span>노드 {item.node_count}</span>
+                <span>엣지 {item.edge_count}</span>
+                <span>{new Date(item.saved_at).toLocaleDateString("ko-KR")}</span>
+              </div>
+            </button>
+          );
+        })}
       </div>
     </section>
   );
