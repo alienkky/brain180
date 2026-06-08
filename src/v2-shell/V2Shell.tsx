@@ -1443,36 +1443,43 @@ function PracticeScreen({
             {session ? `세션 ${session.id.slice(0, 8)}…` : "세션 시작 중…"}
           </div>
         </div>
-        {tab === "canvas" && (
-          <div className="flex-1 overflow-hidden">
-            {!canvasReady ? (
-              <p className="p-6 text-sm text-brain-text-muted">캔버스 불러오는 중…</p>
-            ) : canvasMode === null ? (
-              <CanvasModeSelector onSelect={setCanvasMode} />
-            ) : canvasMode === "free" ? (
-              <FreeDrawCanvas
-                initial={initialCanvas as FreeCanvasJson | null}
-                onSave={onSaveCanvas}
-                onChange={onCanvasChange}
-                onCanvasRef={(fn) => { freeCanvasGetBase64.current = fn; }}
-                onAskTutor={onAskTutor}
-                disabled={!session}
-              />
-            ) : (
-              <CognitiveMap
-                initial={initialCanvas}
-                onSave={onSaveCanvas}
-                onChange={onCanvasChange}
-                onAskTutor={onAskTutor}
-                onNodeFocus={onNodeFocus}
-                canvasMode={canvasMode}
-                injectCite={pendingCite}
-                onCiteConsumed={() => setPendingCite(null)}
-                disabled={!session}
-              />
-            )}
-          </div>
-        )}
+        {/* Always mount the canvas pane so its internal node/edge state and
+            pending autosave timer survive tab switches. Hiding via CSS keeps
+            React from unmounting CognitiveMap, which used to drop in-progress
+            nodes when the user popped over to 자기평가 / 3축 / 패턴 / 피드백
+            before the 700ms autosave debounce had a chance to fire. */}
+        <div
+          className="flex-1 overflow-hidden"
+          style={tab === "canvas" ? undefined : { display: "none" }}
+          aria-hidden={tab !== "canvas"}
+        >
+          {!canvasReady ? (
+            <p className="p-6 text-sm text-brain-text-muted">캔버스 불러오는 중…</p>
+          ) : canvasMode === null ? (
+            <CanvasModeSelector onSelect={setCanvasMode} />
+          ) : canvasMode === "free" ? (
+            <FreeDrawCanvas
+              initial={initialCanvas as FreeCanvasJson | null}
+              onSave={onSaveCanvas}
+              onChange={onCanvasChange}
+              onCanvasRef={(fn) => { freeCanvasGetBase64.current = fn; }}
+              onAskTutor={onAskTutor}
+              disabled={!session}
+            />
+          ) : (
+            <CognitiveMap
+              initial={initialCanvas}
+              onSave={onSaveCanvas}
+              onChange={onCanvasChange}
+              onAskTutor={onAskTutor}
+              onNodeFocus={onNodeFocus}
+              canvasMode={canvasMode}
+              injectCite={pendingCite}
+              onCiteConsumed={() => setPendingCite(null)}
+              disabled={!session}
+            />
+          )}
+        </div>
         {tab === "axis" && (
           <div className="b-pane b-pane--axis flex-1 overflow-y-auto p-4 md:p-5">
             <AxisAnalysisPanel
