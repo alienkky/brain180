@@ -79,7 +79,7 @@ export function FeedbackPanel({ lessonId }: Props) {
   };
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto bg-brain-surface-soft">
+    <div className="b-pane b-pane--feedback flex h-full flex-col overflow-y-auto bg-brain-surface-soft">
       <div className="border-b border-brain-border bg-brain-surface px-6 py-3">
         <p
           className="mb-1 text-[10px] uppercase tracking-[0.18em]"

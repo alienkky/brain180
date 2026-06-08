@@ -296,3 +296,60 @@ body::before {
 [data-skin="ivory"] .b-axis-card[data-axis="value"] blockquote     { border-color: #D88254 !important; }
 [data-skin="ivory"] .b-axis-card[data-axis="time"] blockquote      { border-color: #6FA56D !important; }
 
+/* ── Ivory skin: self-eval / pattern / feedback panes ──────────────────
+   The three right-pane tabs (자기평가, 패턴, 피드백) all share the muddy
+   `bg-brain-surface-soft` background + slate accents that look dingy on
+   ivory. Lift the canvas to clean off-white, force inner cards to a
+   crisp white with a soft hairline shadow, and replace the slate
+   accent boxes with a warm ivory tint that matches the page paper. */
+[data-skin="ivory"] .b-pane {
+  background-color: #F8F2E5 !important;
+}
+[data-skin="ivory"] .b-pane > div:first-child {
+  background-color: #FFFFFF !important;
+  border-bottom-color: rgba(40, 30, 14, 0.10) !important;
+}
+[data-skin="ivory"] .b-pane h3,
+[data-skin="ivory"] .b-pane h4 { color: #1B1710 !important; }
+[data-skin="ivory"] .b-pane article,
+[data-skin="ivory"] .b-pane .rounded-lg.border,
+[data-skin="ivory"] .b-pane .rounded-lg.p-3\.5 {
+  background-color: #FFFFFF !important;
+  border-color: rgba(40, 30, 14, 0.10) !important;
+  box-shadow: 0 1px 0 rgba(40, 30, 14, 0.03);
+}
+/* The italic guidance box at the foot of each pane uses an inline
+   rgba(111, 138, 168, ...) slate tint — re-tint it as a warm cream
+   that reads as a "side note" without going gray. */
+[data-skin="ivory"] .b-pane > div:nth-child(2) > div[style*="rgba(111, 138, 168"] {
+  background-color: #FBF6EA !important;
+  border-color: rgba(40, 30, 14, 0.10) !important;
+}
+[data-skin="ivory"] .b-pane > div:nth-child(2) > div[style*="rgba(111, 138, 168"] p {
+  color: #6A6258 !important;
+}
+/* Eval score circle gets a soft cream backdrop instead of the inline
+   color-stamped 10%-alpha tint, so it reads as a clean medallion. */
+[data-skin="ivory"] .b-pane--eval .rounded-full[style*="border"] {
+  background-color: #FFFFFF !important;
+}
+/* Metric chips: bring them onto white with a thin border. */
+[data-skin="ivory"] .b-pane--eval .rounded-lg[style*="--color-brain-surface"] {
+  background-color: #FFFFFF !important;
+  border: 1px solid rgba(40, 30, 14, 0.08) !important;
+}
+/* Pattern node chips already carry a per-type tint via TYPE_COLOR;
+   leave those alone so the color coding stays. Only soften the muted
+   description text. */
+[data-skin="ivory"] .b-pane--pattern article p[style*="--color-brain-text-muted"] {
+  color: #4F4738 !important;
+}
+/* Feedback panel: the rating / form rows live as plain divs without
+   border classes — give them the same hairline shadow when they sit
+   on the cream backdrop, but only inside the pane content body. */
+[data-skin="ivory"] .b-pane--feedback form,
+[data-skin="ivory"] .b-pane--feedback li {
+  background-color: #FFFFFF;
+  border-color: rgba(40, 30, 14, 0.10);
+}
+
