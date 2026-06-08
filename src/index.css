@@ -37,6 +37,53 @@
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
 
+/* ============================================================
+   THEME SKINS — runtime remap of --color-brain-* tokens.
+   warm  = @theme defaults above (Brain180 brand). No data-skin needed.
+   slate = pure shadcn (Slate + Inter)
+   ivory = ivory + black, Monocle highlighter/post-it, skeuomorphism
+   Applied via [data-skin] on the v2 shell root; all Tailwind brain-*
+   utilities + inline var() refs pick up the overrides automatically.
+   ============================================================ */
+[data-skin="slate"] {
+  --color-brain-bg: #FFFFFF;
+  --color-brain-surface: #FFFFFF;
+  --color-brain-surface-soft: #F1F5F9;
+  --color-brain-border: #E2E8F0;
+  --color-brain-border-strong: #CBD5E1;
+  --color-brain-text: #020817;
+  --color-brain-text-muted: #64748B;
+  --color-brain-text-soft: #94A3B8;
+  --color-brain-accent: #0F172A;
+  --color-brain-accent-soft: #E2E8F0;
+  --color-brain-highlight: #475569;
+  --color-brain-highlight-soft: #E2E8F0;
+  --font-display: "Inter", -apple-system, system-ui, sans-serif;
+  --font-serif: "Inter", -apple-system, system-ui, sans-serif;
+}
+
+[data-skin="ivory"] {
+  --color-brain-bg: #F6F1E5;
+  --color-brain-surface: #FFFDF8;
+  --color-brain-surface-soft: #E7DEC9;
+  --color-brain-border: #D7CCB2;
+  --color-brain-border-strong: #C6BA9C;
+  --color-brain-text: #1B1710;
+  --color-brain-text-muted: #6F6754;
+  --color-brain-text-soft: #A89E86;
+  --color-brain-accent: #1B1710;        /* editorial black */
+  --color-brain-accent-soft: #E0C9A8;
+  --color-brain-highlight: #C68A3D;
+  --color-brain-highlight-soft: #EDD9B6;
+  --brain-hl: #F5A088;                   /* highlighter / post-it — set inline */
+}
+
+/* warm skin keeps the body paper texture; slate/ivory suppress the terracotta tint */
+[data-skin="slate"],
+[data-skin="ivory"] {
+  position: relative;
+}
+
 html, body, #root {
   height: 100%;
   margin: 0;
@@ -90,4 +137,120 @@ body::before {
 }
 .shadow-soft-3 {
   box-shadow: 0 12px 32px rgba(42, 36, 29, 0.07), 0 2px 4px rgba(42, 36, 29, 0.03);
+}
+
+/* Korean: break at word boundaries, never mid-word */
+[data-skin] { word-break: keep-all; overflow-wrap: break-word; }
+
+/* ============================================================
+   IVORY SKIN — clean skeuomorphism (bookshelf, post-it, paper/grid).
+   Hooks: .b-sidebar / .b-fieldgroup / .b-mod(.b-mod--active) on the
+   library sidebar, .b-lesson on lesson cards, .pv-text-body[data-paper]
+   on the practice text pane. Active only under [data-skin="ivory"].
+   ============================================================ */
+
+/* ---- Library sidebar = Apple-bookcase wooden shelf ---- */
+[data-skin="ivory"] .b-sidebar {
+  background:
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.30) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(0deg, rgba(120,84,38,0.03) 0 2px, transparent 2px 11px),
+    linear-gradient(180deg, #FBF5E8 0%, #F8F0DE 16%, #F6EDD6 50%, #F9F1E1 84%, #F2E7CF 100%);
+  border-right: 1px solid #E6D4B2;
+  box-shadow: inset -12px 0 18px -12px rgba(120,84,38,0.18);
+}
+[data-skin="ivory"] .b-sidebar__title {
+  color: #5A3D18;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+}
+[data-skin="ivory"] .b-fieldgroup__label {
+  color: #6E4F26 !important;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.45);
+}
+
+/* each module = a book with a colored spine, resting on the shelf */
+[data-skin="ivory"] .b-modlist { display: flex; flex-direction: column; gap: 6px; }
+[data-skin="ivory"] .b-mod {
+  background: var(--color-brain-surface);
+  border: 1px solid var(--color-brain-border);
+  border-left: 4px solid #F5A088;
+  border-radius: 3px;
+  box-shadow: 0 3px 4px rgba(40,24,8,0.32), inset 0 1px 0 rgba(255,255,255,0.7);
+}
+[data-skin="ivory"] .b-mod:hover {
+  background: var(--color-brain-surface-soft);
+  box-shadow: 0 5px 8px rgba(40,24,8,0.4), inset 0 1px 0 rgba(255,255,255,0.7);
+}
+[data-skin="ivory"] .b-modlist > li:nth-child(5n+1) .b-mod { border-left-color: #F5A088; }
+[data-skin="ivory"] .b-modlist > li:nth-child(5n+2) .b-mod { border-left-color: #FBD24E; }
+[data-skin="ivory"] .b-modlist > li:nth-child(5n+3) .b-mod { border-left-color: #BFD06A; }
+[data-skin="ivory"] .b-modlist > li:nth-child(5n+4) .b-mod { border-left-color: #EBA6B6; }
+[data-skin="ivory"] .b-modlist > li:nth-child(5n+5) .b-mod { border-left-color: #E0B57A; }
+/* active book = highlighter post-it swipe (black ink) */
+[data-skin="ivory"] .b-mod--active,
+[data-skin="ivory"] .b-mod--active:hover {
+  background: var(--brain-hl, #F5A088) !important;
+  border-color: color-mix(in srgb, var(--brain-hl, #F5A088) 72%, #1B1710);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.45), 0 2px 6px rgba(43,33,14,0.25);
+}
+[data-skin="ivory"] .b-mod--active,
+[data-skin="ivory"] .b-mod--active * { color: #1B1710 !important; }
+
+/* a thick wooden shelf board under each field's books */
+[data-skin="ivory"] .b-fieldgroup { padding-bottom: 18px; }
+[data-skin="ivory"] .b-fieldgroup::after {
+  content: ""; display: block; height: 13px; margin: 12px -16px 4px;
+  border-radius: 0 0 2px 2px;
+  background: linear-gradient(180deg, #FAF0DA 0%, #F0DFBC 22%, #E6D0A2 60%, #D6B984 100%);
+  border-top: 1px solid rgba(255,255,255,0.8);
+  box-shadow: 0 7px 9px -3px rgba(120,84,38,0.22), inset 0 -2px 3px rgba(120,84,38,0.14), inset 0 1px 0 rgba(255,255,255,0.7);
+}
+
+/* content column reads as a white sheet on the cream desk */
+[data-skin="ivory"] .b-content { background: #FFFFFF; }
+
+/* highlighter swipe behind section titles (형광펜 포인트) */
+[data-skin="ivory"] .b-hl-title {
+  background-image: linear-gradient(transparent 56%, var(--brain-hl, #F5A088) 56%, var(--brain-hl, #F5A088) 92%, transparent 92%);
+  padding: 0 3px;
+}
+
+/* lesson cards = index-card paper with a sticky post-it tab */
+[data-skin="ivory"] .b-lesson {
+  position: relative; border-radius: 4px; overflow: visible;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 0 1px 2px rgba(43,33,14,0.08), 0 12px 20px -14px rgba(43,33,14,0.42);
+}
+[data-skin="ivory"] .b-lesson::before {
+  content: ""; position: absolute; top: -1px; left: 22px; width: 46px; height: 7px;
+  background: #F5A088; border-radius: 0 0 3px 3px; box-shadow: 0 1px 2px rgba(43,33,14,0.28);
+}
+[data-skin="ivory"] .b-lesson:nth-child(4n+1)::before { background: #F5A088; }
+[data-skin="ivory"] .b-lesson:nth-child(4n+2)::before { background: #FBD24E; }
+[data-skin="ivory"] .b-lesson:nth-child(4n+3)::before { background: #BFD06A; }
+[data-skin="ivory"] .b-lesson:nth-child(4n+4)::before { background: #EBA6B6; }
+[data-skin="ivory"] .b-lesson:hover {
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 0 2px 4px rgba(43,33,14,0.1), 0 18px 26px -14px rgba(43,33,14,0.5);
+}
+
+/* ---- Practice text pane — selectable paper grain vs graph grid ---- */
+.pv-text-body[data-paper="paper"] {
+  background-color: var(--color-brain-surface);
+  background-image:
+    repeating-linear-gradient(0deg,
+      color-mix(in srgb, var(--color-brain-text) 4%, transparent) 0 1px,
+      transparent 1px 6px),
+    radial-gradient(at 28% -6%, color-mix(in srgb, var(--color-brain-text) 5%, transparent) 0, transparent 60%);
+}
+.pv-text-body[data-paper="grid"] {
+  background-color: var(--color-brain-surface);
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--color-brain-text) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--color-brain-text) 7%, transparent) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: -1px -1px;
+}
+[data-skin="ivory"] .pv-text-body[data-paper="grid"] {
+  background-image:
+    linear-gradient(rgba(40,30,14,0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(40,30,14,0.09) 1px, transparent 1px);
 }

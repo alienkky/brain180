@@ -55,6 +55,13 @@ import { TutorBubble } from "./TutorBubble";
 import { LoginLanding } from "./LoginLanding";
 import { OnboardingFlow, isOnboarded } from "./OnboardingFlow";
 import { MethodologyScreen } from "./MethodologyScreen";
+import {
+  useTheme,
+  rootThemeStyle,
+  ACCENT_OPTIONS,
+  HL_OPTIONS,
+  type Skin,
+} from "./useTheme";
 
 type Screen =
   | { name: "login" }
@@ -80,6 +87,9 @@ export function V2Shell() {
   const [branding, setBranding] = useState<BrandingSettingsDto>({
     logo_data_url: null,
   });
+  const skin = useTheme((s) => s.skin);
+  const accent = useTheme((s) => s.accent);
+  const hl = useTheme((s) => s.hl);
 
   useEffect(() => {
     let cancelled = false;
@@ -158,7 +168,11 @@ export function V2Shell() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-brain-bg text-brain-text">
+    <div
+      className="flex h-full flex-col bg-brain-bg text-brain-text"
+      data-skin={skin}
+      style={rootThemeStyle(skin, accent, hl)}
+    >
       <Header
         user={user}
         onLogout={onLogout}
@@ -619,8 +633,8 @@ function LibraryScreen({
 
   return (
     <div className="grid h-full grid-cols-[280px_1fr] gap-0">
-      <aside className="overflow-y-auto border-r border-brain-border bg-brain-surface-soft p-4">
-        <h2 className="mb-3 font-display text-lg">분야</h2>
+      <aside className="b-sidebar overflow-y-auto border-r border-brain-border bg-brain-surface-soft p-4">
+        <h2 className="b-sidebar__title mb-3 font-display text-lg">분야</h2>
         {!modules && <p className="text-sm text-brain-text-muted">불러오는 중…</p>}
         {modules && modules.length === 0 && (
           <p className="text-sm text-brain-text-muted">
@@ -635,7 +649,7 @@ function LibraryScreen({
           />
         )}
       </aside>
-      <section className="overflow-y-auto p-6">
+      <section className="b-content overflow-y-auto p-6">
         <ProgressSummary progress={progress} />
         <ArtifactGallery
           artifacts={artifacts}
@@ -648,7 +662,7 @@ function LibraryScreen({
           onClear={onClearPin}
           onStart={onStartCompare}
         />
-        <h2 className="mb-4 font-display text-xl">레슨</h2>
+        <h2 className="b-hl-title mb-4 inline-block font-display text-xl">레슨</h2>
         {error && (
           <div className="mb-4 rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
             {error}
@@ -673,7 +687,7 @@ function LibraryScreen({
                   : null;
             return (
               <li key={l.id}>
-                <div className="group relative rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1 transition hover:border-brain-accent hover:shadow-soft-2">
+                <div className="b-lesson group relative rounded-xl border border-brain-border bg-brain-surface p-4 shadow-soft-1 transition hover:border-brain-accent hover:shadow-soft-2">
                   <button
                     onClick={() => onPickLesson(l)}
                     className="block w-full text-left"
@@ -983,6 +997,8 @@ function PracticeScreen({
   resumeSessionId?: string;
   onBack: () => void;
 }) {
+  const paper = useTheme((s) => s.paper);
+  const setPaper = useTheme((s) => s.setPaper);
   const [text, setText] = useState<TextExcerptDto | null>(null);
   const [session, setSession] = useState<SessionDto | null>(null);
   const [messages, setMessages] = useState<TutorMessageDto[]>([]);
@@ -1294,9 +1310,15 @@ function PracticeScreen({
             ← 레슨 선택
           </button>
           <div className="font-display text-base md:text-lg">{lesson.title}</div>
-          <ModePicker active={mode} onPick={setMode} disabled={sending} />
+          <div className="flex items-center gap-2">
+            <PaperToggle active={paper} onPick={setPaper} />
+            <ModePicker active={mode} onPick={setMode} disabled={sending} />
+          </div>
         </div>
-        <div className="flex-1 overflow-y-auto px-4 py-4 md:px-8 md:py-6">
+        <div
+          className="pv-text-body flex-1 overflow-y-auto px-4 py-4 md:px-8 md:py-6"
+          data-paper={paper}
+        >
           {!text && !error && (
             <p className="text-sm text-brain-text-muted">본문 불러오는 중…</p>
           )}
@@ -1548,7 +1570,7 @@ function CanvasModeSelector({ onSelect }: { onSelect: (m: "free" | CanvasMode) =
   );
 }
 
-type AdminTab = "users" | "modules" | "lessons" | "feedback" | "tutorQuality" | "brand";
+type AdminTab = "users" | "modules" | "lessons" | "feedback" | "tutorQuality" | "brand" | "theme";
 
 function AdminScreen({
   branding,
@@ -1583,6 +1605,9 @@ function AdminScreen({
           <AdminTabButton active={tab === "brand"} onClick={() => setTab("brand")}>
             브랜드
           </AdminTabButton>
+          <AdminTabButton active={tab === "theme"} onClick={() => setTab("theme")}>
+            테마
+          </AdminTabButton>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-6">
@@ -1598,6 +1623,7 @@ function AdminScreen({
               onBrandingChange={onBrandingChange}
             />
           )}
+          {tab === "theme" && <AdminThemePanel />}
         </div>
       </div>
     </div>
@@ -1965,6 +1991,170 @@ function AdminLessonFeedbackPanel() {
         })}
       </ul>
     </section>
+  );
+}
+
+function AdminThemePanel() {
+  const { skin, accent, hl, paper, setSkin, setAccent, setHl, setPaper } =
+    useTheme();
+
+  const SKINS: { value: Skin; label: string; desc: string; sw: string[] }[] = [
+    { value: "warm", label: "웜", desc: "브랜드 페이퍼 + 테라코타 + Fraunces", sw: ["#FAF7F2", "#B85C3F", "#2A241D"] },
+    { value: "slate", label: "슬레이트", desc: "순정 shadcn — 슬레이트 + Inter", sw: ["#FFFFFF", "#0F172A", "#64748B"] },
+    { value: "ivory", label: "아이보리", desc: "아이보리+블랙, 형광 포인트, 스큐어모피즘", sw: ["#F6F1E5", "#1B1710", "#F5A088"] },
+  ];
+
+  return (
+    <section className="space-y-6">
+      <div>
+        <h2 className="font-display text-2xl">테마</h2>
+        <p className="mt-1 text-sm text-brain-text-muted">
+          앱 전체 스킨과 포인트 색을 설정합니다. 변경은 즉시 적용되고 이 브라우저에 저장됩니다.
+        </p>
+      </div>
+
+      {/* Skin cards */}
+      <div>
+        <div className="mb-2 text-sm font-medium text-brain-text">스킨</div>
+        <div className="grid gap-3 md:grid-cols-3">
+          {SKINS.map((s) => {
+            const isActive = skin === s.value;
+            return (
+              <button
+                key={s.value}
+                onClick={() => setSkin(s.value)}
+                className={
+                  "rounded-xl border p-4 text-left transition shadow-soft-1 " +
+                  (isActive
+                    ? "border-brain-accent ring-2 ring-brain-accent"
+                    : "border-brain-border hover:border-brain-accent")
+                }
+                style={{ backgroundColor: "var(--color-brain-surface)" }}
+              >
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="font-display text-lg">{s.label}</span>
+                  {isActive && (
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-brain-accent">
+                      사용 중
+                    </span>
+                  )}
+                </div>
+                <div className="mb-3 flex gap-1.5">
+                  {s.sw.map((c) => (
+                    <span
+                      key={c}
+                      className="h-6 w-6 rounded-full border border-brain-border"
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+                <p className="text-xs text-brain-text-muted">{s.desc}</p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Accent (warm) */}
+      {skin === "warm" && (
+        <SwatchRow
+          title="액센트 색상"
+          options={ACCENT_OPTIONS}
+          value={accent}
+          onPick={setAccent}
+        />
+      )}
+
+      {/* Highlighter (ivory) */}
+      {skin === "ivory" && (
+        <SwatchRow
+          title="형광 포인트"
+          options={HL_OPTIONS}
+          value={hl}
+          onPick={setHl}
+          darkCheck
+        />
+      )}
+
+      {skin === "slate" && (
+        <p className="rounded-lg border border-brain-border bg-brain-surface-soft px-4 py-3 text-sm text-brain-text-muted">
+          슬레이트 스킨은 순정 shadcn 팔레트를 사용하며 별도 포인트 색 설정이 없습니다.
+        </p>
+      )}
+
+      {/* Practice text-pane background */}
+      <div>
+        <div className="mb-2 text-sm font-medium text-brain-text">
+          본문 배경 (연습 화면)
+        </div>
+        <div className="inline-flex rounded-full border border-brain-border p-1">
+          {(["paper", "grid"] as const).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPaper(p)}
+              className={
+                "rounded-full px-4 py-1.5 text-sm transition " +
+                (paper === p
+                  ? "bg-brain-accent text-white"
+                  : "text-brain-text-muted hover:text-brain-text")
+              }
+            >
+              {p === "paper" ? "종이 질감" : "모눈"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <p className="text-xs text-brain-text-soft">
+        참고: 현재는 브라우저(localStorage)에 저장됩니다. 계정/서버 동기화가 필요하면 백엔드 설정 API로 확장할 수 있습니다.
+      </p>
+    </section>
+  );
+}
+
+function SwatchRow({
+  title,
+  options,
+  value,
+  onPick,
+  darkCheck,
+}: {
+  title: string;
+  options: string[];
+  value: string;
+  onPick: (c: string) => void;
+  darkCheck?: boolean;
+}) {
+  return (
+    <div>
+      <div className="mb-2 text-sm font-medium text-brain-text">{title}</div>
+      <div className="flex flex-wrap gap-2.5">
+        {options.map((c) => {
+          const isActive = value.toLowerCase() === c.toLowerCase();
+          return (
+            <button
+              key={c}
+              onClick={() => onPick(c)}
+              title={c}
+              className={
+                "flex h-9 w-9 items-center justify-center rounded-full border transition " +
+                (isActive ? "border-brain-text" : "border-brain-border hover:scale-105")
+              }
+              style={{ backgroundColor: c }}
+            >
+              {isActive && (
+                <span
+                  className="text-sm font-bold"
+                  style={{ color: darkCheck ? "#1B1710" : "#FFFFFF" }}
+                >
+                  ✓
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -3242,9 +3432,9 @@ function ModulesByField({
         const list = grouped.get(field) ?? [];
         const label = FIELD_LABEL[field] ?? field;
         return (
-          <section key={field}>
+          <section key={field} className="b-fieldgroup">
             <h3
-              className="mb-1.5 text-[10px] uppercase tracking-[0.18em]"
+              className="b-fieldgroup__label mb-1.5 text-[10px] uppercase tracking-[0.18em]"
               style={{
                 color: "var(--color-brain-text-soft)",
                 fontWeight: 600,
@@ -3258,15 +3448,15 @@ function ModulesByField({
                 ({list.length})
               </span>
             </h3>
-            <ul className="space-y-1">
+            <ul className="b-modlist space-y-1">
               {list.map((m) => (
                 <li key={m.id}>
                   <button
                     onClick={() => onPick(m.id)}
                     className={
-                      "w-full rounded px-3 py-2 text-left text-sm transition " +
+                      "b-mod w-full rounded px-3 py-2 text-left text-sm transition " +
                       (m.id === activeModuleId
-                        ? "bg-brain-accent text-white"
+                        ? "b-mod--active bg-brain-accent text-white"
                         : "text-brain-text hover:bg-brain-surface")
                     }
                   >
@@ -3570,6 +3760,40 @@ function ModePicker({
           }
         >
           {m.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function PaperToggle({
+  active,
+  onPick,
+}: {
+  active: "paper" | "grid";
+  onPick: (p: "paper" | "grid") => void;
+}) {
+  const opts: { value: "paper" | "grid"; label: string }[] = [
+    { value: "paper", label: "종이" },
+    { value: "grid", label: "모눈" },
+  ];
+  return (
+    <div
+      className="flex items-center rounded-full border border-brain-border p-0.5"
+      title="본문 배경 질감"
+    >
+      {opts.map((o) => (
+        <button
+          key={o.value}
+          onClick={() => active !== o.value && onPick(o.value)}
+          className={
+            "rounded-full px-2.5 py-0.5 text-[11px] transition " +
+            (o.value === active
+              ? "bg-brain-accent text-white"
+              : "text-brain-text-muted hover:text-brain-text")
+          }
+        >
+          {o.label}
         </button>
       ))}
     </div>
