@@ -150,53 +150,70 @@ practiceRouter.get(
   "/me/artifacts",
   userRateLimit,
   asyncHandler(async (req, res) => {
-    const rows = await db
-      .select({
-        artifactId: canvasArtifacts.id,
-        sessionId: canvasArtifacts.sessionId,
-        mode: canvasArtifacts.mode,
-        payload: canvasArtifacts.payload,
-        savedAt: canvasArtifacts.savedAt,
-        lessonId: lessons.id,
-        moduleId: lessons.moduleId,
-        order: lessons.order,
-        title: lessons.title,
-        textExcerptId: sql<string | null>`(SELECT id FROM text_excerpts WHERE lesson_id = ${lessons.id} ORDER BY "order" LIMIT 1)`,
-        tutorSystemPromptId: lessons.tutorSystemPromptId,
-        objectives: lessons.objectives,
-        axisFocus: lessons.axisFocus,
-      })
-      .from(canvasArtifacts)
-      .innerJoin(learningSessions, eq(canvasArtifacts.sessionId, learningSessions.id))
-      .innerJoin(lessons, eq(learningSessions.lessonId, lessons.id))
-      .where(
-        and(
-          eq(learningSessions.userId, req.user!.id),
-          isNull(learningSessions.deletedAt),
-          isNull(canvasArtifacts.deletedAt),
-        ),
-      )
-      .orderBy(desc(canvasArtifacts.savedAt))
-      .limit(20);
+    // Autosave on the practice page inserts a new canvas_artifacts row
+    // every save (snapshot history). Surface only the latest non-deleted
+    // snapshot per learning_sessions row so the dashboard shows one card
+    // per session, not the same lesson over and over — and so soft-deleting
+    // the visible card cannot be silently undone by a previous snapshot
+    // bubbling up.
+    const rows = await db.execute<{
+      artifact_id: string;
+      session_id: string;
+      mode: "free" | "constrained" | "guided";
+      payload: Record<string, unknown>;
+      saved_at: Date;
+      lesson_id: string;
+      module_id: string;
+      order: number;
+      title: string;
+      text_excerpt_id: string | null;
+      tutor_system_prompt_id: string | null;
+      objectives: string[];
+      axis_focus: Record<string, unknown> | null;
+    }>(sql`
+      SELECT DISTINCT ON (ca.session_id)
+        ca.id          AS artifact_id,
+        ca.session_id  AS session_id,
+        ca.mode        AS mode,
+        ca.payload     AS payload,
+        ca.saved_at    AS saved_at,
+        l.id           AS lesson_id,
+        l.module_id    AS module_id,
+        l."order"      AS "order",
+        l.title        AS title,
+        (SELECT id FROM text_excerpts WHERE lesson_id = l.id ORDER BY "order" LIMIT 1) AS text_excerpt_id,
+        l.tutor_system_prompt_id AS tutor_system_prompt_id,
+        l.objectives   AS objectives,
+        l.axis_focus   AS axis_focus
+      FROM canvas_artifacts ca
+      INNER JOIN learning_sessions ls ON ls.id = ca.session_id
+      INNER JOIN lessons l ON l.id = ls.lesson_id
+      WHERE ls.user_id = ${req.user!.id}
+        AND ls.deleted_at IS NULL
+        AND ca.deleted_at IS NULL
+      ORDER BY ca.session_id, ca.saved_at DESC
+      LIMIT 20
+    `);
 
-    const dto: ArtifactGalleryDTO[] = rows.map((row) => {
+    const dto: ArtifactGalleryDTO[] = rows.rows.map((row) => {
       const payload = row.payload as { nodes?: unknown[]; edges?: unknown[] };
+      const savedAt = row.saved_at instanceof Date ? row.saved_at : new Date(row.saved_at);
       return {
-        artifact_id: row.artifactId,
-        session_id: row.sessionId,
-        saved_at: row.savedAt.toISOString(),
+        artifact_id: row.artifact_id,
+        session_id: row.session_id,
+        saved_at: savedAt.toISOString(),
         mode: row.mode,
-        node_count: Array.isArray(payload.nodes) ? payload.nodes.length : 0,
-        edge_count: Array.isArray(payload.edges) ? payload.edges.length : 0,
+        node_count: Array.isArray(payload?.nodes) ? payload.nodes.length : 0,
+        edge_count: Array.isArray(payload?.edges) ? payload.edges.length : 0,
         lesson: {
-          id: row.lessonId,
-          module_id: row.moduleId,
+          id: row.lesson_id,
+          module_id: row.module_id,
           order: row.order,
           title: row.title,
-          text_excerpt_id: row.textExcerptId,
-          tutor_system_prompt_id: row.tutorSystemPromptId,
-          objectives: row.objectives,
-          axis_focus: (row.axisFocus ?? {}) as Record<string, unknown>,
+          text_excerpt_id: row.text_excerpt_id,
+          tutor_system_prompt_id: row.tutor_system_prompt_id,
+          objectives: Array.isArray(row.objectives) ? row.objectives : [],
+          axis_focus: (row.axis_focus ?? {}) as Record<string, unknown>,
         },
       };
     });
@@ -205,7 +222,10 @@ practiceRouter.get(
 );
 
 // DELETE /api/practice/me/artifacts/:id
-//   Soft-deletes a single artifact owned by the caller (sets deletedAt).
+//   Soft-deletes every snapshot of the learning session this artifact
+//   belongs to. Autosave writes a fresh canvas_artifacts row per save,
+//   so deleting just the targeted row would let the previous snapshot
+//   bubble up to the dashboard and make the card look undeletable.
 practiceRouter.delete(
   "/me/artifacts/:id",
   userRateLimit,
@@ -217,7 +237,10 @@ practiceRouter.delete(
     }
 
     const rows = await db
-      .select({ id: canvasArtifacts.id })
+      .select({
+        id: canvasArtifacts.id,
+        sessionId: canvasArtifacts.sessionId,
+      })
       .from(canvasArtifacts)
       .innerJoin(learningSessions, eq(canvasArtifacts.sessionId, learningSessions.id))
       .where(
@@ -237,7 +260,12 @@ practiceRouter.delete(
     await db
       .update(canvasArtifacts)
       .set({ deletedAt: new Date() })
-      .where(eq(canvasArtifacts.id, artifactId));
+      .where(
+        and(
+          eq(canvasArtifacts.sessionId, rows[0].sessionId),
+          isNull(canvasArtifacts.deletedAt),
+        ),
+      );
 
     ok(res, { id: artifactId });
   }),
@@ -245,10 +273,11 @@ practiceRouter.delete(
 
 // POST /api/practice/me/artifacts/bulk-delete
 //   Body: { artifact_ids: string[] }
-//   Soft-deletes the caller's own artifacts. Artifacts owned by another
-//   user are silently skipped, so the response only reports the ids
-//   actually removed — the client should prune the visible grid using
-//   `deleted_ids` without a refetch.
+//   Soft-deletes every snapshot of the learning sessions the requested
+//   artifact ids belong to (autosave keeps writing new canvas_artifacts
+//   rows per save, so deleting just the latest snapshot lets the prior
+//   one bubble up — the user perceives the card as "not deleted"). Ids
+//   the caller does not own are silently skipped.
 practiceRouter.post(
   "/me/artifacts/bulk-delete",
   userRateLimit,
@@ -271,7 +300,10 @@ practiceRouter.post(
     }
 
     const owned = await db
-      .select({ id: canvasArtifacts.id })
+      .select({
+        artifactId: canvasArtifacts.id,
+        sessionId: canvasArtifacts.sessionId,
+      })
       .from(canvasArtifacts)
       .innerJoin(learningSessions, eq(canvasArtifacts.sessionId, learningSessions.id))
       .where(
@@ -282,18 +314,31 @@ practiceRouter.post(
           isNull(canvasArtifacts.deletedAt),
         ),
       );
-    const ownedIds = owned.map((r) => r.id);
-    if (ownedIds.length === 0) {
+    const sessionIds = Array.from(new Set(owned.map((r) => r.sessionId)));
+    if (sessionIds.length === 0) {
       ok(res, { deleted_count: 0, deleted_ids: [] });
       return;
     }
 
-    await db
+    const cascaded = await db
       .update(canvasArtifacts)
       .set({ deletedAt: new Date() })
-      .where(inArray(canvasArtifacts.id, ownedIds));
+      .where(
+        and(
+          inArray(canvasArtifacts.sessionId, sessionIds),
+          isNull(canvasArtifacts.deletedAt),
+        ),
+      )
+      .returning({ id: canvasArtifacts.id });
 
-    ok(res, { deleted_count: ownedIds.length, deleted_ids: ownedIds });
+    ok(res, {
+      deleted_count: cascaded.length,
+      // Return the artifact ids the client *asked* about so it can prune
+      // the dashboard grid without a refetch. Cascading siblings are
+      // already invisible because the GET handler returns only the
+      // latest non-deleted snapshot per session.
+      deleted_ids: owned.map((r) => r.artifactId),
+    });
   }),
 );
 
