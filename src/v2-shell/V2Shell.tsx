@@ -1006,7 +1006,10 @@ function PracticeScreen({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ratingToast, setRatingToast] = useState<string | null>(null);
-  const [tab, setTab] = useState<PracticeTab>("axis");
+  // Lessons land on the cognitive canvas first so the learner sees the
+  // practice text + canvas together on entry. The axis/eval/pattern/feedback
+  // tabs stay one click away on the right pane's tab bar.
+  const [tab, setTab] = useState<PracticeTab>("canvas");
   // 튜터 버블 열림 상태 — v1 의 floating ChatPanel 패턴 복원.
   const [tutorOpen, setTutorOpen] = useState(false);
   const [mode, setMode] = useState<SessionMode>("analyze");
