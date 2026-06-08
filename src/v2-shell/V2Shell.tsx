@@ -1091,11 +1091,12 @@ function PracticeScreen({
     };
   }, [lesson.id, lesson.text_excerpt_id, mode, resumeSessionId]);
 
+  // Always land on the cognitive canvas tab when a lesson opens or its
+  // session mode changes. Previously analyze mode forced the axis tab,
+  // which silently undid the canvas-first default the moment a new
+  // lesson session mounted (analyze is the default mode).
   useEffect(() => {
-    setTab((current) => {
-      if (mode === "analyze") return "axis";
-      return current === "axis" ? "canvas" : current;
-    });
+    setTab("canvas");
   }, [mode]);
 
   const onSaveCanvas = useCallback(
