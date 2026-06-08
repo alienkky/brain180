@@ -662,7 +662,7 @@ function LibraryScreen({
           onClear={onClearPin}
           onStart={onStartCompare}
         />
-        <h2 className="b-hl-title mb-4 inline-block font-display text-xl">레슨</h2>
+        <h2 className="mb-4 font-display text-xl">레슨</h2>
         {error && (
           <div className="mb-4 rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
             {error}
@@ -2004,9 +2004,11 @@ function AdminThemePanel() {
 
   const SKINS: { value: Skin; label: string; desc: string; sw: string[] }[] = [
     { value: "warm", label: "웜", desc: "브랜드 페이퍼 + 테라코타 + Fraunces", sw: ["#FAF7F2", "#B85C3F", "#2A241D"] },
-    { value: "slate", label: "슬레이트", desc: "순정 shadcn — 슬레이트 + Inter", sw: ["#FFFFFF", "#0F172A", "#64748B"] },
+    { value: "slate", label: "슬레이트", desc: "중립 회색 + 형광 포인트 + Inter", sw: ["#FFFFFF", "#1A1A1A", "#F5A088"] },
+    { value: "dark", label: "다크", desc: "중립 다크 그레이 + 형광 포인트", sw: ["#0A0A0A", "#161616", "#F5A088"] },
     { value: "ivory", label: "아이보리", desc: "아이보리+블랙, 형광 포인트, 스큐어모피즘", sw: ["#F6F1E5", "#1B1710", "#F5A088"] },
   ];
+  const usesHl = skin === "slate" || skin === "dark" || skin === "ivory";
 
   return (
     <section className="space-y-6">
@@ -2020,7 +2022,7 @@ function AdminThemePanel() {
       {/* Skin cards */}
       <div>
         <div className="mb-2 text-sm font-medium text-brain-text">스킨</div>
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {SKINS.map((s) => {
             const isActive = skin === s.value;
             return (
@@ -2069,8 +2071,8 @@ function AdminThemePanel() {
         />
       )}
 
-      {/* Highlighter (ivory) */}
-      {skin === "ivory" && (
+      {/* Highlighter point (slate / dark / ivory) */}
+      {usesHl && (
         <SwatchRow
           title="형광 포인트"
           options={HL_OPTIONS}
@@ -2078,12 +2080,6 @@ function AdminThemePanel() {
           onPick={setHl}
           darkCheck
         />
-      )}
-
-      {skin === "slate" && (
-        <p className="rounded-lg border border-brain-border bg-brain-surface-soft px-4 py-3 text-sm text-brain-text-muted">
-          슬레이트 스킨은 순정 shadcn 팔레트를 사용하며 별도 포인트 색 설정이 없습니다.
-        </p>
       )}
 
       {/* Practice text-pane background */}

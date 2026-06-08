@@ -45,22 +45,46 @@
    Applied via [data-skin] on the v2 shell root; all Tailwind brain-*
    utilities + inline var() refs pick up the overrides automatically.
    ============================================================ */
+/* slate = neutral gray (no blue undertone) + highlighter accent */
 [data-skin="slate"] {
   --color-brain-bg: #FFFFFF;
   --color-brain-surface: #FFFFFF;
-  --color-brain-surface-soft: #F1F5F9;
-  --color-brain-border: #E2E8F0;
-  --color-brain-border-strong: #CBD5E1;
-  --color-brain-text: #020817;
-  --color-brain-text-muted: #64748B;
-  --color-brain-text-soft: #94A3B8;
-  --color-brain-accent: #0F172A;
-  --color-brain-accent-soft: #E2E8F0;
-  --color-brain-highlight: #475569;
-  --color-brain-highlight-soft: #E2E8F0;
+  --color-brain-surface-soft: #F4F4F4;
+  --color-brain-border: #E4E4E4;
+  --color-brain-border-strong: #D4D4D4;
+  --color-brain-text: #0A0A0A;
+  --color-brain-text-muted: #767676;
+  --color-brain-text-soft: #A3A3A3;
+  --color-brain-accent: #1A1A1A;
+  --color-brain-accent-soft: #F4F4F4;
+  --color-brain-highlight: #767676;
+  --color-brain-highlight-soft: #F4F4F4;
+  --brain-hl: #F5A088;
   --font-display: "Inter", -apple-system, system-ui, sans-serif;
   --font-serif: "Inter", -apple-system, system-ui, sans-serif;
 }
+
+/* dark = neutral dark gray (slate inverted) + highlighter accent */
+[data-skin="dark"] {
+  --color-brain-bg: #0A0A0A;
+  --color-brain-surface: #161616;
+  --color-brain-surface-soft: #242424;
+  --color-brain-border: #2C2C2C;
+  --color-brain-border-strong: #313131;
+  --color-brain-text: #FAFAFA;
+  --color-brain-text-muted: #A0A0A0;
+  --color-brain-text-soft: #6E6E6E;
+  --color-brain-accent: #FAFAFA;       /* light primary (shadcn dark) */
+  --color-brain-accent-soft: #2A2A2A;
+  --color-brain-highlight: #A0A0A0;
+  --color-brain-highlight-soft: #242424;
+  --brain-hl: #F5A088;
+  --font-display: "Inter", -apple-system, system-ui, sans-serif;
+  --font-serif: "Inter", -apple-system, system-ui, sans-serif;
+}
+/* dark: primary is near-white, so text on bg-brain-accent must be dark */
+[data-skin="dark"] .bg-brain-accent,
+[data-skin="dark"] .bg-brain-accent * { color: #171717 !important; }
 
 [data-skin="ivory"] {
   --color-brain-bg: #F6F1E5;
@@ -207,12 +231,6 @@ body::before {
 
 /* content column reads as a white sheet on the cream desk */
 [data-skin="ivory"] .b-content { background: #FFFFFF; }
-
-/* highlighter swipe behind section titles (형광펜 포인트) */
-[data-skin="ivory"] .b-hl-title {
-  background-image: linear-gradient(transparent 56%, var(--brain-hl, #F5A088) 56%, var(--brain-hl, #F5A088) 92%, transparent 92%);
-  padding: 0 3px;
-}
 
 /* lesson cards = index-card paper with a sticky post-it tab */
 [data-skin="ivory"] .b-lesson {
