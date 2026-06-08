@@ -191,12 +191,16 @@ body::before {
   text-shadow: 0 1px 0 rgba(255,255,255,0.45);
 }
 
-/* each module = a book with a colored spine, resting on the shelf */
+/* sidebar module cards — colored book-spine left bar removed per design
+   review (the rotating peach / yellow / green / pink / amber strip was
+   doubling up with the lesson-list title row and reading as noise once
+   real field names were populated). The card now sits as a plain
+   paper-tile on the shelf; active state still uses the highlighter
+   swipe below so the selected field is unmistakable. */
 [data-skin="ivory"] .b-modlist { display: flex; flex-direction: column; gap: 6px; }
 [data-skin="ivory"] .b-mod {
   background: var(--color-brain-surface);
   border: 1px solid var(--color-brain-border);
-  border-left: 4px solid #F5A088;
   border-radius: 3px;
   box-shadow: 0 3px 4px rgba(40,24,8,0.32), inset 0 1px 0 rgba(255,255,255,0.7);
 }
@@ -204,11 +208,6 @@ body::before {
   background: var(--color-brain-surface-soft);
   box-shadow: 0 5px 8px rgba(40,24,8,0.4), inset 0 1px 0 rgba(255,255,255,0.7);
 }
-[data-skin="ivory"] .b-modlist > li:nth-child(5n+1) .b-mod { border-left-color: #F5A088; }
-[data-skin="ivory"] .b-modlist > li:nth-child(5n+2) .b-mod { border-left-color: #FBD24E; }
-[data-skin="ivory"] .b-modlist > li:nth-child(5n+3) .b-mod { border-left-color: #BFD06A; }
-[data-skin="ivory"] .b-modlist > li:nth-child(5n+4) .b-mod { border-left-color: #EBA6B6; }
-[data-skin="ivory"] .b-modlist > li:nth-child(5n+5) .b-mod { border-left-color: #E0B57A; }
 /* active book = highlighter post-it swipe (black ink) */
 [data-skin="ivory"] .b-mod--active,
 [data-skin="ivory"] .b-mod--active:hover {
