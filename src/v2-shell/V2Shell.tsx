@@ -813,12 +813,8 @@ function extractAxisAnalysis(
 
 function AxisAnalysisPanel({
   lesson,
-  canvas,
-  text,
 }: {
   lesson: LessonDto;
-  canvas: CanvasJson | null;
-  text: TextExcerptDto | null;
 }) {
   const analysis = lesson.cognitive_structure_analysis?.trim() ?? "";
   const hasAnalysis =
@@ -839,29 +835,15 @@ function AxisAnalysisPanel({
           </h4>
         </div>
         <p className="text-xs text-brain-text-muted">
-          캔버스 노드와 함께 본문 구조를 확인합니다.
+          저자가 박은 본문 구조 해석을 그대로 확인합니다.
         </p>
       </div>
-      {(() => {
-        // If the learner has not yet tagged any node with an axis, surface
-        // every untagged node under the cognition column so the "노드와
-        // 본문 근거" panel is never empty when nodes actually exist. Tag
-        // any node from the canvas toolbar (축 지정 pills) to move it to
-        // 가치 or 시간.
-        const allNodes = canvas?.nodes ?? [];
-        const anyTagged = allNodes.some((n) => Boolean(n.axis_tag));
-        return (
-          <div className="grid gap-3 xl:grid-cols-3">
-            {AXIS_ANALYSIS.map((axis) => {
-              const axisText =
-                extractAxisAnalysis(analysis, axis.key) ||
-                (axis.key === "cognition" ? analysis : "") ||
-                axis.empty;
-              const axisNodes = anyTagged
-                ? allNodes.filter((node) => node.axis_tag === axis.key)
-                : axis.key === "cognition"
-                  ? allNodes
-                  : [];
+      <div className="grid gap-3 xl:grid-cols-3">
+        {AXIS_ANALYSIS.map((axis) => {
+          const axisText =
+            extractAxisAnalysis(analysis, axis.key) ||
+            (axis.key === "cognition" ? analysis : "") ||
+            axis.empty;
           return (
             <article
               key={axis.key}
@@ -872,9 +854,6 @@ function AxisAnalysisPanel({
                 <span className="rounded-full border border-brain-border bg-brain-surface px-2 py-0.5 text-xs font-semibold">
                   {axis.label}
                 </span>
-                <span className="text-[11px] text-brain-text-muted">
-                  노드 {axisNodes.length}
-                </span>
               </div>
               <h5 className="mb-2 text-sm font-semibold text-brain-text">
                 {axis.title}
@@ -882,82 +861,14 @@ function AxisAnalysisPanel({
               <p className="whitespace-pre-line text-sm leading-6 text-brain-text">
                 {axisText}
               </p>
-              <div className="mt-4 space-y-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-brain-text-muted">
-                  노드와 본문 근거
-                </p>
-                {axisNodes.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-brain-border bg-brain-surface/70 p-3 text-xs leading-5 text-brain-text-muted">
-                    아직 이 축으로 분류된 노드가 없습니다. 본문에서 관련 문장을 더블탭해
-                    캔버스로 보내면 여기에서 본문 근거와 함께 표시됩니다.
-                  </div>
-                ) : (
-                  axisNodes.slice(0, 6).map((node) => (
-                    <AxisEvidenceCard
-                      key={node.id}
-                      node={node}
-                      body={text?.body ?? ""}
-                    />
-                  ))
-                )}
-              </div>
-              {axisNodes.length > 6 && (
-                <p className="mt-2 text-[11px] text-brain-text-muted">
-                  외 {axisNodes.length - 6}개 노드는 캔버스에서 계속 확인할 수 있습니다.
-                </p>
-              )}
             </article>
           );
         })}
       </div>
-        );
-      })()}
     </section>
   );
 }
 
-function citeExcerpt(body: string, node: CanvasNode): string {
-  const quote = node.cite?.quote?.trim();
-  if (quote) return quote;
-  if (!node.cite || !body) return "";
-  const start = Math.max(0, node.cite.start - 24);
-  const end = Math.min(body.length, node.cite.end + 24);
-  const prefix = start > 0 ? "…" : "";
-  const suffix = end < body.length ? "…" : "";
-  return `${prefix}${body.slice(start, end).trim()}${suffix}`;
-}
-
-function AxisEvidenceCard({
-  node,
-  body,
-}: {
-  node: CanvasNode;
-  body: string;
-}) {
-  const excerpt = citeExcerpt(body, node);
-  return (
-    <div className="rounded-md border border-brain-border bg-brain-surface p-3">
-      <div className="flex items-start justify-between gap-2">
-        <span className="rounded-full border border-brain-border bg-brain-surface-soft px-2 py-0.5 text-[11px] font-semibold text-brain-text">
-          {node.label}
-        </span>
-        <span className="shrink-0 text-[10px] text-brain-text-soft">
-          {node.type}
-        </span>
-      </div>
-      {excerpt ? (
-        <blockquote className="mt-2 border-l-2 border-brain-accent/50 pl-2 text-xs leading-5 text-brain-text-muted">
-          {excerpt}
-        </blockquote>
-      ) : (
-        <p className="mt-2 text-xs leading-5 text-brain-text-muted">
-          본문 근거가 연결되지 않은 노드입니다. 본문에서 문장을 선택해 보강하면
-          V1처럼 근거 문장과 함께 비교할 수 있습니다.
-        </p>
-      )}
-    </div>
-  );
-}
 
 function ReverseMissionPanel({
   canvas,
@@ -1496,11 +1407,7 @@ function PracticeScreen({
         </div>
         {tab === "axis" && (
           <div className="b-pane b-pane--axis flex-1 overflow-y-auto p-4 md:p-5">
-            <AxisAnalysisPanel
-              lesson={lesson}
-              canvas={liveCanvas ?? initialCanvas}
-              text={text}
-            />
+            <AxisAnalysisPanel lesson={lesson} />
           </div>
         )}
         {tab === "eval" && (
