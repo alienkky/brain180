@@ -303,7 +303,18 @@ body::before {
    crisp white with a soft hairline shadow, and replace the slate
    accent boxes with a warm ivory tint that matches the page paper. */
 [data-skin="ivory"] .b-pane {
-  background-color: #F8F2E5 !important;
+  /* Match the cognitive canvas paper tone (var(--color-brain-bg) = #F6F1E5
+     under ivory) so the three side panels read as the same continuous
+     surface as the canvas. */
+  background-color: var(--color-brain-bg) !important;
+}
+/* The axis tab wrapper is a plain `flex-1 overflow-y-auto` div with no
+   header band — the generic `.b-pane > div:first-child` white-header
+   rule below would force its outer padding stripe to white, so opt the
+   axis variant out and keep it on the canvas-toned paper. */
+[data-skin="ivory"] .b-pane--axis > div:first-child {
+  background-color: transparent !important;
+  border-bottom: 0 !important;
 }
 [data-skin="ivory"] .b-pane > div:first-child {
   background-color: #FFFFFF !important;
