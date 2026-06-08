@@ -58,18 +58,6 @@ const NODE_TYPES: {
   },
 ];
 
-// Fallback relation set used when the lesson does not (yet) carry a
-// curated relation lexicon. Once `relationLexicon` is provided by the
-// parent (Lesson DTO), the button row is regenerated from the author's
-// own connectives — see lexiconToRelations() below.
-const DEFAULT_RELATIONS: { value: Relation; label: string }[] = [
-  { value: "causes", label: "원인 →" },
-  { value: "supports", label: "지지 →" },
-  { value: "contrasts", label: "대비 ↔" },
-  { value: "transforms", label: "변형 →" },
-  { value: "contains", label: "포함 ⊃" },
-];
-
 // One entry in the dialog's button row. Carries both the canonical enum
 // (persisted as edge.relation) and the author-token label (persisted as
 // edge.label) so the edge dialog can write both with one click.
@@ -79,6 +67,27 @@ interface RelationChoice {
   token?: string;
   example?: string;
 }
+
+// Fallback relation set used when the lesson does not (yet) carry a
+// curated relation lexicon. Once `relationLexicon` is provided by the
+// parent (Lesson DTO), the button row is regenerated from the author's
+// own connectives — see lexiconToRelationChoices() below.
+//
+// Labels switched from the original logic-theory vocabulary
+// (원인/지지/대비/변형/포함) to plain-Korean verbs that middle- and
+// high-school readers can map without prior training. Each entry also
+// ships a universal example sentence; the EdgeDialog surfaces it as the
+// button's hover tooltip so the meaning is reinforced at pick time.
+// `token` is the bare verb that lands on the saved edge label so the
+// canvas keeps showing the friendly word the student picked, not the
+// canonical enum.
+const DEFAULT_RELATIONS: RelationChoice[] = [
+  { value: "causes",     label: "때문에 →",   token: "때문에",   example: "비 → 길이 젖었다" },
+  { value: "supports",   label: "맞아 ↑",     token: "맞아",     example: "증거 → 주장이 맞아" },
+  { value: "contrasts",  label: "반대 ↔",     token: "반대",     example: "낮 ↔ 밤" },
+  { value: "transforms", label: "바뀌어 ⇒",   token: "바뀌어",   example: "물 → 얼음" },
+  { value: "contains",   label: "안에 ⊂",     token: "안에",     example: "사과 ⊂ 과일" },
+];
 
 function lexiconToRelationChoices(
   lex: RelationLexiconEntry[] | undefined,
