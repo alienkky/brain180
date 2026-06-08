@@ -842,14 +842,26 @@ function AxisAnalysisPanel({
           캔버스 노드와 함께 본문 구조를 확인합니다.
         </p>
       </div>
-      <div className="grid gap-3 xl:grid-cols-3">
-        {AXIS_ANALYSIS.map((axis) => {
-          const axisText =
-            extractAxisAnalysis(analysis, axis.key) ||
-            (axis.key === "cognition" ? analysis : "") ||
-            axis.empty;
-          const axisNodes =
-            canvas?.nodes.filter((node) => node.axis_tag === axis.key) ?? [];
+      {(() => {
+        // If the learner has not yet tagged any node with an axis, surface
+        // every untagged node under the cognition column so the "노드와
+        // 본문 근거" panel is never empty when nodes actually exist. Tag
+        // any node from the canvas toolbar (축 지정 pills) to move it to
+        // 가치 or 시간.
+        const allNodes = canvas?.nodes ?? [];
+        const anyTagged = allNodes.some((n) => Boolean(n.axis_tag));
+        return (
+          <div className="grid gap-3 xl:grid-cols-3">
+            {AXIS_ANALYSIS.map((axis) => {
+              const axisText =
+                extractAxisAnalysis(analysis, axis.key) ||
+                (axis.key === "cognition" ? analysis : "") ||
+                axis.empty;
+              const axisNodes = anyTagged
+                ? allNodes.filter((node) => node.axis_tag === axis.key)
+                : axis.key === "cognition"
+                  ? allNodes
+                  : [];
           return (
             <article
               key={axis.key}
@@ -898,6 +910,8 @@ function AxisAnalysisPanel({
           );
         })}
       </div>
+        );
+      })()}
     </section>
   );
 }

@@ -68,6 +68,14 @@ interface RelationChoice {
   example?: string;
 }
 
+type AxisTag = NonNullable<CanvasNode["axis_tag"]>;
+
+const AXIS_TAGS: { value: AxisTag; label: string; color: string }[] = [
+  { value: "cognition", label: "인지", color: "#4A87C2" },
+  { value: "value",     label: "가치", color: "#D88254" },
+  { value: "time",      label: "시간", color: "#6FA56D" },
+];
+
 // Fallback relation set used when the lesson does not (yet) carry a
 // curated relation lexicon. Once `relationLexicon` is provided by the
 // parent (Lesson DTO), the button row is regenerated from the author's
@@ -561,6 +569,20 @@ export function CognitiveMap({
     }));
   };
 
+  // 선택된 노드의 axis_tag 토글 — 3축 분석 패널에서 노드가 인지/가치/시간 중
+  // 어느 축에 묶일지 결정한다. 같은 축을 다시 누르면 해제.
+  const toggleSelectedAxisTag = (tag: AxisTag) => {
+    if (!selectedNodeId) return;
+    setCanvas((c) => ({
+      ...c,
+      nodes: c.nodes.map((n) =>
+        n.id === selectedNodeId
+          ? { ...n, axis_tag: n.axis_tag === tag ? undefined : tag }
+          : n,
+      ),
+    }));
+  };
+
   const clearCanvas = () => {
     if (!window.confirm("캔버스를 비울까요? 모든 노드와 엣지가 삭제됩니다.")) {
       return;
@@ -706,12 +728,48 @@ export function CognitiveMap({
           </p>
         )}
         {selectedNode && (
-          <p className="text-[11px] text-brain-text-muted">
-            <strong style={{ color: "var(--color-brain-text)" }}>
-              {selectedNode.label}
-            </strong>
-            {" — 역할 버튼을 다시 누르면 type 이 바뀝니다. 더블클릭으로 라벨 수정. 다른 노드 클릭 시 엣지 생성."}
-          </p>
+          <>
+            <div className="flex items-center gap-2">
+              <span className="mr-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-brain-text-soft">
+                축 지정
+              </span>
+              {AXIS_TAGS.map((a) => {
+                const active = selectedNode.axis_tag === a.value;
+                return (
+                  <button
+                    key={a.value}
+                    onClick={() => toggleSelectedAxisTag(a.value)}
+                    disabled={disabled}
+                    title={`이 노드를 ${a.label} 축에 묶기 — 3축 분석 패널에서 ${a.label} 칸으로 분류됩니다. 다시 누르면 해제.`}
+                    className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[12px] transition disabled:opacity-50"
+                    style={{
+                      borderColor: active ? a.color : "var(--color-brain-border)",
+                      background: active ? `${a.color}14` : "var(--color-brain-bg)",
+                      color: active ? a.color : "var(--color-brain-text)",
+                      fontWeight: active ? 600 : 500,
+                    }}
+                  >
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{ background: a.color }}
+                    />
+                    {a.label}
+                  </button>
+                );
+              })}
+              <span className="ml-auto text-[10px] text-brain-text-muted">
+                {selectedNode.axis_tag
+                  ? "선택 해제하려면 같은 칩을 다시 누르세요"
+                  : "축을 지정해야 3축 분석 패널에서 보입니다"}
+              </span>
+            </div>
+            <p className="text-[11px] text-brain-text-muted">
+              <strong style={{ color: "var(--color-brain-text)" }}>
+                {selectedNode.label}
+              </strong>
+              {" — 역할 버튼을 다시 누르면 type 이 바뀝니다. 더블클릭으로 라벨 수정. 다른 노드 클릭 시 엣지 생성."}
+            </p>
+          </>
         )}
       </div>
       <div className="relative flex-1 overflow-hidden bg-brain-bg">
