@@ -254,3 +254,45 @@ body::before {
     linear-gradient(rgba(40,30,14,0.09) 1px, transparent 1px),
     linear-gradient(90deg, rgba(40,30,14,0.09) 1px, transparent 1px);
 }
+
+/* ── Ivory skin: 3-axis analysis cards ────────────────────────────────────
+   The default Tailwind palette mixes terracotta/purple/sage at low opacity,
+   which lands muddy on an ivory background. Override per-axis with a clean
+   pastel set: cognition = sky-blue, value = peach, time = mint. Inner badges
+   and evidence cards go pure white so the type stays crisp. */
+[data-skin="ivory"] .b-axis-card {
+  background-image: none !important;
+  border-width: 1px;
+  box-shadow: 0 1px 0 rgba(40, 30, 14, 0.04);
+}
+[data-skin="ivory"] .b-axis-card[data-axis="cognition"] {
+  background-color: #EEF5FB !important;
+  border-color: #B8D4EC !important;
+}
+[data-skin="ivory"] .b-axis-card[data-axis="value"] {
+  background-color: #FDF0E5 !important;
+  border-color: #F2B999 !important;
+}
+[data-skin="ivory"] .b-axis-card[data-axis="time"] {
+  background-color: #EBF5EC !important;
+  border-color: #B6D4B7 !important;
+}
+[data-skin="ivory"] .b-axis-card > div > span:first-child,
+[data-skin="ivory"] .b-axis-card span.rounded-full {
+  background-color: #FFFFFF !important;
+  border-color: rgba(40, 30, 14, 0.12) !important;
+  color: #2A2520 !important;
+}
+[data-skin="ivory"] .b-axis-card h5 { color: #1B1710; }
+[data-skin="ivory"] .b-axis-card p { color: #3B342A; }
+[data-skin="ivory"] .b-axis-card .text-brain-text-muted { color: #6A6258 !important; }
+[data-skin="ivory"] .b-axis-card .text-brain-text-soft { color: #8A8270 !important; }
+[data-skin="ivory"] .b-axis-card .rounded-md {
+  background-color: #FFFFFF !important;
+  border-color: rgba(40, 30, 14, 0.12) !important;
+  box-shadow: 0 1px 0 rgba(40, 30, 14, 0.03);
+}
+[data-skin="ivory"] .b-axis-card[data-axis="cognition"] blockquote { border-color: #4A87C2 !important; }
+[data-skin="ivory"] .b-axis-card[data-axis="value"] blockquote     { border-color: #D88254 !important; }
+[data-skin="ivory"] .b-axis-card[data-axis="time"] blockquote      { border-color: #6FA56D !important; }
+

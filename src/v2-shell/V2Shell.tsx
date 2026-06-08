@@ -853,7 +853,8 @@ function AxisAnalysisPanel({
           return (
             <article
               key={axis.key}
-              className={`rounded-lg border p-4 ${axis.accent}`}
+              data-axis={axis.key}
+              className={`b-axis-card rounded-lg border p-4 ${axis.accent}`}
             >
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="rounded-full border border-brain-border bg-brain-surface px-2 py-0.5 text-xs font-semibold">
