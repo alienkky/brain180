@@ -6,7 +6,7 @@ import { create } from "zustand";
 //   ivory = ivory + black, Monocle highlighter/post-it accents, skeuomorphism
 // Skin remaps the --color-brain-* tokens at runtime via a [data-skin] scope on
 // the shell root (see index.css). accent (warm) / hl (ivory) are applied inline.
-export type Skin = "warm" | "slate" | "ivory";
+export type Skin = "warm" | "slate" | "dark" | "ivory";
 export type PaperBg = "paper" | "grid";
 
 export interface ThemeState {
@@ -96,6 +96,8 @@ export function rootThemeStyle(
 ): React.CSSProperties {
   const style: Record<string, string> = {};
   if (skin === "warm") style["--color-brain-accent"] = accent;
-  if (skin === "ivory") style["--brain-hl"] = hl;
+  // slate / dark / ivory share the highlighter point color
+  if (skin === "slate" || skin === "dark" || skin === "ivory")
+    style["--brain-hl"] = hl;
   return style as React.CSSProperties;
 }
