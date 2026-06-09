@@ -244,12 +244,30 @@ export function CognitiveMap({
   );
   const [canvas, setCanvas] = useState<CanvasJson>(initial ?? EMPTY);
   const [paletteType, setPaletteType] = useState<NodeType | null>(null);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(() => new Set());
+  // When the learner explicitly enters "관계 그리기" mode from the toolbar,
+  // the next node click proposes an edge from this id. The plain click path
+  // never opens the edge dialog on its own — so just selecting and moving a
+  // second node can no longer surprise the user with the relation picker.
+  const [edgeFromId, setEdgeFromId] = useState<string | null>(null);
   const [pendingEdge, setPendingEdge] = useState<PendingEdge | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">(
     "idle",
   );
-  const dragRef = useRef<{ id: string; dx: number; dy: number } | null>(null);
+  // dragRef now carries offsets for *every* node being moved together so
+  // a marquee-selected group translates as one unit.
+  const dragRef = useRef<{ ids: string[]; offsets: Record<string, { dx: number; dy: number }> } | null>(null);
+  // Marquee rectangle in canvas coordinates while the learner is rubber-band
+  // selecting on empty space. `additive` keeps Shift-drag from clearing the
+  // existing selection.
+  const marqueeStartRef = useRef<{ x: number; y: number; additive: boolean } | null>(null);
+  const [marquee, setMarquee] = useState<
+    | { x0: number; y0: number; x1: number; y1: number; additive: boolean }
+    | null
+  >(null);
+  // Set right after a marquee completes so the synthetic SVG click that
+  // follows the drag does not clear the freshly made selection.
+  const justFinishedMarqueeRef = useRef(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const saveTimer = useRef<number | null>(null);
   const isFirstLoad = useRef(true);
@@ -294,8 +312,10 @@ export function CognitiveMap({
   // Reload when the parent swaps in a different initial (e.g. session change).
   useEffect(() => {
     setCanvas(initial ?? EMPTY);
-    setSelectedNodeId(null);
+    setSelectedNodeIds(new Set());
+    setEdgeFromId(null);
     setPendingEdge(null);
+    setMarquee(null);
     isFirstLoad.current = true;
   }, [initial]);
 
@@ -345,13 +365,14 @@ export function CognitiveMap({
     };
   }, [canvas, onSave, onChange, disabled]);
 
-  // Delete/Backspace removes the selected node (and its incident edges).
+  // Delete/Backspace removes every selected node (and its incident edges).
+  // Escape cancels edge-create mode + marquee + selection in that order so
+  // the same key keeps backing the learner out of nested states.
   // Ignored while typing in form fields so label editing via window.prompt
   // and any future inline inputs are not hijacked.
   useEffect(() => {
     if (disabled) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key !== "Delete" && e.key !== "Backspace") return;
       const t = e.target as HTMLElement | null;
       if (t) {
         const tag = t.tagName;
@@ -359,20 +380,39 @@ export function CognitiveMap({
           return;
         }
       }
-      if (!selectedNodeId) return;
+      if (e.key === "Escape") {
+        if (edgeFromId !== null) {
+          setEdgeFromId(null);
+          e.preventDefault();
+          return;
+        }
+        if (marquee || marqueeStartRef.current) {
+          marqueeStartRef.current = null;
+          setMarquee(null);
+          e.preventDefault();
+          return;
+        }
+        if (selectedNodeIds.size > 0) {
+          setSelectedNodeIds(new Set());
+          e.preventDefault();
+        }
+        return;
+      }
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      if (selectedNodeIds.size === 0) return;
       e.preventDefault();
+      const dead = selectedNodeIds;
       setCanvas((c) => ({
         ...c,
-        nodes: c.nodes.filter((n) => n.id !== selectedNodeId),
-        edges: c.edges.filter(
-          (eg) => eg.from !== selectedNodeId && eg.to !== selectedNodeId,
-        ),
+        nodes: c.nodes.filter((n) => !dead.has(n.id)),
+        edges: c.edges.filter((eg) => !dead.has(eg.from) && !dead.has(eg.to)),
       }));
-      setSelectedNodeId(null);
+      setSelectedNodeIds(new Set());
+      setEdgeFromId(null);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [selectedNodeId, disabled]);
+  }, [selectedNodeIds, edgeFromId, marquee, disabled]);
 
   const screenToCanvas = (clientX: number, clientY: number) => {
     const svg = svgRef.current;
@@ -391,14 +431,64 @@ export function CognitiveMap({
     return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
   };
 
+  // Build dragRef carrying offsets for every node we plan to translate as
+  // one unit. When the drag starts on a node already in the selection, we
+  // move the whole selection; otherwise we move just that node and replace
+  // the selection with it (single-target move).
+  const buildDragOffsets = (anchorNode: CanvasNode, x: number, y: number, includeIds?: Set<string>): { ids: string[]; offsets: Record<string, { dx: number; dy: number }> } => {
+    const ids = includeIds && includeIds.size > 0
+      ? Array.from(includeIds)
+      : [anchorNode.id];
+    const offsets: Record<string, { dx: number; dy: number }> = {};
+    const byId = new Map(canvas.nodes.map((nn) => [nn.id, nn] as const));
+    for (const id of ids) {
+      const nn = byId.get(id);
+      if (!nn) continue;
+      offsets[id] = { dx: x - nn.x, dy: y - nn.y };
+    }
+    if (!offsets[anchorNode.id]) {
+      offsets[anchorNode.id] = { dx: x - anchorNode.x, dy: y - anchorNode.y };
+    }
+    return { ids: Object.keys(offsets), offsets };
+  };
+
+  const moveDraggedNodes = (cursorX: number, cursorY: number) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    setCanvas((c) => ({
+      ...c,
+      nodes: c.nodes.map((n) => {
+        const off = drag.offsets[n.id];
+        if (!off) return n;
+        return { ...n, x: cursorX - off.dx, y: cursorY - off.dy };
+      }),
+    }));
+  };
+
+  const onCanvasMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (disabled) return;
+    if (e.target !== svgRef.current && e.target !== e.currentTarget) return;
+    if (paletteType) return; // adding-node mode handled by onCanvasClick
+    if (e.button !== 0) return;
+    const { x, y } = screenToCanvas(e.clientX, e.clientY);
+    marqueeStartRef.current = { x, y, additive: e.shiftKey };
+  };
+
   const onCanvasClick = (e: React.MouseEvent<SVGSVGElement>) => {
     if (disabled) return;
     if (e.target !== svgRef.current && e.target !== e.currentTarget) {
       // Click hit a node/edge — those handlers run instead.
       return;
     }
+    if (justFinishedMarqueeRef.current) {
+      // Suppress the synthetic click that follows a marquee drag, otherwise
+      // it would immediately clear the selection we just built.
+      justFinishedMarqueeRef.current = false;
+      return;
+    }
     if (!paletteType) {
-      setSelectedNodeId(null);
+      if (selectedNodeIds.size > 0) setSelectedNodeIds(new Set());
+      if (edgeFromId !== null) setEdgeFromId(null);
       return;
     }
     const { x, y } = screenToCanvas(e.clientX, e.clientY);
@@ -419,7 +509,10 @@ export function CognitiveMap({
     if (disabled) return;
     e.stopPropagation();
     const { x, y } = screenToCanvas(e.clientX, e.clientY);
-    dragRef.current = { id: n.id, dx: x - n.x, dy: y - n.y };
+    // Drag a selected node moves the whole current selection. Drag an
+    // unselected node moves just that node and replaces the selection.
+    const group = selectedNodeIds.has(n.id) ? selectedNodeIds : undefined;
+    dragRef.current = buildDragOffsets(n, x, y, group);
   };
 
   const onNodeTouchStart = (e: React.TouchEvent, n: CanvasNode) => {
@@ -429,19 +522,26 @@ export function CognitiveMap({
     const touch = e.touches[0];
     if (!touch) return;
     const { x, y } = screenToCanvas(touch.clientX, touch.clientY);
-    dragRef.current = { id: n.id, dx: x - n.x, dy: y - n.y };
+    const group = selectedNodeIds.has(n.id) ? selectedNodeIds : undefined;
+    dragRef.current = buildDragOffsets(n, x, y, group);
   };
 
   const onMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const start = marqueeStartRef.current;
+    if (start) {
+      const { x, y } = screenToCanvas(e.clientX, e.clientY);
+      setMarquee({
+        x0: Math.min(start.x, x),
+        y0: Math.min(start.y, y),
+        x1: Math.max(start.x, x),
+        y1: Math.max(start.y, y),
+        additive: start.additive,
+      });
+      return;
+    }
     if (!dragRef.current) return;
     const { x, y } = screenToCanvas(e.clientX, e.clientY);
-    const { id, dx, dy } = dragRef.current;
-    setCanvas((c) => ({
-      ...c,
-      nodes: c.nodes.map((n) =>
-        n.id === id ? { ...n, x: x - dx, y: y - dy } : n,
-      ),
-    }));
+    moveDraggedNodes(x, y);
   };
 
   const onTouchMove = (e: React.TouchEvent<SVGSVGElement>) => {
@@ -466,16 +566,41 @@ export function CognitiveMap({
     const touch = e.touches[0];
     if (!touch) return;
     const { x, y } = screenToCanvas(touch.clientX, touch.clientY);
-    const { id, dx, dy } = dragRef.current;
-    setCanvas((c) => ({
-      ...c,
-      nodes: c.nodes.map((n) =>
-        n.id === id ? { ...n, x: x - dx, y: y - dy } : n,
-      ),
-    }));
+    moveDraggedNodes(x, y);
+  };
+
+  const finishMarquee = () => {
+    const box = marquee;
+    const start = marqueeStartRef.current;
+    marqueeStartRef.current = null;
+    if (!box) return;
+    setMarquee(null);
+    // If the rectangle barely moved, treat it as a click on empty space.
+    const dragged = Math.abs(box.x1 - box.x0) > 4 || Math.abs(box.y1 - box.y0) > 4;
+    if (!dragged) return;
+    const hit = canvas.nodes
+      .filter((n) => n.x >= box.x0 && n.x <= box.x1 && n.y >= box.y0 && n.y <= box.y1)
+      .map((n) => n.id);
+    if (hit.length === 0) {
+      if (!start?.additive && !box.additive) setSelectedNodeIds(new Set());
+      justFinishedMarqueeRef.current = true;
+      return;
+    }
+    setSelectedNodeIds((prev) => {
+      if (box.additive || start?.additive) {
+        const next = new Set(prev);
+        for (const id of hit) next.add(id);
+        return next;
+      }
+      return new Set(hit);
+    });
+    justFinishedMarqueeRef.current = true;
   };
 
   const onMouseUp = () => {
+    if (marqueeStartRef.current || marquee) {
+      finishMarquee();
+    }
     dragRef.current = null;
     pinchDistance.current = null;
   };
@@ -498,17 +623,29 @@ export function CognitiveMap({
   const onNodeClick = (e: React.MouseEvent, n: CanvasNode) => {
     if (disabled) return;
     e.stopPropagation();
-    // If a node is already selected and it's not this one, propose an edge.
-    if (selectedNodeId && selectedNodeId !== n.id) {
-      setPendingEdge({ fromId: selectedNodeId, toId: n.id });
-      setSelectedNodeId(null);
+    // Edge-draw mode: this click picks the target node and opens the
+    // relation picker. Reached only after the learner explicitly pressed
+    // "관계 그리기" on the previously selected node.
+    if (edgeFromId !== null && edgeFromId !== n.id) {
+      setPendingEdge({ fromId: edgeFromId, toId: n.id });
+      setEdgeFromId(null);
       return;
     }
-    const next = n.id === selectedNodeId ? null : n.id;
-    setSelectedNodeId(next);
-    // When selecting a cite-bearing node, give the parent a chance to scroll
-    // the text panel to that quote.
-    if (next && n.cite) onNodeFocus?.(n);
+    // Shift / Ctrl / Meta click extends or toggles the multi-selection so
+    // the learner can pick a handful of nodes by hand before bulk-moving
+    // them. Plain click resets to single-target selection.
+    const multi = e.shiftKey || e.metaKey || e.ctrlKey;
+    setSelectedNodeIds((prev) => {
+      if (multi) {
+        const next = new Set(prev);
+        if (next.has(n.id)) next.delete(n.id);
+        else next.add(n.id);
+        return next;
+      }
+      if (prev.size === 1 && prev.has(n.id)) return new Set();
+      return new Set([n.id]);
+    });
+    if (!multi && n.cite) onNodeFocus?.(n);
   };
 
   const onEdgeClick = (edgeId: string) => {
@@ -531,15 +668,15 @@ export function CognitiveMap({
   };
 
   const deleteSelected = () => {
-    if (!selectedNodeId) return;
+    if (selectedNodeIds.size === 0) return;
+    const dead = selectedNodeIds;
     setCanvas((c) => ({
       ...c,
-      nodes: c.nodes.filter((n) => n.id !== selectedNodeId),
-      edges: c.edges.filter(
-        (e) => e.from !== selectedNodeId && e.to !== selectedNodeId,
-      ),
+      nodes: c.nodes.filter((n) => !dead.has(n.id)),
+      edges: c.edges.filter((e) => !dead.has(e.from) && !dead.has(e.to)),
     }));
-    setSelectedNodeId(null);
+    setSelectedNodeIds(new Set());
+    setEdgeFromId(null);
   };
 
   // 더블클릭으로 라벨 즉시 수정. v1 PracticeToolbar 의 "노드 편집" 흐름 대체.
@@ -558,25 +695,26 @@ export function CognitiveMap({
     }));
   };
 
-  // 선택된 노드의 type 변경 — v1 toolbar 의 "역할 다시 고르기" 와 동등.
+  // 단일 선택 노드의 type 변경 — v1 toolbar 의 "역할 다시 고르기" 와 동등.
+  // Multi-selection 일 때는 모든 선택 노드에 적용된다.
   const reassignSelectedType = (type: NodeType) => {
-    if (!selectedNodeId) return;
+    if (selectedNodeIds.size === 0) return;
+    const targets = selectedNodeIds;
     setCanvas((c) => ({
       ...c,
-      nodes: c.nodes.map((n) =>
-        n.id === selectedNodeId ? { ...n, type } : n,
-      ),
+      nodes: c.nodes.map((n) => (targets.has(n.id) ? { ...n, type } : n)),
     }));
   };
 
-  // 선택된 노드의 axis_tag 토글 — 3축 분석 패널에서 노드가 인지/가치/시간 중
-  // 어느 축에 묶일지 결정한다. 같은 축을 다시 누르면 해제.
+  // 선택된 노드(들)의 axis_tag 토글. 한 번 누르면 모두 해당 축으로, 같은
+  // 축을 다시 누르면 해당 축인 노드들은 해제된다.
   const toggleSelectedAxisTag = (tag: AxisTag) => {
-    if (!selectedNodeId) return;
+    if (selectedNodeIds.size === 0) return;
+    const targets = selectedNodeIds;
     setCanvas((c) => ({
       ...c,
       nodes: c.nodes.map((n) =>
-        n.id === selectedNodeId
+        targets.has(n.id)
           ? { ...n, axis_tag: n.axis_tag === tag ? undefined : tag }
           : n,
       ),
@@ -588,14 +726,21 @@ export function CognitiveMap({
       return;
     }
     setCanvas((c) => ({ ...c, nodes: [], edges: [] }));
-    setSelectedNodeId(null);
+    setSelectedNodeIds(new Set());
+    setEdgeFromId(null);
     setPendingEdge(null);
     setPaletteType(null);
   };
 
+  // The toolbar's per-node controls (역할 / 축 지정) operate on the single
+  // selected node when exactly one is selected. With a marquee group, those
+  // pills hide so the learner only sees the group-level tools.
+  const primarySelectedId = selectedNodeIds.size === 1
+    ? Array.from(selectedNodeIds)[0]!
+    : null;
   const selectedNode = useMemo(
-    () => canvas.nodes.find((n) => n.id === selectedNodeId) ?? null,
-    [canvas.nodes, selectedNodeId],
+    () => canvas.nodes.find((n) => n.id === primarySelectedId) ?? null,
+    [canvas.nodes, primarySelectedId],
   );
 
   const nodeIndex = useMemo(() => {
@@ -670,12 +815,30 @@ export function CognitiveMap({
                 튜터에게 패턴 제안
               </button>
             )}
-            {selectedNodeId && (
+            {primarySelectedId && edgeFromId === null && (
+              <button
+                onClick={() => setEdgeFromId(primarySelectedId)}
+                className="rounded border border-brain-accent/60 px-2 py-1 text-brain-accent hover:bg-brain-accent-soft/50"
+                title="이 노드에서 시작하는 관계를 그립니다. 다음 노드 클릭으로 대상 지정."
+              >
+                관계 그리기
+              </button>
+            )}
+            {edgeFromId !== null && (
+              <button
+                onClick={() => setEdgeFromId(null)}
+                className="rounded border border-brain-border bg-brain-accent-soft/40 px-2 py-1 text-brain-accent"
+                title="관계 그리기 취소 (ESC)"
+              >
+                관계 그리기 취소
+              </button>
+            )}
+            {selectedNodeIds.size > 0 && (
               <button
                 onClick={deleteSelected}
                 className="rounded border border-brain-danger/40 px-2 py-1 text-brain-danger hover:bg-brain-accent-soft/50"
               >
-                선택 삭제
+                선택 삭제{selectedNodeIds.size > 1 ? ` (${selectedNodeIds.size})` : ""}
               </button>
             )}
             {canvas.nodes.length > 0 && (
@@ -767,14 +930,28 @@ export function CognitiveMap({
               <strong style={{ color: "var(--color-brain-text)" }}>
                 {selectedNode.label}
               </strong>
-              {" — 역할 버튼을 다시 누르면 type 이 바뀝니다. 더블클릭으로 라벨 수정. 다른 노드 클릭 시 엣지 생성."}
+              {" — 역할 버튼을 다시 누르면 type 이 바뀝니다. 더블클릭으로 라벨 수정. 빈 공간을 드래그하면 여러 노드를 한 번에 선택할 수 있고, 관계를 그리려면 위 ‘관계 그리기’ 버튼을 누르세요."}
             </p>
           </>
+        )}
+        {edgeFromId !== null && (
+          <p className="text-[11px] font-semibold text-brain-accent">
+            관계 그리기 — 시작 노드 선택됨. 다음으로 *대상 노드를 클릭* 하면 관계 선택 창이 뜹니다. ESC 로 취소.
+          </p>
+        )}
+        {selectedNodeIds.size > 1 && (
+          <p className="text-[11px] text-brain-text-muted">
+            <strong style={{ color: "var(--color-brain-text)" }}>
+              {selectedNodeIds.size}개 노드 선택됨
+            </strong>
+            {" — 아무 노드를 드래그하면 함께 이동합니다. Shift+클릭으로 추가·해제. Delete 키로 일괄 삭제."}
+          </p>
         )}
       </div>
       <div className="relative flex-1 overflow-hidden bg-brain-bg">
         <svg
           ref={svgRef}
+          onMouseDown={onCanvasMouseDown}
           onClick={onCanvasClick}
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
@@ -784,7 +961,14 @@ export function CognitiveMap({
           onTouchEnd={onMouseUp}
           onWheel={onWheelCanvas}
           className="h-full w-full"
-          style={{ cursor: paletteType ? "crosshair" : "default", touchAction: "none" }}
+          style={{
+            cursor: paletteType
+              ? "crosshair"
+              : edgeFromId !== null
+                ? "alias"
+                : "default",
+            touchAction: "none",
+          }}
         >
           {/* Per-relation arrow markers — v1 style colored arrows */}
           <defs>
@@ -852,7 +1036,8 @@ export function CognitiveMap({
           {canvas.nodes.map((n) => {
             const nt = NODE_TYPES.find((t) => t.value === n.type);
             const color = nt?.color ?? "#8F857A";
-            const selected = n.id === selectedNodeId;
+            const selected = selectedNodeIds.has(n.id);
+            const isEdgeOrigin = edgeFromId === n.id;
             // Dynamic radius: wider for longer labels (like v1 nodeSize)
             const labelLen = n.label.length;
             const r = nodeRadius(n.label);
@@ -882,6 +1067,11 @@ export function CognitiveMap({
                 {/* Selection ring */}
                 {selected && (
                   <circle r={r + 4} fill="none" stroke={color} strokeWidth={2} strokeOpacity={0.5} />
+                )}
+                {/* Edge-create origin ring — pulses softly so the learner
+                    can see which node a pending edge is being drawn from. */}
+                {isEdgeOrigin && (
+                  <circle r={r + 9} fill="none" stroke="var(--color-brain-accent)" strokeWidth={2} strokeDasharray="3 3" strokeOpacity={0.85} />
                 )}
                 {/* Label — white text like v1 */}
                 {line2 ? (
@@ -926,6 +1116,20 @@ export function CognitiveMap({
             );
           })}
           </g>
+          {marquee && (
+            <g pointerEvents="none">
+              <rect
+                x={marquee.x0 * viewport.zoom + viewport.x}
+                y={marquee.y0 * viewport.zoom + viewport.y}
+                width={(marquee.x1 - marquee.x0) * viewport.zoom}
+                height={(marquee.y1 - marquee.y0) * viewport.zoom}
+                fill="rgba(184, 92, 63, 0.10)"
+                stroke="rgba(184, 92, 63, 0.55)"
+                strokeDasharray="4 3"
+                strokeWidth={1}
+              />
+            </g>
+          )}
         </svg>
         {canvas.nodes.length === 0 && !paletteType && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-brain-text-soft">
