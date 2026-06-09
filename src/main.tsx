@@ -3,13 +3,18 @@ import { createRoot } from "react-dom/client"
 import "./index.css"
 import App from "./App"
 import { V2Shell } from "./v2-shell/V2Shell"
+import { V3Shell } from "./v3/V3Shell"
 
-// v2 shell is the new default. The v1 prototype is kept reachable via ?v1=1
-// while we migrate features (visualization layer, practice canvas) into v2.
-const useV1 = new URLSearchParams(window.location.search).has("v1")
+// Routing:
+//   ?v3=1  → Brain180 v3 (3-part protocol, customer + admin modes)
+//   ?v1=1  → v1 prototype (static text library)
+//   default → v2 shell
+const params = new URLSearchParams(window.location.search)
+const useV1 = params.has("v1")
+const useV3 = params.has("v3")
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    {useV1 ? <App /> : <V2Shell />}
+    {useV3 ? <V3Shell /> : useV1 ? <App /> : <V2Shell />}
   </StrictMode>
 )

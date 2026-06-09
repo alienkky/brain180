@@ -1,0 +1,140 @@
+import { useState, useRef, useEffect } from "react";
+import type { ChatMessage } from "../types";
+import { api } from "../../v2-shell/api";
+import type { CanvasJson } from "../../v2-shell/api";
+
+interface Props {
+  sessionId: string;
+  lessonId: string;
+  messages: ChatMessage[];
+  onMessage: (msg: ChatMessage) => void;
+  onIterate: () => void;
+  stagePrefix: string; // "[1부 시각화 설명]" etc.
+  canvasSnapshot?: CanvasJson | null;
+  placeholder?: string;
+}
+
+export function AICoach({
+  sessionId,
+  lessonId,
+  messages,
+  onMessage,
+  onIterate,
+  stagePrefix,
+  canvasSnapshot,
+  placeholder,
+}: Props) {
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const send = async () => {
+    const text = input.trim();
+    if (!text || loading) return;
+    setInput("");
+    const userMsg: ChatMessage = { role: "user", content: `${stagePrefix}\n\n${text}` };
+    onMessage(userMsg);
+    onIterate();
+    setLoading(true);
+    try {
+      const res = await api.chat(
+        sessionId,
+        lessonId,
+        userMsg.content,
+        canvasSnapshot ?? null,
+        null,
+        null
+      );
+      onMessage({ role: "assistant", content: res.content, messageId: res.id });
+    } catch (e) {
+      onMessage({
+        role: "assistant",
+        content: `⚠️ 피드백을 불러오지 못했습니다. (${e instanceof Error ? e.message : "오류"})`,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Message list */}
+      <div className="flex-1 overflow-y-auto space-y-3 p-3 min-h-0">
+        {messages.length === 0 && (
+          <div className="text-center text-brain-text-muted text-sm py-8">
+            작업 내용을 입력하고 AI 코치에게 피드백을 받아보세요.
+          </div>
+        )}
+        {messages.map((m, i) => (
+          <div
+            key={i}
+            className={`flex gap-2 ${m.role === "user" ? "flex-row-reverse" : "flex-row"}`}
+          >
+            <div
+              className={`text-xs px-1.5 py-0.5 rounded-full h-fit mt-1 shrink-0 font-medium ${
+                m.role === "assistant"
+                  ? "bg-brain-accent text-white"
+                  : "bg-brain-surface-soft text-brain-text-muted border border-brain-border"
+              }`}
+            >
+              {m.role === "assistant" ? "AI" : "나"}
+            </div>
+            <div
+              className={`max-w-[85%] text-sm rounded-xl px-3 py-2 whitespace-pre-wrap leading-relaxed ${
+                m.role === "assistant"
+                  ? "bg-brain-surface border border-brain-border text-brain-text"
+                  : "bg-brain-accent-soft text-brain-text border border-brain-border"
+              }`}
+            >
+              {m.content.replace(/^\[.*?\]\n\n/, "")}
+            </div>
+          </div>
+        ))}
+        {loading && (
+          <div className="flex gap-2">
+            <div className="text-xs px-1.5 py-0.5 rounded-full h-fit mt-1 bg-brain-accent text-white font-medium shrink-0">
+              AI
+            </div>
+            <div className="bg-brain-surface border border-brain-border rounded-xl px-3 py-2">
+              <span className="inline-flex gap-1">
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    className="w-1.5 h-1.5 bg-brain-text-muted rounded-full animate-bounce"
+                    style={{ animationDelay: `${i * 0.15}s` }}
+                  />
+                ))}
+              </span>
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div className="border-t border-brain-border p-3 flex gap-2">
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) send();
+          }}
+          placeholder={placeholder ?? "다이어그램 설명을 입력하세요... (Ctrl+Enter 전송)"}
+          rows={3}
+          className="flex-1 resize-none text-sm rounded-lg border border-brain-border bg-brain-surface px-3 py-2 focus:outline-none focus:border-brain-accent text-brain-text placeholder-brain-text-soft"
+        />
+        <button
+          onClick={send}
+          disabled={loading || !input.trim()}
+          className="self-end px-4 py-2 rounded-lg bg-brain-accent text-white text-sm font-medium disabled:opacity-40 hover:opacity-90 transition-opacity"
+        >
+          전송
+        </button>
+      </div>
+    </div>
+  );
+}

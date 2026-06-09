@@ -1,0 +1,473 @@
+import { useEffect, useState } from "react";
+import { api } from "../../v2-shell/api";
+import type {
+  UserDto,
+  AdminModuleDto,
+  AdminLessonDto,
+  AdminTutorRatingsDto,
+} from "../../v2-shell/api";
+import { useTheme, ACCENT_OPTIONS, HL_OPTIONS } from "../../v2-shell/useTheme";
+import type { Skin } from "../../v2-shell/useTheme";
+import type { AdminScreen, V3User } from "../types";
+
+interface Props {
+  user: V3User;
+  onLogout: () => void;
+}
+
+const NAV_ITEMS: { id: AdminScreen; label: string; icon: string }[] = [
+  { id: "dashboard", label: "대시보드", icon: "📊" },
+  { id: "users", label: "회원 관리", icon: "👥" },
+  { id: "content", label: "콘텐츠 관리", icon: "📚" },
+  { id: "ai", label: "AI 코치 제어", icon: "🤖" },
+  { id: "theme", label: "테마 관리", icon: "🎨" },
+  { id: "analytics", label: "분석/통계", icon: "📈" },
+];
+
+// ── Sub-panels ────────────────────────────────────────────
+
+function AdminDashboard() {
+  const [pending, setPending] = useState<UserDto[]>([]);
+  const [allUsers, setAllUsers] = useState<UserDto[]>([]);
+  useEffect(() => {
+    api.adminPending().then(setPending).catch(() => {});
+    api.adminUsers().then(setAllUsers).catch(() => {});
+  }, []);
+  return (
+    <div className="p-6 space-y-6 max-w-3xl">
+      <h2 className="text-lg font-semibold text-brain-text">관리자 대시보드</h2>
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          { label: "전체 회원", value: allUsers.length },
+          { label: "승인 대기", value: pending.length },
+          { label: "승인된 회원", value: allUsers.filter((u) => u.status === "approved").length },
+        ].map((s) => (
+          <div key={s.label} className="bg-brain-surface border border-brain-border rounded-xl p-4">
+            <div className="text-2xl font-bold text-brain-text">{s.value}</div>
+            <div className="text-xs text-brain-text-muted mt-1">{s.label}</div>
+          </div>
+        ))}
+      </div>
+      {pending.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <p className="text-sm font-medium text-amber-800">
+            ⚠️ 승인 대기 회원 {pending.length}명 — 회원 관리 탭에서 처리하세요.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminUsers() {
+  const [users, setUsers] = useState<UserDto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [acting, setActing] = useState<string | null>(null);
+
+  const load = () => {
+    setLoading(true);
+    api.adminUsers().then(setUsers).finally(() => setLoading(false));
+  };
+  useEffect(load, []);
+
+  const approve = async (id: string) => {
+    setActing(id);
+    await api.adminApprove(id).catch(() => {});
+    load();
+    setActing(null);
+  };
+  const reject = async (id: string) => {
+    setActing(id);
+    await api.adminReject(id).catch(() => {});
+    load();
+    setActing(null);
+  };
+
+  const STATUS_LABELS: Record<string, string> = {
+    pending_approval: "대기",
+    approved: "승인됨",
+    rejected: "거절됨",
+    suspended: "정지됨",
+  };
+
+  return (
+    <div className="p-6 space-y-4 max-w-4xl">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-brain-text">회원 관리</h2>
+        <button onClick={load} className="text-xs text-brain-text-muted hover:text-brain-text">
+          새로고침
+        </button>
+      </div>
+      {loading ? (
+        <div className="text-center text-brain-text-muted py-12">로딩 중...</div>
+      ) : (
+        <div className="space-y-2">
+          {users.map((u) => (
+            <div
+              key={u.id}
+              className="flex items-center justify-between bg-brain-surface border border-brain-border rounded-xl px-4 py-3"
+            >
+              <div>
+                <div className="text-sm font-medium text-brain-text">{u.name}</div>
+                <div className="text-xs text-brain-text-muted mt-0.5">
+                  {u.email} · {u.role}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                    u.status === "approved"
+                      ? "bg-green-100 text-green-700"
+                      : u.status === "pending_approval"
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-brain-surface-soft text-brain-text-muted"
+                  }`}
+                >
+                  {STATUS_LABELS[u.status] ?? u.status}
+                </span>
+                {u.status === "pending_approval" && (
+                  <>
+                    <button
+                      onClick={() => approve(u.id)}
+                      disabled={acting === u.id}
+                      className="text-xs px-3 py-1 rounded-lg bg-green-600 text-white disabled:opacity-50 hover:bg-green-700"
+                    >
+                      승인
+                    </button>
+                    <button
+                      onClick={() => reject(u.id)}
+                      disabled={acting === u.id}
+                      className="text-xs px-3 py-1 rounded-lg bg-brain-surface border border-brain-border text-brain-text-muted disabled:opacity-50 hover:text-brain-text"
+                    >
+                      거절
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+          {users.length === 0 && (
+            <div className="text-center text-brain-text-muted py-12 text-sm">회원 없음</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminContent() {
+  const [modules, setModules] = useState<AdminModuleDto[]>([]);
+  const [selectedMod, setSelectedMod] = useState<AdminModuleDto | null>(null);
+  const [lessons, setLessons] = useState<AdminLessonDto[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.adminModules().then(setModules).finally(() => setLoading(false));
+  }, []);
+
+  const selectMod = async (mod: AdminModuleDto) => {
+    setSelectedMod(mod);
+    const ls = await api.adminLessons(mod.id);
+    setLessons(ls);
+  };
+
+  return (
+    <div className="flex h-full overflow-hidden">
+      {/* Module list */}
+      <div className="w-64 border-r border-brain-border flex flex-col overflow-hidden">
+        <div className="px-4 py-3 border-b border-brain-border flex items-center justify-between">
+          <span className="text-xs font-semibold text-brain-text-muted uppercase">모듈</span>
+        </div>
+        <div className="flex-1 overflow-y-auto py-2">
+          {loading ? (
+            <div className="text-center text-brain-text-muted text-xs py-6">로딩...</div>
+          ) : (
+            modules.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => selectMod(m)}
+                className={`w-full text-left px-4 py-3 text-sm transition-colors ${
+                  selectedMod?.id === m.id
+                    ? "bg-brain-accent-soft text-brain-accent"
+                    : "text-brain-text hover:bg-brain-surface-soft"
+                }`}
+              >
+                <div className="font-medium truncate">{m.title}</div>
+                <div className="text-xs text-brain-text-muted">{m.lesson_count}레슨</div>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Lesson list */}
+      <div className="flex-1 overflow-y-auto p-4">
+        {!selectedMod ? (
+          <div className="text-center text-brain-text-muted text-sm py-16">모듈을 선택하세요.</div>
+        ) : (
+          <>
+            <h2 className="text-base font-semibold text-brain-text mb-4">{selectedMod.title}</h2>
+            <div className="space-y-2 max-w-2xl">
+              {lessons.map((l, idx) => (
+                <div
+                  key={l.id}
+                  className="bg-brain-surface border border-brain-border rounded-xl p-4"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className="text-xs text-brain-text-muted mr-2">#{idx + 1}</span>
+                      <span className="text-sm font-medium text-brain-text">{l.title}</span>
+                      {l.author && (
+                        <div className="text-xs text-brain-text-muted mt-1">저자: {l.author}</div>
+                      )}
+                      {l.objectives?.length > 0 && (
+                        <ul className="text-xs text-brain-text-muted mt-2 space-y-0.5">
+                          {l.objectives.slice(0, 2).map((o, i) => (
+                            <li key={i}>· {o}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                    <span className="text-xs text-brain-text-soft">
+                      {l.text_excerpt_id ? "텍스트 있음" : "텍스트 없음"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {lessons.length === 0 && (
+                <div className="text-center text-brain-text-muted text-sm py-12">레슨 없음</div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AdminAI() {
+  const [ratings, setRatings] = useState<AdminTutorRatingsDto | null>(null);
+  useEffect(() => {
+    api.adminTutorRatings(20).then(setRatings).catch(() => {});
+  }, []);
+
+  return (
+    <div className="p-6 space-y-6 max-w-3xl">
+      <h2 className="text-lg font-semibold text-brain-text">AI 코치 제어</h2>
+
+      {/* Stats */}
+      {ratings && (
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-brain-surface border border-brain-border rounded-xl p-4">
+            <div className="text-2xl font-bold text-brain-text">{ratings.summary.count}</div>
+            <div className="text-xs text-brain-text-muted mt-1">총 평가 수</div>
+          </div>
+          <div className="bg-brain-surface border border-brain-border rounded-xl p-4">
+            <div className="text-2xl font-bold text-brain-text">
+              {ratings.summary.average?.toFixed(1) ?? "-"}
+            </div>
+            <div className="text-xs text-brain-text-muted mt-1">평균 평점</div>
+          </div>
+          <div className="bg-brain-surface border border-brain-border rounded-xl p-4">
+            <div className="text-2xl font-bold text-brain-text">
+              {ratings.summary.by_model.length}
+            </div>
+            <div className="text-xs text-brain-text-muted mt-1">사용 모델 수</div>
+          </div>
+        </div>
+      )}
+
+      {/* Stage-specific prompts */}
+      <div className="bg-brain-surface border border-brain-border rounded-xl p-5">
+        <h3 className="text-sm font-semibold text-brain-text mb-3">3부 프로토콜 AI 설정</h3>
+        <p className="text-xs text-brain-text-muted mb-4">
+          각 부의 AI 피드백 프롬프트는 레슨별로 설정됩니다.
+          <br />콘텐츠 관리 탭에서 레슨을 선택하여 시스템 프롬프트를 편집하세요.
+        </p>
+        <div className="space-y-3">
+          {["1부 · 시각화 피드백", "2부 · 인지구조 피드백", "3부 · 글쓰기 피드백"].map(
+            (label) => (
+              <div
+                key={label}
+                className="flex items-center justify-between p-3 bg-brain-surface-soft rounded-lg"
+              >
+                <span className="text-xs text-brain-text">{label}</span>
+                <span className="text-xs text-brain-text-soft">레슨별 프롬프트 사용</span>
+              </div>
+            )
+          )}
+        </div>
+      </div>
+
+      {/* Recent ratings */}
+      {ratings && ratings.recent.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-brain-text mb-3">최근 AI 피드백 평가</h3>
+          <div className="space-y-2">
+            {ratings.recent.slice(0, 8).map((r) => (
+              <div
+                key={r.id}
+                className="bg-brain-surface border border-brain-border rounded-lg p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-xs text-brain-text line-clamp-2">{r.message_content}</p>
+                  <div className="shrink-0 flex items-center gap-1.5">
+                    {"⭐".repeat(r.rating)}
+                    <span className="text-xs text-brain-text-muted">({r.rating})</span>
+                  </div>
+                </div>
+                {r.feedback && (
+                  <p className="text-xs text-brain-text-muted mt-1.5 italic">"{r.feedback}"</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminTheme() {
+  const { skin, accent, hl, setSkin, setAccent, setHl } = useTheme();
+  const SKINS: { id: Skin; label: string; desc: string }[] = [
+    { id: "warm", label: "Warm", desc: "테라코타 + 종이 질감" },
+    { id: "slate", label: "Slate", desc: "중립 회색 + 모던" },
+    { id: "dark", label: "Dark", desc: "다크 그레이" },
+    { id: "ivory", label: "Ivory", desc: "아이보리 + 스큐어모피즘" },
+  ];
+  return (
+    <div className="p-6 space-y-6 max-w-xl">
+      <h2 className="text-lg font-semibold text-brain-text">테마 관리</h2>
+      {/* Skin */}
+      <div>
+        <h3 className="text-xs font-semibold text-brain-text-muted uppercase tracking-wide mb-3">스킨</h3>
+        <div className="grid grid-cols-2 gap-3">
+          {SKINS.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setSkin(s.id)}
+              className={`text-left p-4 rounded-xl border-2 transition-all ${
+                skin === s.id
+                  ? "border-brain-accent bg-brain-accent-soft"
+                  : "border-brain-border hover:border-brain-accent/50"
+              }`}
+            >
+              <div className="text-sm font-semibold text-brain-text">{s.label}</div>
+              <div className="text-xs text-brain-text-muted mt-0.5">{s.desc}</div>
+              {skin === s.id && <div className="text-xs text-brain-accent mt-1 font-medium">✓ 현재 적용됨</div>}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Accent color (warm) */}
+      {skin === "warm" && (
+        <div>
+          <h3 className="text-xs font-semibold text-brain-text-muted uppercase tracking-wide mb-3">액센트 색상</h3>
+          <div className="flex gap-2">
+            {ACCENT_OPTIONS.map((c) => (
+              <button
+                key={c}
+                onClick={() => setAccent(c)}
+                style={{ background: c }}
+                className={`w-8 h-8 rounded-full transition-all ${
+                  accent === c ? "ring-2 ring-offset-2 ring-brain-accent scale-110" : "hover:scale-105"
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Highlight color (non-warm) */}
+      {skin !== "warm" && (
+        <div>
+          <h3 className="text-xs font-semibold text-brain-text-muted uppercase tracking-wide mb-3">하이라이트 색상</h3>
+          <div className="flex gap-2">
+            {HL_OPTIONS.map((c) => (
+              <button
+                key={c}
+                onClick={() => setHl(c)}
+                style={{ background: c }}
+                className={`w-8 h-8 rounded-full transition-all ${
+                  hl === c ? "ring-2 ring-offset-2 ring-brain-accent scale-110" : "hover:scale-105"
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminAnalytics() {
+  return (
+    <div className="p-6 max-w-3xl">
+      <h2 className="text-lg font-semibold text-brain-text mb-6">분석 / 통계</h2>
+      <div className="bg-brain-surface border border-brain-border rounded-xl p-8 text-center">
+        <div className="text-3xl mb-3">📊</div>
+        <p className="text-sm text-brain-text-muted">
+          상세 분석 기능은 추후 업데이트 예정입니다.
+          <br />회원 진행도는 회원 관리 탭에서 확인하세요.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── Main AdminShell ───────────────────────────────────────
+
+export function AdminShell({ user, onLogout }: Props) {
+  const [screen, setScreen] = useState<AdminScreen>("dashboard");
+
+  const PANELS: Record<AdminScreen, React.ReactNode> = {
+    dashboard: <AdminDashboard />,
+    users: <AdminUsers />,
+    content: <AdminContent />,
+    ai: <AdminAI />,
+    theme: <AdminTheme />,
+    analytics: <AdminAnalytics />,
+  };
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-brain-bg">
+      {/* Sidebar */}
+      <div className="w-52 border-r border-brain-border bg-brain-surface flex flex-col shrink-0">
+        <div className="px-4 py-4 border-b border-brain-border">
+          <div className="text-sm font-bold text-brain-text">Brain180</div>
+          <div className="text-xs text-brain-text-muted mt-0.5">관리자 모드</div>
+        </div>
+        <nav className="flex-1 py-2">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setScreen(item.id)}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors text-left ${
+                screen === item.id
+                  ? "bg-brain-accent-soft text-brain-accent font-medium"
+                  : "text-brain-text hover:bg-brain-surface-soft"
+              }`}
+            >
+              <span>{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="border-t border-brain-border p-3">
+          <div className="text-xs text-brain-text-muted truncate mb-2">{user.email}</div>
+          <button
+            onClick={onLogout}
+            className="w-full text-xs text-brain-text-muted hover:text-brain-text py-1"
+          >
+            로그아웃
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">{PANELS[screen]}</div>
+    </div>
+  );
+}

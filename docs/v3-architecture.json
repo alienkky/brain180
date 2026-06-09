@@ -1,0 +1,387 @@
+{
+  "nodes": [
+    {
+      "id": "c001",
+      "kind": "system",
+      "title": "로그인 / 회원가입",
+      "sub": "이메일·소셜 로그인",
+      "x": 700,
+      "y": 0
+    },
+    {
+      "id": "c002",
+      "kind": "system",
+      "title": "학습 대시보드",
+      "sub": "진행도 / 완료 레슨 / 포인트",
+      "x": 700,
+      "y": 300
+    },
+    {
+      "id": "c003",
+      "kind": "system",
+      "title": "텍스트 라이브러리",
+      "sub": "레슨 선택 (어린왕자 등)",
+      "x": 700,
+      "y": 600
+    },
+    {
+      "id": "c010",
+      "kind": "system",
+      "title": "1부",
+      "sub": "글의 내용 이해하기",
+      "x": 200,
+      "y": 950
+    },
+    {
+      "id": "c011",
+      "kind": "system",
+      "title": "텍스트 블록 추출",
+      "sub": "조사 제거 → 명사·동사 블록",
+      "x": 0,
+      "y": 1250
+    },
+    {
+      "id": "c012",
+      "kind": "system",
+      "title": "구조적 시각화 캔버스",
+      "sub": "단어 드래그 → 노드 다이어그램",
+      "x": 200,
+      "y": 1250
+    },
+    {
+      "id": "c013",
+      "kind": "system",
+      "title": "다이어그램 설명하기",
+      "sub": "글 입력 또는 음성 녹음",
+      "x": 400,
+      "y": 1250
+    },
+    {
+      "id": "c014",
+      "kind": "agent",
+      "title": "AI 코치 #1",
+      "sub": "1부 구조화 피드백",
+      "x": 200,
+      "y": 1550
+    },
+    {
+      "id": "c015",
+      "kind": "note",
+      "title": "완료 판단",
+      "sub": "수정 반복 or 2부 진행",
+      "x": 200,
+      "y": 1850,
+      "body": "AI 판단 기준 충족 시 → 2부 진행\n미충족 시 → 시각화 캔버스로 돌아가 수정"
+    },
+    {
+      "id": "c020",
+      "kind": "system",
+      "title": "2부",
+      "sub": "저자의 인지구조 이해하기",
+      "x": 750,
+      "y": 950
+    },
+    {
+      "id": "c021",
+      "kind": "system",
+      "title": "대상 + 렌즈 도표화",
+      "sub": "저자가 무엇을 어떤 렌즈로 봤는지 캔버스",
+      "x": 600,
+      "y": 1250
+    },
+    {
+      "id": "c022",
+      "kind": "system",
+      "title": "도식 기반 스피치/글쓰기",
+      "sub": "저자의 렌즈 설명 (텍스트·음성)",
+      "x": 800,
+      "y": 1250
+    },
+    {
+      "id": "c023",
+      "kind": "agent",
+      "title": "AI 코치 #2",
+      "sub": "2부 인지구조 피드백",
+      "x": 700,
+      "y": 1550
+    },
+    {
+      "id": "c024",
+      "kind": "note",
+      "title": "완료 판단",
+      "sub": "수정 반복 or 3부 진행",
+      "x": 700,
+      "y": 1850,
+      "body": "AI 판단 기준 충족 시 → 3부 진행\n미충족 시 → 도표화로 돌아가 수정"
+    },
+    {
+      "id": "c030",
+      "kind": "system",
+      "title": "3부",
+      "sub": "저자의 렌즈를 자신의 뇌에 셋팅",
+      "x": 1250,
+      "y": 950
+    },
+    {
+      "id": "c031",
+      "kind": "system",
+      "title": "종합 글쓰기 에디터",
+      "sub": "1·2부 종합 → 한편의 글 완성",
+      "x": 1150,
+      "y": 1250
+    },
+    {
+      "id": "c032",
+      "kind": "agent",
+      "title": "AI 코치 #3",
+      "sub": "글쓰기 피드백 (구조·표현·논리)",
+      "x": 1350,
+      "y": 1250
+    },
+    {
+      "id": "c033",
+      "kind": "note",
+      "title": "완료 판단",
+      "sub": "수정 반복 or 레슨 완료",
+      "x": 1250,
+      "y": 1550,
+      "body": "AI 판단 기준 충족 시 → 레슨 완료\n미충족 시 → 글쓰기 에디터로 돌아가 수정"
+    },
+    {
+      "id": "c040",
+      "kind": "system",
+      "title": "레슨 완료",
+      "sub": "포트폴리오 저장 / 다음 레슨",
+      "x": 700,
+      "y": 2150
+    },
+    {
+      "id": "c050",
+      "kind": "note",
+      "title": "브레인180 코칭 프로토콜 v3",
+      "sub": "학습자 규칙 요약",
+      "x": -350,
+      "y": 1250,
+      "body": "1부 글의 내용 이해하기\n  - 명사·동사 블록 추출\n  - 구조적 시각화\n  - 다이어그램 설명\n  - AI 피드백 → 수정 반복\n\n2부 저자의 인지구조 이해하기\n  - 대상+렌즈 도표화\n  - 도식 설명 (글/음성)\n  - AI 피드백 → 수정 반복\n\n3부 저자의 렌즈 내재화\n  - 1·2부 종합 글쓰기\n  - AI 피드백 → 수정 반복"
+    },
+    {
+      "id": "a001",
+      "kind": "system",
+      "title": "관리자 로그인",
+      "sub": "Admin 전용 인증",
+      "x": 2500,
+      "y": 0
+    },
+    {
+      "id": "a002",
+      "kind": "system",
+      "title": "관리자 대시보드",
+      "sub": "전체 현황 · 알림 · 빠른 접근",
+      "x": 2500,
+      "y": 300
+    },
+    {
+      "id": "a010",
+      "kind": "system",
+      "title": "회원 관리",
+      "sub": "가입 · 등급 · 진행도",
+      "x": 2000,
+      "y": 600
+    },
+    {
+      "id": "a011",
+      "kind": "system",
+      "title": "가입 신청 승인",
+      "sub": "신규 가입 승인 / 거절",
+      "x": 1850,
+      "y": 950
+    },
+    {
+      "id": "a012",
+      "kind": "system",
+      "title": "회원 목록 / 등급",
+      "sub": "무료 / 베이직 / 프리미엄",
+      "x": 2050,
+      "y": 950
+    },
+    {
+      "id": "a013",
+      "kind": "system",
+      "title": "학습 진행도 모니터링",
+      "sub": "회원별 1·2·3부 완료 현황",
+      "x": 2250,
+      "y": 950
+    },
+    {
+      "id": "a020",
+      "kind": "system",
+      "title": "콘텐츠 관리",
+      "sub": "텍스트 · 레슨 · 모듈",
+      "x": 2550,
+      "y": 600
+    },
+    {
+      "id": "a021",
+      "kind": "system",
+      "title": "텍스트 등록",
+      "sub": "고전 텍스트 DB 추가",
+      "x": 2450,
+      "y": 950
+    },
+    {
+      "id": "a022",
+      "kind": "system",
+      "title": "레슨 구성",
+      "sub": "모듈·레슨 순서·공개여부",
+      "x": 2650,
+      "y": 950
+    },
+    {
+      "id": "a030",
+      "kind": "system",
+      "title": "AI 코치 제어",
+      "sub": "프롬프트 · 난이도 · 반복 설정",
+      "x": 2900,
+      "y": 600
+    },
+    {
+      "id": "a031",
+      "kind": "agent",
+      "title": "1부 AI 프롬프트 편집",
+      "sub": "시각화 피드백 시스템 프롬프트",
+      "x": 2750,
+      "y": 950
+    },
+    {
+      "id": "a032",
+      "kind": "agent",
+      "title": "2부 AI 프롬프트 편집",
+      "sub": "인지구조 피드백 시스템 프롬프트",
+      "x": 2950,
+      "y": 950
+    },
+    {
+      "id": "a033",
+      "kind": "agent",
+      "title": "3부 AI 프롬프트 편집",
+      "sub": "글쓰기 피드백 시스템 프롬프트",
+      "x": 3150,
+      "y": 950
+    },
+    {
+      "id": "a034",
+      "kind": "note",
+      "title": "반복 횟수 / 완료 기준",
+      "sub": "각 부 최소·최대 반복 설정",
+      "x": 2950,
+      "y": 1250,
+      "body": "각 부별 최소 반복 횟수 설정\n최대 반복 횟수 설정\nAI 자동 완료 판단 ON/OFF\n학습자 자기평가 허용 여부"
+    },
+    {
+      "id": "a040",
+      "kind": "system",
+      "title": "테마 관리",
+      "sub": "스킨 · 색상 · 타이포그래피",
+      "x": 3300,
+      "y": 600
+    },
+    {
+      "id": "a041",
+      "kind": "system",
+      "title": "스킨 선택",
+      "sub": "warm / slate / dark / ivory",
+      "x": 3200,
+      "y": 950
+    },
+    {
+      "id": "a042",
+      "kind": "system",
+      "title": "색상 커스텀",
+      "sub": "액센트·하이라이터 색상 지정",
+      "x": 3400,
+      "y": 950
+    },
+    {
+      "id": "a050",
+      "kind": "system",
+      "title": "분석 / 통계",
+      "sub": "학습 성과 데이터",
+      "x": 3600,
+      "y": 600
+    },
+    {
+      "id": "a051",
+      "kind": "system",
+      "title": "레슨별 완료율",
+      "sub": "콘텐츠 효과 측정",
+      "x": 3500,
+      "y": 950
+    },
+    {
+      "id": "a052",
+      "kind": "system",
+      "title": "회원별 진행도",
+      "sub": "학습자 성과 추적",
+      "x": 3700,
+      "y": 950
+    },
+    {
+      "id": "a060",
+      "kind": "note",
+      "title": "관리자 권한 분리",
+      "sub": "역할별 접근 범위",
+      "x": 1900,
+      "y": 300,
+      "body": "슈퍼어드민: 전 기능\n콘텐츠 관리자: 텍스트·레슨만\nAI 운영자: AI 프롬프트·반복 설정만\n\n관리자 접근 = 별도 /admin 경로\n학습자 계정으로 관리자 화면 접근 불가"
+    }
+  ],
+  "edges": [
+    { "id": "ec001", "from": "c001", "to": "c002", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ec002", "from": "c002", "to": "c003", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ec003", "from": "c003", "to": "c010", "fromPort": "s", "toPort": "n", "label": "1부 시작", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ec004", "from": "c003", "to": "c020", "fromPort": "s", "toPort": "n", "label": "2부 시작", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ec005", "from": "c003", "to": "c030", "fromPort": "s", "toPort": "n", "label": "3부 시작", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ec010", "from": "c010", "to": "c011", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ec011", "from": "c011", "to": "c012", "fromPort": "e", "toPort": "w", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ec012", "from": "c012", "to": "c013", "fromPort": "e", "toPort": "w", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ec013", "from": "c013", "to": "c014", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ec014", "from": "c014", "to": "c015", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ec015", "from": "c015", "to": "c012", "fromPort": "w", "toPort": "s", "label": "수정 반복", "style": "dashed", "arrow": "end", "weight": "normal" },
+    { "id": "ec016", "from": "c015", "to": "c020", "fromPort": "e", "toPort": "w", "label": "완료→2부", "style": "solid", "arrow": "end", "weight": "bold" },
+    { "id": "ec020", "from": "c020", "to": "c021", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ec021", "from": "c021", "to": "c022", "fromPort": "e", "toPort": "w", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ec022", "from": "c022", "to": "c023", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ec023", "from": "c023", "to": "c024", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ec024", "from": "c024", "to": "c021", "fromPort": "w", "toPort": "s", "label": "수정 반복", "style": "dashed", "arrow": "end", "weight": "normal" },
+    { "id": "ec025", "from": "c024", "to": "c030", "fromPort": "e", "toPort": "w", "label": "완료→3부", "style": "solid", "arrow": "end", "weight": "bold" },
+    { "id": "ec030", "from": "c030", "to": "c031", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ec031", "from": "c031", "to": "c032", "fromPort": "e", "toPort": "w", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ec032", "from": "c032", "to": "c033", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ec033", "from": "c033", "to": "c031", "fromPort": "w", "toPort": "s", "label": "수정 반복", "style": "dashed", "arrow": "end", "weight": "normal" },
+    { "id": "ec034", "from": "c033", "to": "c040", "fromPort": "s", "toPort": "n", "label": "완료", "style": "solid", "arrow": "end", "weight": "bold" },
+    { "id": "ec040", "from": "c040", "to": "c002", "fromPort": "e", "toPort": "e", "label": "다음 레슨", "style": "dashed", "arrow": "end", "weight": "normal" },
+    { "id": "ea001", "from": "a001", "to": "a002", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ea002", "from": "a002", "to": "a010", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ea003", "from": "a002", "to": "a020", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ea004", "from": "a002", "to": "a030", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ea005", "from": "a002", "to": "a040", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ea006", "from": "a002", "to": "a050", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ea010", "from": "a010", "to": "a011", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ea011", "from": "a010", "to": "a012", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ea012", "from": "a010", "to": "a013", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ea020", "from": "a020", "to": "a021", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ea021", "from": "a020", "to": "a022", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ea030", "from": "a030", "to": "a031", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ea031", "from": "a030", "to": "a032", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ea032", "from": "a030", "to": "a033", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ea033", "from": "a030", "to": "a034", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ea040", "from": "a040", "to": "a041", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ea041", "from": "a040", "to": "a042", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ea050", "from": "a050", "to": "a051", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ea051", "from": "a050", "to": "a052", "fromPort": "s", "toPort": "n", "label": "", "style": "solid", "arrow": "end", "weight": "normal" },
+    { "id": "ex001", "from": "a031", "to": "c014", "fromPort": "w", "toPort": "e", "label": "프롬프트 적용", "style": "dashed", "arrow": "end", "weight": "normal" },
+    { "id": "ex002", "from": "a032", "to": "c023", "fromPort": "w", "toPort": "e", "label": "프롬프트 적용", "style": "dashed", "arrow": "end", "weight": "normal" },
+    { "id": "ex003", "from": "a033", "to": "c032", "fromPort": "w", "toPort": "e", "label": "프롬프트 적용", "style": "dashed", "arrow": "end", "weight": "normal" },
+    { "id": "ex004", "from": "a022", "to": "c003", "fromPort": "w", "toPort": "e", "label": "레슨 반영", "style": "dashed", "arrow": "end", "weight": "normal" }
+  ]
+}
