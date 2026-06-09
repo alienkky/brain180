@@ -283,13 +283,20 @@ function Header({
           <img
             src={branding.logo_data_url}
             alt="Brain180"
-            className="h-8 max-w-[180px] object-contain object-left"
+            className="h-12 max-w-[260px] object-contain object-left"
           />
         ) : (
-          <div className="font-display text-xl tracking-tight">Brain180</div>
+          <div className="font-display text-3xl leading-none tracking-tight">Brain180</div>
         )}
-        <div className="text-xs text-brain-text-muted">천재의 뇌인지 구조 시각화</div>
       </button>
+      {!user && (
+        <nav className="hidden items-center gap-6 text-sm text-brain-text-muted md:flex">
+          <a href="#program" className="hover:text-brain-text">프로그램</a>
+          <a href="#method" className="hover:text-brain-text">방법론</a>
+          <a href="#system" className="hover:text-brain-text">시스템</a>
+          <a href="#journey" className="hover:text-brain-text">여정</a>
+        </nav>
+      )}
       {user && (
         <div className="flex items-center gap-4 text-sm">
           <nav className="flex items-center gap-1">

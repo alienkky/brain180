@@ -222,13 +222,9 @@ export function LoginLanding({ onLoggedIn }: { onLoggedIn: (u: UserDto) => void 
 function LandingContent() {
   return (
     <div className="min-h-full bg-brain-bg text-brain-text">
-      {/* Nav — Brain180 title is in the app header above, no duplicate here */}
-      <nav className="sticky top-0 z-10 flex items-center justify-end gap-6 border-b border-brain-border bg-brain-surface/90 px-8 py-3 text-sm text-brain-text-muted backdrop-blur-sm">
-        <a href="#program" className="hover:text-brain-text">프로그램</a>
-        <a href="#method" className="hover:text-brain-text">방법론</a>
-        <a href="#system" className="hover:text-brain-text">시스템</a>
-        <a href="#journey" className="hover:text-brain-text">여정</a>
-      </nav>
+      {/* The 프로그램 / 방법론 / 시스템 / 여정 nav now lives in the global
+          header (V2Shell) for logged-out visitors, so the landing body
+          opens directly on the hero. */}
 
       {/* Hero */}
       <section className="flex flex-col gap-8 px-8 py-16 md:flex-row md:items-center md:py-24">
