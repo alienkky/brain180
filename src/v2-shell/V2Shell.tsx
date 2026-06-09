@@ -651,18 +651,12 @@ function LibraryScreen({
       </aside>
       <section className="b-content overflow-y-auto p-6">
         <ProgressSummary progress={progress} />
-        <ArtifactGallery
-          artifacts={artifacts}
-          onOpen={onOpenArtifact}
-          onBulkDelete={onBulkDeleteArtifacts}
-          onDelete={deleteArtifact}
-        />
         <CompareBar
           pins={comparePins}
           onClear={onClearPin}
           onStart={onStartCompare}
         />
-        <h2 className="mb-4 font-display text-xl">레슨</h2>
+        <h2 className="mb-4 font-display text-xl">새로운 레슨 시작하기</h2>
         {error && (
           <div className="mb-4 rounded border border-brain-danger/40 bg-brain-accent-soft/50 px-3 py-2 text-sm text-brain-danger">
             {error}
@@ -716,6 +710,14 @@ function LibraryScreen({
             );
           })}
         </ul>
+        <div className="mt-6">
+          <ArtifactGallery
+            artifacts={artifacts}
+            onOpen={onOpenArtifact}
+            onBulkDelete={onBulkDeleteArtifacts}
+            onDelete={deleteArtifact}
+          />
+        </div>
       </section>
     </div>
   );
