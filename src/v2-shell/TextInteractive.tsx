@@ -109,6 +109,10 @@ export function TextInteractive({
   const shiftAnchorRef = useRef<string | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
+  // Where the pointer first touched a word — used to give long-press a
+  // small jitter tolerance (10px) so an Apple Pencil resting on the same
+  // word still triggers 묶기 mode even with the natural hand tremor.
+  const pointerStart = useRef<{ x: number; y: number } | null>(null);
   const phraseClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const words = useMemo<WordInfo[]>(() => {
@@ -279,20 +283,41 @@ export function TextInteractive({
     [wordIndex, words, onAddPhrase],
   );
 
-  const handlePointerDown = useCallback((wordKey: string) => {
-    didLongPress.current = false;
-    longPressTimer.current = setTimeout(() => {
-      didLongPress.current = true;
-      setRangeAnchor(wordKey);
-      longPressTimer.current = null;
-      if (navigator.vibrate) navigator.vibrate(30);
-    }, 500);
-  }, []);
+  const handlePointerDown = useCallback(
+    (wordKey: string, e: React.PointerEvent) => {
+      didLongPress.current = false;
+      pointerStart.current = { x: e.clientX, y: e.clientY };
+      longPressTimer.current = setTimeout(() => {
+        didLongPress.current = true;
+        setRangeAnchor(wordKey);
+        longPressTimer.current = null;
+        if (navigator.vibrate) navigator.vibrate(30);
+      }, 500);
+    },
+    [],
+  );
 
   const cancelLongPress = useCallback(() => {
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
+    }
+    pointerStart.current = null;
+  }, []);
+
+  // Container-level pointermove: only cancel the long-press timer if the
+  // pointer actually drifted more than ~10px from the touchdown spot.
+  // Restores v1's tolerance so an Apple Pencil resting on a word still
+  // promotes to 묶기 mode after 500ms instead of getting killed by the
+  // pen's natural micro-tremor.
+  const handleContainerPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!longPressTimer.current || !pointerStart.current) return;
+    const dx = e.clientX - pointerStart.current.x;
+    const dy = e.clientY - pointerStart.current.y;
+    if (dx * dx + dy * dy > 100) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+      pointerStart.current = null;
     }
   }, []);
 
@@ -424,7 +449,7 @@ export function TextInteractive({
       </div>
       <div
         className="flex-1 overflow-y-auto px-6 py-6"
-        onPointerMove={cancelLongPress}
+        onPointerMove={handleContainerPointerMove}
         onContextMenu={(e) => e.preventDefault()}
         style={{ touchAction: "pan-y" }}
       >
@@ -500,7 +525,7 @@ export function TextInteractive({
                     return (
                       <span
                         key={w.key}
-                        onPointerDown={() => handlePointerDown(w.key)}
+                        onPointerDown={(e) => handlePointerDown(w.key, e)}
                         onPointerUp={(e) => handleWordPointerUp(w, e)}
                         onPointerCancel={cancelLongPress}
                         onClick={(e) => handleWordClick(w, e)}
@@ -550,7 +575,7 @@ export function TextInteractive({
                   return (
                     <span
                       key={w.key}
-                      onPointerDown={() => handlePointerDown(w.key)}
+                      onPointerDown={(e) => handlePointerDown(w.key, e)}
                       onPointerUp={cancelLongPress}
                       onPointerCancel={cancelLongPress}
                       onClick={(e) => handleWordClick(w, e)}

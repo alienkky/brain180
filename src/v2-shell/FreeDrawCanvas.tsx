@@ -161,6 +161,37 @@ function FreeCanvasBase({ initial, onSave, onChange, onCanvasRef, onAskTutor, di
     return () => ro.disconnect();
   }, [redraw]);
 
+  // iOS Safari ignores preventDefault() called from a React synthetic
+  // pointer/touch handler because the underlying listener is registered
+  // as passive. The page therefore scrolls while the learner is drawing
+  // with Apple Pencil even though our React onPointerMove blocks default
+  // synthetically. Attach native non-passive listeners on the canvas so
+  // preventDefault() truly suppresses the browser's pan / scroll.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const block = (e: Event) => {
+      e.preventDefault();
+    };
+    const opts: AddEventListenerOptions = { passive: false };
+    canvas.addEventListener("touchstart", block, opts);
+    canvas.addEventListener("touchmove", block, opts);
+    canvas.addEventListener("touchend", block, opts);
+    canvas.addEventListener("touchcancel", block, opts);
+    canvas.addEventListener("gesturestart", block, opts);
+    canvas.addEventListener("gesturechange", block, opts);
+    canvas.addEventListener("gestureend", block, opts);
+    return () => {
+      canvas.removeEventListener("touchstart", block, opts);
+      canvas.removeEventListener("touchmove", block, opts);
+      canvas.removeEventListener("touchend", block, opts);
+      canvas.removeEventListener("touchcancel", block, opts);
+      canvas.removeEventListener("gesturestart", block, opts);
+      canvas.removeEventListener("gesturechange", block, opts);
+      canvas.removeEventListener("gestureend", block, opts);
+    };
+  }, []);
+
   function buildSnapshot(): FreeCanvasJson {
     return {
       version: 1,
