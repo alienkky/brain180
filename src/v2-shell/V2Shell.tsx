@@ -634,7 +634,7 @@ function LibraryScreen({
   return (
     <div className="grid h-full grid-cols-[280px_1fr] gap-0">
       <aside className="b-sidebar overflow-y-auto border-r border-brain-border bg-brain-surface-soft p-4">
-        <h2 className="b-sidebar__title mb-3 font-display text-lg">분야</h2>
+        <h2 className="b-sidebar__title mb-3 font-display text-lg">라이브러리</h2>
         {!modules && <p className="text-sm text-brain-text-muted">불러오는 중…</p>}
         {modules && modules.length === 0 && (
           <p className="text-sm text-brain-text-muted">
@@ -3357,29 +3357,60 @@ function ModulesByField({
     ...FIELD_ORDER.filter((f) => grouped.has(f)),
     ...Array.from(grouped.keys()).filter((f) => !FIELD_ORDER.includes(f)),
   ];
+  // Track which field groups are collapsed by the learner. Default: every
+  // field is expanded so the first visit shows the full library at a glance.
+  // Active module's field stays expanded automatically — collapsing it would
+  // hide the very item the learner has selected.
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const activeField = activeModuleId
+    ? modules.find((m) => m.id === activeModuleId)?.field
+    : undefined;
+  const toggleField = (f: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(f)) next.delete(f);
+      else next.add(f);
+      return next;
+    });
+  };
   return (
     <div className="space-y-4">
       {fields.map((field) => {
         const list = grouped.get(field) ?? [];
         const label = FIELD_LABEL[field] ?? field;
+        const isOpen = field === activeField || !collapsed.has(field);
         return (
           <section key={field} className="b-fieldgroup">
-            <h3
-              className="b-fieldgroup__label mb-1.5 text-[10px] uppercase tracking-[0.18em]"
+            <button
+              type="button"
+              onClick={() => toggleField(field)}
+              aria-expanded={isOpen}
+              className="b-fieldgroup__label mb-1.5 flex w-full items-center gap-1 text-[10px] uppercase tracking-[0.18em] hover:opacity-80"
               style={{
                 color: "var(--color-brain-text-soft)",
                 fontWeight: 600,
               }}
             >
-              {label}{" "}
               <span
-                className="ml-1 text-[10px] normal-case"
+                aria-hidden
+                className="inline-block w-3 text-center text-[11px]"
+                style={{ color: "var(--color-brain-text-soft)" }}
+              >
+                {isOpen ? "▾" : "▸"}
+              </span>
+              {label}
+              <span
+                className="text-[10px] normal-case"
                 style={{ color: "var(--color-brain-text-soft)" }}
               >
                 ({list.length})
               </span>
-            </h3>
-            <ul className="b-modlist space-y-1">
+            </button>
+            <ul
+              className="b-modlist space-y-1"
+              style={isOpen ? undefined : { display: "none" }}
+              aria-hidden={!isOpen}
+            >
               {list.map((m) => (
                 <li key={m.id}>
                   <button
