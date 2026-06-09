@@ -296,12 +296,15 @@ export function TextInteractive({
     }
   }, []);
 
-  const handleWordClick = useCallback(
-    (w: WordInfo, e: React.MouseEvent) => {
-      if (didLongPress.current) {
-        didLongPress.current = false;
-        return;
-      }
+  // Track the key of the word the pointer just fired a tap on, so the
+  // synthetic click that follows a real PointerEvent does not double-add
+  // the same phrase. iPad's Apple Pencil delivers PointerEvents reliably
+  // but the trailing MouseEvent / click can be flaky or missing entirely,
+  // which is why the original onClick-only path silently dropped pen taps.
+  const pointerTapHandledKey = useRef<string | null>(null);
+
+  const executeWordTap = useCallback(
+    (w: WordInfo, shiftKey: boolean) => {
       if (rangeAnchor) {
         if (w.key === rangeAnchor) {
           onAddPhrase({
@@ -317,7 +320,7 @@ export function TextInteractive({
         setRangeAnchor(null);
         return;
       }
-      if (e.shiftKey && shiftAnchorRef.current) {
+      if (shiftKey && shiftAnchorRef.current) {
         makePhrase(shiftAnchorRef.current, w.key);
         shiftAnchorRef.current = w.key;
         return;
@@ -332,6 +335,42 @@ export function TextInteractive({
       shiftAnchorRef.current = w.key;
     },
     [rangeAnchor, makePhrase, onAddPhrase],
+  );
+
+  const handleWordPointerUp = useCallback(
+    (w: WordInfo, e: React.PointerEvent) => {
+      cancelLongPress();
+      if (didLongPress.current) {
+        didLongPress.current = false;
+        return;
+      }
+      pointerTapHandledKey.current = w.key;
+      // Drop the marker on the next tick so a stray late click still
+      // gets suppressed but a brand-new mouse click on the same key is
+      // not silently swallowed seconds later.
+      window.setTimeout(() => {
+        if (pointerTapHandledKey.current === w.key) {
+          pointerTapHandledKey.current = null;
+        }
+      }, 300);
+      executeWordTap(w, e.shiftKey);
+    },
+    [cancelLongPress, executeWordTap],
+  );
+
+  const handleWordClick = useCallback(
+    (w: WordInfo, e: React.MouseEvent) => {
+      if (pointerTapHandledKey.current === w.key) {
+        pointerTapHandledKey.current = null;
+        return;
+      }
+      if (didLongPress.current) {
+        didLongPress.current = false;
+        return;
+      }
+      executeWordTap(w, e.shiftKey);
+    },
+    [executeWordTap],
   );
 
   const handlePhraseClick = useCallback(
@@ -462,7 +501,7 @@ export function TextInteractive({
                       <span
                         key={w.key}
                         onPointerDown={() => handlePointerDown(w.key)}
-                        onPointerUp={cancelLongPress}
+                        onPointerUp={(e) => handleWordPointerUp(w, e)}
                         onPointerCancel={cancelLongPress}
                         onClick={(e) => handleWordClick(w, e)}
                         className="inline-block"
