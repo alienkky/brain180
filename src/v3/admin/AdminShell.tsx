@@ -13,6 +13,7 @@ import type { AdminScreen, V3User } from "../types";
 interface Props {
   user: V3User;
   onLogout: () => void;
+  onSwitchToLearning?: () => void;
 }
 
 const NAV_ITEMS: { id: AdminScreen; label: string; icon: string }[] = [
@@ -419,7 +420,7 @@ function AdminAnalytics() {
 
 // ── Main AdminShell ───────────────────────────────────────
 
-export function AdminShell({ user, onLogout }: Props) {
+export function AdminShell({ user, onLogout, onSwitchToLearning }: Props) {
   const [screen, setScreen] = useState<AdminScreen>("dashboard");
 
   const PANELS: Record<AdminScreen, React.ReactNode> = {
@@ -455,8 +456,16 @@ export function AdminShell({ user, onLogout }: Props) {
             </button>
           ))}
         </nav>
-        <div className="border-t border-brain-border p-3">
-          <div className="text-xs text-brain-text-muted truncate mb-2">{user.email}</div>
+        <div className="border-t border-brain-border p-3 space-y-2">
+          {onSwitchToLearning && (
+            <button
+              onClick={onSwitchToLearning}
+              className="w-full text-xs bg-brain-accent-soft text-brain-accent hover:opacity-80 py-2 rounded-lg font-medium transition-opacity"
+            >
+              📖 학습자 모드로 보기
+            </button>
+          )}
+          <div className="text-xs text-brain-text-muted truncate">{user.email}</div>
           <button
             onClick={onLogout}
             className="w-full text-xs text-brain-text-muted hover:text-brain-text py-1"

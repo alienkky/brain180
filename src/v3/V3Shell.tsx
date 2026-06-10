@@ -18,6 +18,7 @@ export function V3Shell() {
   const [authState, setAuthState] = useState<AuthState>("loading");
   const [user, setUser] = useState<V3User | null>(null);
   const [screen, setScreen] = useState<V3Screen>("dashboard");
+  const [adminMode, setAdminMode] = useState(true); // admin users: true=관리자패널 / false=학습자모드
 
   const session = useProtocolStore((s) => s.session);
 
@@ -42,6 +43,8 @@ export function V3Shell() {
     setUser(u);
     setAuthState("authenticated");
     setScreen("dashboard");
+    // admin → start in admin mode
+    setAdminMode(true);
   };
 
   const handleLogout = async () => {
@@ -67,16 +70,20 @@ export function V3Shell() {
     );
   }
 
-  // Admin mode
-  if (user?.role === "admin") {
+  // Admin + adminMode → admin panel
+  if (user?.role === "admin" && adminMode) {
     return (
       <div data-skin={skin} style={rootThemeStyle(skin, accent, hl)} className="h-screen overflow-hidden">
-        <AdminShell user={user} onLogout={handleLogout} />
+        <AdminShell
+          user={user}
+          onLogout={handleLogout}
+          onSwitchToLearning={() => setAdminMode(false)}
+        />
       </div>
     );
   }
 
-  // Customer mode
+  // Customer mode (or admin in learning mode)
   return (
     <div
       data-skin={skin}
@@ -103,6 +110,15 @@ export function V3Shell() {
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-3">
+            {/* Admin: show switch-back button */}
+            {user?.role === "admin" && (
+              <button
+                onClick={() => setAdminMode(true)}
+                className="px-3 py-1 rounded-md text-xs font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors border border-amber-300"
+              >
+                🔧 관리자 패널
+              </button>
+            )}
             <span className="text-xs text-brain-text-muted">{user?.name}</span>
             <button
               onClick={handleLogout}
