@@ -100,11 +100,11 @@ export function LibraryScreen({ onSessionStart }: Props) {
       {/* Module sidebar */}
       <div className="w-56 border-r border-brain-border bg-brain-surface flex flex-col overflow-hidden">
         <div className="px-4 py-3 border-b border-brain-border">
-          <span className="text-xs font-semibold text-brain-text-muted uppercase tracking-wide">모듈</span>
+          <span className="text-xs font-semibold text-brain-text-muted uppercase tracking-wide">라이브러리</span>
         </div>
         <div className="flex-1 overflow-y-auto py-2">
           {modules.length === 0 ? (
-            <p className="text-xs text-brain-text-soft text-center py-8">모듈 없음</p>
+            <p className="text-xs text-brain-text-soft text-center py-8">라이브러리 없음</p>
           ) : (
             modules.map((mod) => (
               <button
@@ -130,7 +130,7 @@ export function LibraryScreen({ onSessionStart }: Props) {
       <div className="flex-1 flex flex-col overflow-hidden">
         {!selectedModule ? (
           <div className="flex-1 flex items-center justify-center text-brain-text-muted text-sm">
-            왼쪽에서 모듈을 선택하세요.
+            왼쪽에서 라이브러리를 선택하세요.
           </div>
         ) : (
           <>
@@ -143,7 +143,7 @@ export function LibraryScreen({ onSessionStart }: Props) {
             <div className="flex-1 overflow-y-auto p-4">
               {lessons.length === 0 ? (
                 <p className="text-sm text-brain-text-soft text-center py-12">
-                  이 모듈에 레슨이 없습니다.
+                  이 라이브러리에 레슨이 없습니다.
                 </p>
               ) : (
                 <div className="grid grid-cols-1 gap-3 max-w-2xl">
