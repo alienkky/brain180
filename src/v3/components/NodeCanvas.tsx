@@ -438,12 +438,29 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
       };
 
       // 좌/중/우 · 상/중/하 — 끝과 끝, 끝과 중심 모든 조합 정렬 (포토샵 스마트 가이드)
+      //
+      // cytoscape 드래그는 "이전 위치 + 포인터 이동량"이라, 스냅으로 옮긴 위치가
+      // 다음 이벤트의 기준이 되어 한 번 붙으면 임계값 이상 튕겨야만 탈출하는
+      // 끈적임이 생긴다. 직전에 적용한 스냅 보정량(snapOffset)을 기억했다가
+      // 매 이벤트마다 빼서 "포인터를 그대로 따라간 가상 위치"를 복원해 판정 —
+      // 포인터가 임계 밖이면 즉시 풀린다.
+      let snapOffset = { x: 0, y: 0 };
+      cy.on("grab", "node", () => {
+        snapOffset = { x: 0, y: 0 };
+      });
       cy.on("drag", "node", (evt) => {
         const node = evt.target;
-        const thresh = 8 / cy.zoom(); // 화면 기준 8px
+        const thresh = 6 / cy.zoom(); // 화면 기준 6px
+        const cur = node.position();
+        // 스냅 보정 제거 → 포인터 추종 가상 위치
+        const vx = cur.x - snapOffset.x;
+        const vy = cur.y - snapOffset.y;
         const bb = node.boundingBox({ includeLabels: false, includeOverlays: false });
-        const dragXs = [bb.x1, (bb.x1 + bb.x2) / 2, bb.x2];
-        const dragYs = [bb.y1, (bb.y1 + bb.y2) / 2, bb.y2];
+        // bb 는 현재(스냅된) 위치 기준 → 가상 위치 기준으로 평행이동
+        const offX = vx - cur.x;
+        const offY = vy - cur.y;
+        const dragXs = [bb.x1 + offX, (bb.x1 + bb.x2) / 2 + offX, bb.x2 + offX];
+        const dragYs = [bb.y1 + offY, (bb.y1 + bb.y2) / 2 + offY, bb.y2 + offY];
         let shiftX: number | null = null;
         let shiftY: number | null = null;
         let guideX: number | null = null;
@@ -468,10 +485,8 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
             }
           }
         });
-        if (shiftX !== null || shiftY !== null) {
-          const pos = node.position();
-          node.position({ x: pos.x + (shiftX ?? 0), y: pos.y + (shiftY ?? 0) });
-        }
+        node.position({ x: vx + (shiftX ?? 0), y: vy + (shiftY ?? 0) });
+        snapOffset = { x: shiftX ?? 0, y: shiftY ?? 0 };
         drawGuides(guideX, guideY);
       });
 
