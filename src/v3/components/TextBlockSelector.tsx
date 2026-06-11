@@ -258,7 +258,7 @@ export function TextBlockSelector({ body, blocks, onAddBlock, onRemoveBlock, hig
       setRangeAnchor(wordKey);
       longPressTimer.current = null;
       if (navigator.vibrate) navigator.vibrate(30);
-    }, 500);
+    }, 300);
   }, []);
 
   const cancelLongPress = useCallback(() => {
