@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import cytoscape from "cytoscape";
 import type { Core } from "cytoscape";
+import { useTheme } from "../../v2-shell/useTheme";
 import type { V3Node, V3Edge, EdgeDir } from "../types";
 
 // 화살표 방향 순환: 단방향 → 양방향 → 역방향 → 없음 → 단방향
@@ -46,6 +47,7 @@ function findFreePosition(cy: Core, desiredX: number, desiredY: number): { x: nu
 }
 
 export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props) {
+  const { skin } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const guideRef = useRef<HTMLCanvasElement>(null);
   const cyRef = useRef<Core | null>(null);
@@ -505,6 +507,23 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 테마(스킨) 색상 동기화 — 노드 글자/엣지 라벨이 하드코딩 색이면 다크 모드에서 안 보임
+  useEffect(() => {
+    const cy = cyRef.current;
+    const el = containerRef.current;
+    if (!cy || !el) return;
+    const css = getComputedStyle(el);
+    const text = css.getPropertyValue("--color-brain-text").trim() || "#1a1a1a";
+    const muted = css.getPropertyValue("--color-brain-text-muted").trim() || "#6b7280";
+    const surface = css.getPropertyValue("--color-brain-surface").trim() || "#ffffff";
+    cy.style()
+      .selector("node")
+      .style({ color: text })
+      .selector("edge")
+      .style({ color: muted, "text-background-color": surface })
+      .update();
+  }, [skin]);
 
   // Add node from word bank drop
   const handleWordClick = useCallback(
