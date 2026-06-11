@@ -22,8 +22,22 @@ export function LibraryScreen({ onSessionStart }: Props) {
   const [lessons, setLessons] = useState<LessonDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState<string | null>(null);
-  const { startSession } = useProtocolStore();
+  const { startSession, resumeLesson } = useProtocolStore();
   const existingSession = useProtocolStore((s) => s.session);
+  const savedMap = useProtocolStore((s) => s.saved);
+
+  // 레슨별 진행 상태 — 현재 세션 또는 임시저장에서
+  const lessonProgress = (lessonId: string) => {
+    const sess =
+      existingSession && existingSession.lessonId === lessonId && !existingSession.completedAt
+        ? existingSession
+        : savedMap[lessonId];
+    if (!sess) return null;
+    return {
+      stage: sess.currentStage,
+      done: [sess.stage1.done, sess.stage2.done, sess.stage3.done] as const,
+    };
+  };
 
   useEffect(() => {
     api.modules().then(setModules).finally(() => setLoading(false));
@@ -40,11 +54,16 @@ export function LibraryScreen({ onSessionStart }: Props) {
       alert("이 레슨에 텍스트가 등록되지 않았습니다.");
       return;
     }
-    if (existingSession && !existingSession.completedAt) {
-      const ok = window.confirm(
-        `진행 중인 학습(${existingSession.lessonTitle})이 있습니다.\n새 레슨을 시작하면 기존 진행 내용이 사라집니다. 계속할까요?`
-      );
-      if (!ok) return;
+    // 이미 진행 중인 레슨이면 그대로 이어서
+    if (existingSession?.lessonId === lesson.id && !existingSession.completedAt) {
+      onSessionStart();
+      return;
+    }
+    // 임시저장이 있으면 서버 호출 없이 복원 (현재 진행 중인 다른 레슨은 자동 임시저장)
+    if (savedMap[lesson.id]) {
+      resumeLesson(lesson.id);
+      onSessionStart();
+      return;
     }
     setStarting(lesson.id);
     try {
@@ -128,40 +147,71 @@ export function LibraryScreen({ onSessionStart }: Props) {
                 </p>
               ) : (
                 <div className="grid grid-cols-1 gap-3 max-w-2xl">
-                  {lessons.map((lesson, idx) => (
-                    <div
-                      key={lesson.id}
-                      className="bg-brain-surface border border-brain-border rounded-xl p-4 hover:border-brain-accent/50 transition-colors"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs text-brain-text-soft">#{idx + 1}</span>
-                            <h3 className="text-sm font-semibold text-brain-text truncate">
-                              {lesson.title}
-                            </h3>
+                  {lessons.map((lesson, idx) => {
+                    const prog = lessonProgress(lesson.id);
+                    return (
+                      <div
+                        key={lesson.id}
+                        className={`bg-brain-surface border rounded-xl p-4 transition-colors ${
+                          prog ? "border-brain-accent/60" : "border-brain-border hover:border-brain-accent/50"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs text-brain-text-soft">#{idx + 1}</span>
+                              <h3 className="text-sm font-semibold text-brain-text truncate">
+                                {lesson.title}
+                              </h3>
+                            </div>
+                            {lesson.objectives?.length > 0 && (
+                              <ul className="text-xs text-brain-text-muted space-y-0.5 mt-2">
+                                {lesson.objectives.slice(0, 2).map((obj, i) => (
+                                  <li key={i} className="flex gap-1.5">
+                                    <span className="text-brain-accent shrink-0">·</span>
+                                    <span className="line-clamp-1">{obj}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                            {/* 진행 단계 표시 — ①②③ */}
+                            {prog && (
+                              <div className="mt-2.5 flex items-center gap-1.5">
+                                {([1, 2, 3] as const).map((n) => {
+                                  const isDone = prog.done[n - 1];
+                                  const isCurrent = !isDone && prog.stage === n;
+                                  return (
+                                    <span
+                                      key={n}
+                                      className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
+                                        isDone
+                                          ? "bg-brain-accent text-white"
+                                          : isCurrent
+                                          ? "border-2 border-brain-accent text-brain-accent"
+                                          : "bg-brain-border text-brain-text-muted"
+                                      }`}
+                                    >
+                                      {isDone ? "✓" : n}
+                                    </span>
+                                  );
+                                })}
+                                <span className="ml-1 text-[11px] text-brain-accent font-medium">
+                                  {prog.stage}부 진행 중
+                                </span>
+                              </div>
+                            )}
                           </div>
-                          {lesson.objectives?.length > 0 && (
-                            <ul className="text-xs text-brain-text-muted space-y-0.5 mt-2">
-                              {lesson.objectives.slice(0, 2).map((obj, i) => (
-                                <li key={i} className="flex gap-1.5">
-                                  <span className="text-brain-accent shrink-0">·</span>
-                                  <span className="line-clamp-1">{obj}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
+                          <button
+                            onClick={() => startLesson(lesson)}
+                            disabled={starting === lesson.id}
+                            className="shrink-0 px-4 py-2 rounded-lg bg-brain-accent text-white text-xs font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
+                          >
+                            {starting === lesson.id ? "시작 중..." : prog ? "이어하기 →" : "학습 시작"}
+                          </button>
                         </div>
-                        <button
-                          onClick={() => startLesson(lesson)}
-                          disabled={starting === lesson.id}
-                          className="shrink-0 px-4 py-2 rounded-lg bg-brain-accent text-white text-xs font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
-                        >
-                          {starting === lesson.id ? "시작 중..." : "학습 시작"}
-                        </button>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

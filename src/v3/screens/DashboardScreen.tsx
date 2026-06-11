@@ -36,14 +36,18 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
         api.startSession(a.lesson.id, "practice"),
       ]);
       const t = text as TextExcerptDto;
-      startSession({
-        sessionId: newSession.id,
-        lessonId: a.lesson.id,
-        lessonTitle: a.lesson.title,
-        author: t.author || "",
-        source: t.source || "",
-        textBody: t.body || "",
-      });
+      // 아티팩트 복원은 항상 새 세션으로 (임시저장 무시, 현재 진행은 자동 보관)
+      startSession(
+        {
+          sessionId: newSession.id,
+          lessonId: a.lesson.id,
+          lessonTitle: a.lesson.title,
+          author: t.author || "",
+          source: t.source || "",
+          textBody: t.body || "",
+        },
+        { restoreSaved: false }
+      );
       if (artifact) {
         const ns: V3Node[] = artifact.canvas_json.nodes.map((n) => ({
           id: n.id,

@@ -22,16 +22,25 @@ const emptyStage = (): StageState => ({
 
 interface ProtocolStore {
   session: V3SessionState | null;
+  /** 레슨별 임시저장 — 다른 레슨으로 옮겨도 진행 내용 보존 */
+  saved: Record<string, V3SessionState>;
 
-  startSession: (params: {
-    sessionId: string;
-    lessonId: string;
-    lessonTitle: string;
-    author: string;
-    source: string;
-    textBody: string;
-  }) => void;
+  startSession: (
+    params: {
+      sessionId: string;
+      lessonId: string;
+      lessonTitle: string;
+      author: string;
+      source: string;
+      textBody: string;
+    },
+    opts?: { restoreSaved?: boolean },
+  ) => void;
   clearSession: () => void;
+  /** 임시저장 삭제 (대시보드 '삭제' 등) */
+  discardSaved: (lessonId: string) => void;
+  /** 임시저장된 레슨 이어하기 — 서버 호출 없이 복원 */
+  resumeLesson: (lessonId: string) => void;
   setStage: (stage: ProtocolStage) => void;
 
   // Stage 1
@@ -57,24 +66,59 @@ export const useProtocolStore = create<ProtocolStore>()(
   persist(
     (set) => ({
   session: null,
+  saved: {},
 
-  startSession: ({ sessionId, lessonId, lessonTitle, author, source, textBody }) =>
-    set({
-      session: {
-        sessionId,
-        lessonId,
-        lessonTitle,
-        author,
-        source,
-        textBody,
-        currentStage: 1,
-        stage1: emptyStage(),
-        stage2: emptyStage(),
-        stage3: emptyStage(),
-      },
+  startSession: ({ sessionId, lessonId, lessonTitle, author, source, textBody }, opts) =>
+    set((s) => {
+      // 현재 진행 중 세션은 자동 임시저장 (완료된 건 제외)
+      const saved = { ...s.saved };
+      if (s.session && !s.session.completedAt && s.session.lessonId !== lessonId) {
+        saved[s.session.lessonId] = s.session;
+      }
+      // 같은 레슨에 임시저장이 있으면 복원 (restoreSaved:false 면 새로 시작)
+      const restored = opts?.restoreSaved !== false ? saved[lessonId] : undefined;
+      delete saved[lessonId];
+      if (restored) {
+        return { session: restored, saved };
+      }
+      return {
+        session: {
+          sessionId,
+          lessonId,
+          lessonTitle,
+          author,
+          source,
+          textBody,
+          currentStage: 1 as const,
+          stage1: emptyStage(),
+          stage2: emptyStage(),
+          stage3: emptyStage(),
+        },
+        saved,
+      };
     }),
 
   clearSession: () => set({ session: null }),
+
+  discardSaved: (lessonId) =>
+    set((s) => {
+      const saved = { ...s.saved };
+      delete saved[lessonId];
+      return { saved };
+    }),
+
+  resumeLesson: (lessonId) =>
+    set((s) => {
+      const saved = { ...s.saved };
+      const target = saved[lessonId];
+      if (!target) return s;
+      // 현재 진행 중인 다른 레슨은 임시저장으로 보관
+      if (s.session && !s.session.completedAt && s.session.lessonId !== lessonId) {
+        saved[s.session.lessonId] = s.session;
+      }
+      delete saved[lessonId];
+      return { session: target, saved };
+    }),
 
   setStage: (stage) =>
     set((s) => s.session ? { session: { ...s.session, currentStage: stage } } : s),
@@ -176,9 +220,10 @@ export const useProtocolStore = create<ProtocolStore>()(
     }),
     {
       name: "brain180-v3-session",
-      // 완료된 세션은 복원하지 않음 (새 학습 방해 방지)
+      // 완료된 세션은 복원하지 않음 (새 학습 방해 방지). 레슨별 임시저장은 유지.
       partialize: (s) => ({
         session: s.session && !s.session.completedAt ? s.session : null,
+        saved: s.saved,
       }),
     }
   )
