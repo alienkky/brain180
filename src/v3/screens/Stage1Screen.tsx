@@ -1,7 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useProtocolStore } from "../store/useProtocolStore";
 import { NodeCanvas } from "../components/NodeCanvas";
 import { AICoach } from "../components/AICoach";
+import { TextBlockSelector } from "../components/TextBlockSelector";
 import type { BlockWord } from "../types";
 import { toCanvasJson, STAGE_DESCRIPTIONS } from "../types";
 
@@ -22,36 +23,26 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
   const [tab, setTab] = useState<Tab>("blocks");
   const [showAI, setShowAI] = useState(false);
 
-  // Word extraction: split text into token spans, user clicks to select
-  const tokens = useMemo(() => {
-    const raw = session.textBody;
-    // Split on whitespace/newline but keep structure
-    return raw.split(/(\s+)/).filter(Boolean).map((tok, i) => {
-      const isWhitespace = /^\s+$/.test(tok);
-      const existing = stage.blocks.find((b) => b.text === tok && !isWhitespace);
-      return { id: `t${i}`, text: tok, isWhitespace, selected: existing?.selected ?? false };
-    });
-  }, [session.textBody, stage.blocks]);
-
-  const toggleToken = (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed || /^\s+$/.test(text)) return;
-    const exists = stage.blocks.find((b) => b.text === trimmed);
-    if (exists) {
-      setBlocks(stage.blocks.filter((b) => b.text !== trimmed));
-    } else {
-      const newBlock: BlockWord = {
-        id: `b_${trimmed}_${Date.now()}`,
-        text: trimmed,
-        type: "other",
-        selected: true,
-      };
-      setBlocks([...stage.blocks, newBlock]);
-    }
+  const handleAddBlock = (block: BlockWord) => {
+    // 같은 위치를 덮는 기존 블록이 있으면 추가하지 않음 (중복 방지)
+    const overlaps = stage.blocks.some(
+      (b) =>
+        b.charStart !== undefined &&
+        b.charEnd !== undefined &&
+        block.charStart !== undefined &&
+        block.charEnd !== undefined &&
+        b.charStart < block.charEnd &&
+        b.charEnd > block.charStart
+    );
+    if (overlaps) return;
+    setBlocks([...stage.blocks, block]);
   };
 
-  const selectedTexts = stage.blocks.map((b) => b.text);
-  const wordBank = selectedTexts;
+  const handleRemoveBlock = (id: string) => {
+    setBlocks(stage.blocks.filter((b) => b.id !== id));
+  };
+
+  const wordBank = stage.blocks.map((b) => b.text);
   const canvasSnapshot = toCanvasJson(stage.nodes, stage.edges);
 
   const handleFinishStage = () => {
@@ -75,30 +66,17 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
             </span>
             <span className="text-xs text-brain-text-soft">{stage.blocks.length}개 블록 선택됨</span>
           </div>
-          <div className="flex-1 overflow-y-auto px-5 py-4 text-sm text-brain-text leading-[1.9]">
-            <h3 className="font-semibold text-base mb-3">{session.lessonTitle}</h3>
-            <div className="select-none">
-              {tokens.map((tok) =>
-                tok.isWhitespace ? (
-                  <span key={tok.id}>{tok.text}</span>
-                ) : (
-                  <span
-                    key={tok.id}
-                    onClick={() => tab === "blocks" ? toggleToken(tok.text) : undefined}
-                    className={`inline cursor-pointer rounded px-0.5 transition-colors ${
-                      tab === "blocks"
-                        ? selectedTexts.includes(tok.text.trim())
-                          ? "bg-brain-accent text-white"
-                          : "hover:bg-brain-surface-soft"
-                        : selectedTexts.includes(tok.text.trim())
-                        ? "bg-brain-accent/20"
-                        : ""
-                    }`}
-                  >
-                    {tok.text}
-                  </span>
-                )
-              )}
+          <div className="flex-1 overflow-hidden flex flex-col">
+            <h3 className="font-semibold text-base px-5 pt-3 pb-1 text-brain-text shrink-0">
+              {session.lessonTitle}
+            </h3>
+            <div className="flex-1 overflow-hidden">
+              <TextBlockSelector
+                body={session.textBody}
+                blocks={stage.blocks}
+                onAddBlock={handleAddBlock}
+                onRemoveBlock={handleRemoveBlock}
+              />
             </div>
           </div>
         </div>

@@ -22,6 +22,11 @@ export interface BlockWord {
   text: string;
   type: "noun" | "verb" | "other";
   selected: boolean;
+  /** 본문 내 문자 위치 — 같은 단어가 여러 번 나와도 구분 */
+  charStart?: number;
+  charEnd?: number;
+  /** 토큰 키 목록 (범위 선택 시 여러 개) */
+  wordKeys?: string[];
 }
 
 export interface V3Node {
