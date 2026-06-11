@@ -359,10 +359,18 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
         setDeleteChip(null);
       });
 
+      // taphold 후 손을 떼면 같은 엣지에 tap 도 발화됨 — 그 tap 이 칩을 지우고
+      // 방향까지 돌려버리므로, taphold 직후의 tap 한 번은 무시한다.
+      let tapholdEdgeId: string | null = null;
+
       // 화살표(엣지) 탭: 방향 순환 — 단방향 → 양방향 → 역방향 → 없음
       cy.on("tap", "edge", (evt) => {
-        setDeleteChip(null);
         const id = evt.target.id();
+        if (tapholdEdgeId === id) {
+          tapholdEdgeId = null;
+          return; // 삭제 칩 유지
+        }
+        setDeleteChip(null);
         const nextEdges = collectEdges().map((e) =>
           e.id === id ? { ...e, dir: DIR_CYCLE[e.dir ?? "forward"] } : e
         );
@@ -371,6 +379,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
 
       // 엣지 길게 누르기: 삭제 칩 표시
       cy.on("taphold", "edge", (evt) => {
+        tapholdEdgeId = evt.target.id();
         const mp = evt.target.renderedMidpoint();
         setDeleteChip({ kind: "edge", id: evt.target.id(), x: mp.x, y: mp.y - 14 });
       });
