@@ -15,8 +15,31 @@ let nodeCounter = 0;
 const newId = () => `n${++nodeCounter}_${Date.now()}`;
 const newEdgeId = () => `e${++nodeCounter}_${Date.now()}`;
 
+// 노드 겹침 판정 간격 (모델 좌표) — 라벨 노드 평균 크기 기준
+const CLEAR_X = 110;
+const CLEAR_Y = 48;
+
+// 기존 노드와 겹치지 않는 위치 탐색 — 원하는 지점부터 나선형으로 확장
+function findFreePosition(cy: Core, desiredX: number, desiredY: number): { x: number; y: number } {
+  const positions = cy.nodes().map((n) => n.position());
+  const isFree = (x: number, y: number) =>
+    positions.every((p) => Math.abs(p.x - x) > CLEAR_X || Math.abs(p.y - y) > CLEAR_Y);
+  if (isFree(desiredX, desiredY)) return { x: desiredX, y: desiredY };
+  for (let ring = 1; ring <= 8; ring++) {
+    const steps = ring * 8;
+    for (let k = 0; k < steps; k++) {
+      const ang = (2 * Math.PI * k) / steps;
+      const tx = desiredX + Math.cos(ang) * ring * (CLEAR_X + 20);
+      const ty = desiredY + Math.sin(ang) * ring * (CLEAR_Y + 16);
+      if (isFree(tx, ty)) return { x: tx, y: ty };
+    }
+  }
+  return { x: desiredX, y: desiredY };
+}
+
 export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const guideRef = useRef<HTMLCanvasElement>(null);
   const cyRef = useRef<Core | null>(null);
   const selectedRef = useRef<string | null>(null);
   const onChangeRef = useRef(onChange);
@@ -196,7 +219,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
         if (evt.target !== cy) return;
         const label = window.prompt("노드 이름 입력:");
         if (!label?.trim()) return;
-        const pos = evt.position;
+        const pos = findFreePosition(cy, evt.position.x, evt.position.y);
         const newNode: V3Node = {
           id: newId(),
           label: label.trim(),
@@ -252,8 +275,73 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
         onChangeRef.current?.(currentNodes, currentEdges);
       });
 
+      // 스마트 가이드: 드래그 중 다른 노드와 X/Y 중심 정렬 시 스냅 + 가이드라인
+      const clearGuides = () => {
+        const canvas = guideRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        ctx?.clearRect(0, 0, canvas.width, canvas.height);
+      };
+
+      const drawGuides = (snapX: number | null, snapY: number | null) => {
+        const canvas = guideRef.current;
+        const container = containerRef.current;
+        if (!canvas || !container) return;
+        // 컨테이너 크기와 동기화 (리사이즈 대응)
+        if (canvas.width !== container.clientWidth) canvas.width = container.clientWidth;
+        if (canvas.height !== container.clientHeight) canvas.height = container.clientHeight;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (snapX === null && snapY === null) return;
+        const zoom = cy.zoom();
+        const pan = cy.pan();
+        ctx.strokeStyle = "#e879a0";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 4]);
+        if (snapX !== null) {
+          const rx = snapX * zoom + pan.x;
+          ctx.beginPath();
+          ctx.moveTo(rx, 0);
+          ctx.lineTo(rx, canvas.height);
+          ctx.stroke();
+        }
+        if (snapY !== null) {
+          const ry = snapY * zoom + pan.y;
+          ctx.beginPath();
+          ctx.moveTo(0, ry);
+          ctx.lineTo(canvas.width, ry);
+          ctx.stroke();
+        }
+      };
+
+      cy.on("drag", "node", (evt) => {
+        const node = evt.target;
+        const pos = node.position();
+        const thresh = 8 / cy.zoom(); // 화면 기준 8px
+        let snapX: number | null = null;
+        let snapY: number | null = null;
+        let bestDx = thresh;
+        let bestDy = thresh;
+        cy.nodes().forEach((o) => {
+          if (o.id() === node.id()) return;
+          const op = o.position();
+          const dx = Math.abs(op.x - pos.x);
+          const dy = Math.abs(op.y - pos.y);
+          if (dx <= bestDx) { bestDx = dx; snapX = op.x; }
+          if (dy <= bestDy) { bestDy = dy; snapY = op.y; }
+        });
+        if (snapX !== null || snapY !== null) {
+          node.position({ x: snapX ?? pos.x, y: snapY ?? pos.y });
+        }
+        drawGuides(snapX, snapY);
+      });
+
+      cy.on("free", "node", clearGuides);
+
       // Drag end: sync positions
       cy.on("dragfree", "node", () => {
+        clearGuides();
         const currentNodes: V3Node[] = [];
         cy.nodes().forEach((n) => {
           currentNodes.push({
@@ -290,8 +378,11 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
       const cy = cyRef.current;
       if (!cy) return;
       const viewport = cy.extent();
-      const x = (viewport.x1 + viewport.x2) / 2 + (Math.random() - 0.5) * 100;
-      const y = (viewport.y1 + viewport.y2) / 2 + (Math.random() - 0.5) * 100;
+      const { x, y } = findFreePosition(
+        cy,
+        (viewport.x1 + viewport.x2) / 2,
+        (viewport.y1 + viewport.y2) / 2
+      );
       const newNode: V3Node = { id: newId(), label: word, x, y, kind: "concept" };
       const currentNodes: V3Node[] = [];
       cy.nodes().forEach((n) => {
@@ -338,7 +429,14 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
           더블클릭 → 노드 추가 · 노드 클릭 후 다른 노드 클릭 → 연결 · 우클릭 → 삭제
         </p>
       )}
-      <div ref={containerRef} className="flex-1 rounded-lg border border-brain-border bg-brain-surface min-h-0" />
+      <div className="relative flex-1 min-h-0">
+        <div ref={containerRef} className="h-full rounded-lg border border-brain-border bg-brain-surface" />
+        {/* 스마트 가이드 오버레이 — 드래그 정렬선 */}
+        <canvas
+          ref={guideRef}
+          className="pointer-events-none absolute inset-0 rounded-lg"
+        />
+      </div>
     </div>
   );
 }
