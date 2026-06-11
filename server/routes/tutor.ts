@@ -100,7 +100,7 @@ const RELATION_KO: Record<string, string> = {
 
 interface CanvasSnapshotShape {
   nodes: { id: string; type: string; label: string }[];
-  edges: { from: string; to: string; relation: string }[];
+  edges: { from: string; to: string; relation: string; label?: string }[];
 }
 
 function formatCanvasState(snap: CanvasSnapshotShape | undefined): string {
@@ -114,7 +114,11 @@ function formatCanvasState(snap: CanvasSnapshotShape | undefined): string {
         .map((e) => {
           const from = labelOf.get(e.from) ?? e.from;
           const to = labelOf.get(e.to) ?? e.to;
-          const rel = RELATION_KO[e.relation] ?? e.relation;
+          // v3 자유 관계("other")는 학생이 붙인 라벨이 의미 — 라벨 우선
+          const rel =
+            e.relation === "other" && e.label
+              ? e.label
+              : RELATION_KO[e.relation] ?? e.relation;
           return `- ${from} → (${rel}) → ${to}`;
         })
         .join("\n")

@@ -98,7 +98,9 @@ export const CanvasEdge = z.object({
   id: z.string().min(1).max(64),
   from: z.string().min(1).max(64),
   to: z.string().min(1).max(64),
-  relation: z.enum(["causes", "supports", "contrasts", "transforms", "contains"]),
+  // "other" = v3 자유 관계 (라벨로 의미 전달)
+  relation: z.enum(["causes", "supports", "contrasts", "transforms", "contains", "other"]),
+  label: z.string().max(120).optional(),
   temporal_order: z.number().int().min(0).max(10_000).optional(),
 });
 
