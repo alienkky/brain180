@@ -22,6 +22,8 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
 
   const [tab, setTab] = useState<Tab>("blocks");
   const [showAI, setShowAI] = useState(false);
+  // 칩 클릭 시 본문에서 강조할 블록 id
+  const [highlightedBlockId, setHighlightedBlockId] = useState<string | null>(null);
 
   const handleAddBlock = (block: BlockWord) => {
     // 같은 위치를 덮는 기존 블록이 있으면 추가하지 않음 (중복 방지)
@@ -76,6 +78,7 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
                 blocks={stage.blocks}
                 onAddBlock={handleAddBlock}
                 onRemoveBlock={handleRemoveBlock}
+                highlightedBlockId={highlightedBlockId}
               />
             </div>
           </div>
@@ -128,11 +131,24 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
                       {stage.blocks.map((b) => (
                         <div
                           key={b.id}
-                          className="flex items-center gap-1 px-3 py-1.5 bg-brain-surface border border-brain-accent/40 rounded-full text-sm text-brain-accent"
+                          className={`flex items-center gap-1 px-3 py-1.5 bg-brain-surface border rounded-full text-sm text-brain-accent transition-shadow ${
+                            highlightedBlockId === b.id
+                              ? "border-brain-accent ring-2 ring-brain-highlight/60"
+                              : "border-brain-accent/40"
+                          }`}
                         >
-                          <span>{b.text}</span>
                           <button
-                            onClick={() => setBlocks(stage.blocks.filter((x) => x.id !== b.id))}
+                            onClick={() => setHighlightedBlockId(b.id)}
+                            className="cursor-pointer"
+                            title="본문에서 위치 보기"
+                          >
+                            {b.text}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setBlocks(stage.blocks.filter((x) => x.id !== b.id));
+                              if (highlightedBlockId === b.id) setHighlightedBlockId(null);
+                            }}
                             className="text-brain-text-muted hover:text-brain-text text-xs ml-1"
                           >
                             ×

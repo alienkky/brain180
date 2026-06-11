@@ -16,7 +16,7 @@
 //
 // charStart 기반 식별 — 같은 단어가 본문에 여러 번 나와도 개별 선택.
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BlockWord } from "../types";
 
 interface WordInfo {
@@ -52,12 +52,21 @@ interface Props {
   blocks: BlockWord[];
   onAddBlock: (block: BlockWord) => void;
   onRemoveBlock: (id: string) => void;
+  /** 우측 칩 클릭 시 본문에서 강조·스크롤할 블록 id */
+  highlightedBlockId?: string | null;
 }
 
 let blockCounter = 0;
 
-export function TextBlockSelector({ body, blocks, onAddBlock, onRemoveBlock }: Props) {
+export function TextBlockSelector({ body, blocks, onAddBlock, onRemoveBlock, highlightedBlockId }: Props) {
   const [rangeAnchor, setRangeAnchor] = useState<string | null>(null);
+  // 강조 대상 블록 span — 칩 클릭 시 본문 위치로 스크롤
+  const highlightRef = useRef<HTMLSpanElement | null>(null);
+  useEffect(() => {
+    if (highlightedBlockId && highlightRef.current) {
+      highlightRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [highlightedBlockId]);
   const shiftAnchorRef = useRef<string | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
@@ -126,21 +135,36 @@ export function TextBlockSelector({ body, blocks, onAddBlock, onRemoveBlock }: P
     return map;
   }, [words, connectiveRegions]);
 
-  // charStart 범위로 블록 ↔ 토큰 매핑 (텍스트 일치가 아닌 위치 기반)
+  // 블록 ↔ 토큰 매핑 (v1 PracticeTextLayer 방식).
+  // wordKeys 의 첫/끝 토큰 인덱스 사이를 공백 포함 전부 매핑 → 범위(묶기)
+  // 블록이 본문에서 끊김 없이 하나의 알약으로 렌더됨.
+  // wordKeys 가 없는 구형 블록은 charStart/charEnd 범위로 폴백.
   const tokenToBlockMap = useMemo(() => {
     const map = new Map<string, BlockWord>();
     for (const block of blocks) {
+      const keys = block.wordKeys;
+      if (keys && keys.length > 0) {
+        const firstIdx = wordIndex.get(keys[0]);
+        const lastIdx = wordIndex.get(keys[keys.length - 1]);
+        if (firstIdx !== undefined && lastIdx !== undefined) {
+          const lo = Math.min(firstIdx, lastIdx);
+          const hi = Math.max(firstIdx, lastIdx);
+          for (let i = lo; i <= hi; i++) map.set(words[i].key, block);
+          continue;
+        }
+      }
+      // 폴백: charStart/charEnd 위치 기반
       if (block.charStart === undefined || block.charEnd === undefined) continue;
       for (const w of words) {
-        if (w.isSpace) continue;
         const tokenEnd = w.charStart + w.text.length;
-        if (w.charStart < block.charEnd && tokenEnd > block.charStart) {
-          map.set(w.key, block);
-        }
+        const inside = w.isSpace
+          ? w.charStart >= block.charStart && tokenEnd <= block.charEnd
+          : w.charStart < block.charEnd && tokenEnd > block.charStart;
+        if (inside) map.set(w.key, block);
       }
     }
     return map;
-  }, [blocks, words]);
+  }, [blocks, words, wordIndex]);
 
   const renderGroups = useMemo<RenderGroup[]>(() => {
     const groups: RenderGroup[] = [];
@@ -331,15 +355,19 @@ export function TextBlockSelector({ body, blocks, onAddBlock, onRemoveBlock }: P
         >
           {renderGroups.map((group, gi) => {
             if (group.kind === "block") {
+              const isHighlighted = group.block.id === highlightedBlockId;
               return (
                 <span
                   key={`${group.block.id}-${gi}`}
+                  ref={isHighlighted ? highlightRef : undefined}
                   onClick={() => onRemoveBlock(group.block.id)}
                   className="inline-flex items-center cursor-pointer"
                   style={{
                     border: "1.5px solid var(--color-brain-accent)",
                     borderRadius: "9999px",
-                    backgroundColor: "rgba(184,92,63,0.08)",
+                    backgroundColor: isHighlighted
+                      ? "rgba(184,92,63,0.22)"
+                      : "rgba(184,92,63,0.08)",
                     padding: "1px 10px",
                     margin: "0 2px",
                     verticalAlign: "middle",
@@ -348,6 +376,9 @@ export function TextBlockSelector({ body, blocks, onAddBlock, onRemoveBlock }: P
                     fontWeight: 500,
                     userSelect: "none",
                     lineHeight: 1.6,
+                    boxShadow: isHighlighted
+                      ? "0 0 0 3px var(--color-brain-highlight, rgba(198,138,61,0.5))"
+                      : "none",
                   }}
                   title="탭 = 블록 해제"
                 >
