@@ -163,6 +163,29 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
           },
         },
         {
+          // 드래그/탭 시 기본 회색 음영 제거 → 살짝 커지며 은은한 할로
+          selector: "node:active",
+          style: {
+            "overlay-opacity": 0,
+            "underlay-color": "#B85C3F",
+            "underlay-opacity": 0.12,
+            "underlay-padding": 8,
+            "border-width": 2.5,
+            padding: "13px",
+            "background-opacity": 0.2,
+            "transition-property": "padding, border-width, background-opacity",
+            "transition-duration": 120,
+          },
+        },
+        {
+          selector: 'node[kind="target"]:active',
+          style: { "underlay-color": "#4f7942" },
+        },
+        {
+          selector: 'node[kind="lens"]:active',
+          style: { "underlay-color": "#4a6fa5" },
+        },
+        {
           selector: "edge",
           style: {
             width: 2,
@@ -190,6 +213,17 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
         {
           selector: 'edge[dir="none"]',
           style: { "target-arrow-shape": "none" },
+        },
+        {
+          // 엣지 탭 시 회색 음영 제거 → 선 강조로 대체
+          selector: "edge:active",
+          style: {
+            "overlay-opacity": 0,
+            width: 3,
+            "line-color": "#B85C3F",
+            "target-arrow-color": "#B85C3F",
+            "source-arrow-color": "#B85C3F",
+          },
         },
       ],
       layout: { name: "preset" },
