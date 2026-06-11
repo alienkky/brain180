@@ -420,14 +420,12 @@ export function TextBlockSelector({ body, blocks, onAddBlock, onRemoveBlock, hig
                           border: isAnchor
                             ? "1.5px dashed var(--color-brain-highlight)"
                             : "1.5px solid transparent",
-                          borderRadius: isAnchor ? "9999px" : "2px",
+                          borderRadius: "6px",
                           backgroundColor: isAnchor ? "rgba(198,138,61,0.10)" : "transparent",
                           color: isAnchor ? "var(--color-brain-highlight)" : undefined,
-                          padding: isAnchor ? "1px 7px" : "1px 2px",
-                          verticalAlign: isAnchor ? "middle" : undefined,
-                          fontWeight: isAnchor ? 500 : undefined,
-                          userSelect: isAnchor ? "none" : undefined,
-                          transition: "all 0.15s ease",
+                          padding: "1px 2px",
+                          userSelect: "none",
+                          transition: "color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease",
                         }}
                       >
                         {w.text}
@@ -447,6 +445,8 @@ export function TextBlockSelector({ body, blocks, onAddBlock, onRemoveBlock, hig
                   const isAnchor = rangeAnchor === w.key;
                   // 선택된 블록과 같은 단어 — 본문 내 다른 등장 위치 연한 표시
                   const isSameAsBlock = !isAnchor && blockTexts.has(w.text);
+                  // 주의: padding/border 두께를 상태별로 바꾸면 본문이 reflow 되어
+                  // 롱프레스 도중 탭 좌표가 어긋남(iPad). 레이아웃 불변 스타일만 사용.
                   return (
                     <span
                       key={w.key}
@@ -467,17 +467,15 @@ export function TextBlockSelector({ body, blocks, onAddBlock, onRemoveBlock, hig
                           : isSameAsBlock
                           ? "rgba(184,92,63,0.06)"
                           : "transparent",
-                        borderRadius: isAnchor || isSameAsBlock ? "9999px" : undefined,
-                        padding: isAnchor || isSameAsBlock ? "1px 7px" : "1px 2px",
-                        verticalAlign: isAnchor || isSameAsBlock ? "middle" : undefined,
+                        borderRadius: "6px",
+                        padding: "1px 2px",
                         color: isAnchor
                           ? "var(--color-brain-highlight)"
                           : isSameAsBlock
                           ? "var(--color-brain-accent)"
                           : undefined,
-                        fontWeight: isAnchor ? 500 : undefined,
-                        userSelect: isAnchor ? "none" : undefined,
-                        transition: "all 0.15s ease",
+                        userSelect: "none",
+                        transition: "color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease",
                       }}
                       title={isSameAsBlock ? "선택된 블록과 같은 단어" : undefined}
                     >

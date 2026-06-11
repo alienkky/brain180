@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../../v2-shell/api";
-import type { ArtifactGalleryDto, ProgressEntryDto } from "../../v2-shell/api";
+import type { ArtifactGalleryDto, ProgressEntryDto, TextExcerptDto } from "../../v2-shell/api";
 import { useProtocolStore } from "../store/useProtocolStore";
-import type { V3User } from "../types";
+import type { V3User, V3Node, V3Edge } from "../types";
 
 interface Props {
   user: V3User;
@@ -12,7 +12,61 @@ interface Props {
 
 export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
   const session = useProtocolStore((s) => s.session);
-  const { clearSession } = useProtocolStore();
+  const { clearSession, startSession, setStage1Canvas } = useProtocolStore();
+  const [loadingArtifact, setLoadingArtifact] = useState<string | null>(null);
+
+  // 저장된 학습 기록 클릭 → 1부 다이어그램 복원 + 세션 재구성
+  const loadArtifact = async (a: ArtifactGalleryDto) => {
+    if (loadingArtifact) return;
+    if (session && !session.completedAt) {
+      const ok = window.confirm(
+        `진행 중인 학습(${session.lessonTitle})이 있습니다.\n기록을 불러오면 기존 진행 내용이 사라집니다. 계속할까요?`
+      );
+      if (!ok) return;
+    }
+    if (!a.lesson.text_excerpt_id) {
+      alert("이 레슨의 텍스트를 찾을 수 없어 불러올 수 없습니다.");
+      return;
+    }
+    setLoadingArtifact(a.artifact_id);
+    try {
+      const [artifact, text, newSession] = await Promise.all([
+        api.getArtifact(a.session_id),
+        api.text(a.lesson.text_excerpt_id),
+        api.startSession(a.lesson.id, "practice"),
+      ]);
+      const t = text as TextExcerptDto;
+      startSession({
+        sessionId: newSession.id,
+        lessonId: a.lesson.id,
+        lessonTitle: a.lesson.title,
+        author: t.author || "",
+        source: t.source || "",
+        textBody: t.body || "",
+      });
+      if (artifact) {
+        const ns: V3Node[] = artifact.canvas_json.nodes.map((n) => ({
+          id: n.id,
+          label: n.label,
+          x: n.x,
+          y: n.y,
+          kind: "concept",
+        }));
+        const es: V3Edge[] = artifact.canvas_json.edges.map((e) => ({
+          id: e.id,
+          from: e.from,
+          to: e.to,
+          label: e.label,
+        }));
+        setStage1Canvas(ns, es);
+      }
+      onResume();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "기록을 불러올 수 없습니다.");
+    } finally {
+      setLoadingArtifact(null);
+    }
+  };
   const [progress, setProgress] = useState<ProgressEntryDto[]>([]);
   const [artifacts, setArtifacts] = useState<ArtifactGalleryDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -108,9 +162,12 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
             <h3 className="text-sm font-semibold text-brain-text mb-3">최근 학습 기록</h3>
             <div className="space-y-2">
               {artifacts.slice(0, 5).map((a) => (
-                <div
+                <button
                   key={a.artifact_id}
-                  className="flex items-center justify-between bg-brain-surface border border-brain-border rounded-lg px-4 py-3"
+                  onClick={() => loadArtifact(a)}
+                  disabled={loadingArtifact !== null}
+                  className="w-full flex items-center justify-between bg-brain-surface border border-brain-border rounded-lg px-4 py-3 text-left hover:border-brain-accent/50 transition-colors disabled:opacity-60"
+                  title="클릭하면 저장된 다이어그램을 불러옵니다"
                 >
                   <div>
                     <div className="text-sm text-brain-text">{a.lesson.title}</div>
@@ -119,8 +176,10 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
                       {new Date(a.saved_at).toLocaleDateString("ko-KR")}
                     </div>
                   </div>
-                  <span className="text-xs text-brain-text-soft capitalize">{a.mode}</span>
-                </div>
+                  <span className="text-xs text-brain-text-soft">
+                    {loadingArtifact === a.artifact_id ? "불러오는 중..." : "불러오기 →"}
+                  </span>
+                </button>
               ))}
             </div>
           </div>

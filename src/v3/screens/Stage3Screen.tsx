@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useProtocolStore } from "../store/useProtocolStore";
 import { NodeCanvas } from "../components/NodeCanvas";
 import { AICoach } from "../components/AICoach";
-import { STAGE_DESCRIPTIONS } from "../types";
+import { STAGE_DESCRIPTIONS, toCanvasJson } from "../types";
+import { api } from "../../v2-shell/api";
 
 export function Stage3Screen({
   onComplete,
@@ -21,6 +22,12 @@ export function Stage3Screen({
   const [refTab, setRefTab] = useState<1 | 2>(1);
 
   const handleComplete = () => {
+    // 1부 다이어그램을 아티팩트로 저장 — 대시보드 '최근 학습 기록'에서 다시 불러옴
+    if (stage1.nodes.length > 0) {
+      api
+        .putArtifact(session.sessionId, toCanvasJson(stage1.nodes, stage1.edges), 1)
+        .catch(() => {});
+    }
     markComplete();
     onComplete();
   };

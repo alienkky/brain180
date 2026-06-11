@@ -315,26 +315,42 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
         }
       };
 
+      // 좌/중/우 · 상/중/하 — 끝과 끝, 끝과 중심 모든 조합 정렬 (포토샵 스마트 가이드)
       cy.on("drag", "node", (evt) => {
         const node = evt.target;
-        const pos = node.position();
         const thresh = 8 / cy.zoom(); // 화면 기준 8px
-        let snapX: number | null = null;
-        let snapY: number | null = null;
+        const bb = node.boundingBox({ includeLabels: false, includeOverlays: false });
+        const dragXs = [bb.x1, (bb.x1 + bb.x2) / 2, bb.x2];
+        const dragYs = [bb.y1, (bb.y1 + bb.y2) / 2, bb.y2];
+        let shiftX: number | null = null;
+        let shiftY: number | null = null;
+        let guideX: number | null = null;
+        let guideY: number | null = null;
         let bestDx = thresh;
         let bestDy = thresh;
         cy.nodes().forEach((o) => {
           if (o.id() === node.id()) return;
-          const op = o.position();
-          const dx = Math.abs(op.x - pos.x);
-          const dy = Math.abs(op.y - pos.y);
-          if (dx <= bestDx) { bestDx = dx; snapX = op.x; }
-          if (dy <= bestDy) { bestDy = dy; snapY = op.y; }
+          const ob = o.boundingBox({ includeLabels: false, includeOverlays: false });
+          const otherXs = [ob.x1, (ob.x1 + ob.x2) / 2, ob.x2];
+          const otherYs = [ob.y1, (ob.y1 + ob.y2) / 2, ob.y2];
+          for (const dx of dragXs) {
+            for (const ox of otherXs) {
+              const d = Math.abs(ox - dx);
+              if (d <= bestDx) { bestDx = d; shiftX = ox - dx; guideX = ox; }
+            }
+          }
+          for (const dy of dragYs) {
+            for (const oy of otherYs) {
+              const d = Math.abs(oy - dy);
+              if (d <= bestDy) { bestDy = d; shiftY = oy - dy; guideY = oy; }
+            }
+          }
         });
-        if (snapX !== null || snapY !== null) {
-          node.position({ x: snapX ?? pos.x, y: snapY ?? pos.y });
+        if (shiftX !== null || shiftY !== null) {
+          const pos = node.position();
+          node.position({ x: pos.x + (shiftX ?? 0), y: pos.y + (shiftY ?? 0) });
         }
-        drawGuides(snapX, snapY);
+        drawGuides(guideX, guideY);
       });
 
       cy.on("free", "node", clearGuides);
