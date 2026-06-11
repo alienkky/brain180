@@ -961,10 +961,15 @@ adminRouter.delete(
       fail(res, 422, "validation_error", { message: "invalid_lesson_id" });
       return;
     }
-    const deleted = await db
-      .delete(lessons)
-      .where(eq(lessons.id, id))
-      .returning({ id: lessons.id });
+    // learning_sessions.lesson_id 가 onDelete:restrict — 학습 이력이 있는 레슨은
+    // 세션(과 그 cascade 자식: 아티팩트/튜터 메시지)을 먼저 지워야 삭제 가능.
+    const deleted = await db.transaction(async (tx) => {
+      await tx.delete(learningSessions).where(eq(learningSessions.lessonId, id));
+      return tx
+        .delete(lessons)
+        .where(eq(lessons.id, id))
+        .returning({ id: lessons.id });
+    });
     if (deleted.length === 0) {
       fail(res, 404, "not_found");
       return;
