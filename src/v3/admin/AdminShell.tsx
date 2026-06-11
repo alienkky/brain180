@@ -156,21 +156,251 @@ function AdminUsers() {
   );
 }
 
+// 레슨 글 편집기 — 제목/저자/출처/순서 + 본문 텍스트 에디터
+function LessonEditor({
+  lesson,
+  moduleId,
+  nextOrder,
+  onSaved,
+  onClose,
+}: {
+  lesson: AdminLessonDto | null; // null = 새 레슨
+  moduleId: string;
+  nextOrder: number;
+  onSaved: () => void;
+  onClose: () => void;
+}) {
+  const [title, setTitle] = useState(lesson?.title ?? "");
+  const [author, setAuthor] = useState(lesson?.author ?? "");
+  const [source, setSource] = useState(lesson?.source ?? "");
+  const [order, setOrder] = useState(lesson?.order ?? nextOrder);
+  const [body, setBody] = useState(lesson?.body ?? "");
+  const [objectives, setObjectives] = useState((lesson?.objectives ?? []).join("\n"));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const charCount = body.length;
+  const paraCount = body.split(/\n\s*\n/).filter((p) => p.trim()).length;
+
+  // 본문 정리 도구
+  const tidyBody = () => {
+    setBody((b) =>
+      b
+        .replace(/[ \t]+\n/g, "\n") // 줄 끝 공백 제거
+        .replace(/\n{3,}/g, "\n\n") // 3줄 이상 빈 줄 → 1줄
+        .replace(/[“”]/g, '"')
+        .replace(/[‘’]/g, "'")
+        .trim()
+    );
+  };
+
+  const save = async () => {
+    if (!title.trim()) { setError("제목을 입력하세요."); return; }
+    if (!body.trim()) { setError("본문을 입력하세요."); return; }
+    setSaving(true);
+    setError(null);
+    const objList = objectives.split("\n").map((s) => s.trim()).filter(Boolean);
+    try {
+      if (lesson) {
+        await api.adminUpdateLesson(lesson.id, {
+          title: title.trim(),
+          order,
+          body,
+          author: author.trim(),
+          source: source.trim(),
+          objectives: objList,
+        });
+      } else {
+        await api.adminCreateLesson({
+          module_id: moduleId,
+          title: title.trim(),
+          order,
+          body,
+          author: author.trim() || undefined,
+          source: source.trim() || undefined,
+          objectives: objList.length ? objList : undefined,
+        });
+      }
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "저장 실패");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="flex h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-brain-border bg-brain-bg shadow-xl">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-brain-border bg-brain-surface px-5 py-3">
+          <h3 className="text-sm font-semibold text-brain-text">
+            {lesson ? "레슨 편집" : "새 레슨"}
+          </h3>
+          <button onClick={onClose} className="text-brain-text-muted hover:text-brain-text text-lg leading-none">✕</button>
+        </div>
+
+        {/* Meta fields */}
+        <div className="grid grid-cols-2 gap-3 border-b border-brain-border px-5 py-3 md:grid-cols-4">
+          <label className="col-span-2 flex flex-col gap-1 text-xs text-brain-text-muted">
+            제목 *
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="rounded-lg border border-brain-border bg-brain-surface px-3 py-2 text-sm text-brain-text focus:border-brain-accent focus:outline-none"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-brain-text-muted">
+            저자
+            <input
+              value={author}
+              onChange={(e) => setAuthor(e.target.value)}
+              className="rounded-lg border border-brain-border bg-brain-surface px-3 py-2 text-sm text-brain-text focus:border-brain-accent focus:outline-none"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-brain-text-muted">
+            순서
+            <input
+              type="number"
+              value={order}
+              onChange={(e) => setOrder(Number(e.target.value))}
+              className="rounded-lg border border-brain-border bg-brain-surface px-3 py-2 text-sm text-brain-text focus:border-brain-accent focus:outline-none"
+            />
+          </label>
+          <label className="col-span-2 flex flex-col gap-1 text-xs text-brain-text-muted">
+            출처
+            <input
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+              className="rounded-lg border border-brain-border bg-brain-surface px-3 py-2 text-sm text-brain-text focus:border-brain-accent focus:outline-none"
+            />
+          </label>
+          <label className="col-span-2 flex flex-col gap-1 text-xs text-brain-text-muted">
+            학습 목표 (줄바꿈으로 구분)
+            <textarea
+              value={objectives}
+              onChange={(e) => setObjectives(e.target.value)}
+              rows={2}
+              className="resize-none rounded-lg border border-brain-border bg-brain-surface px-3 py-2 text-sm text-brain-text focus:border-brain-accent focus:outline-none"
+            />
+          </label>
+        </div>
+
+        {/* Body editor */}
+        <div className="flex flex-1 flex-col overflow-hidden px-5 py-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-medium text-brain-text-muted">본문 *</span>
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] text-brain-text-soft">
+                {charCount.toLocaleString()}자 · 문단 {paraCount}개
+              </span>
+              <button
+                onClick={tidyBody}
+                className="rounded border border-brain-border px-2 py-1 text-[11px] text-brain-text-muted hover:border-brain-accent hover:text-brain-accent"
+                title="줄 끝 공백 제거 · 과도한 빈 줄 정리 · 따옴표 통일"
+              >
+                ✨ 본문 정리
+              </button>
+            </div>
+          </div>
+          <textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder={"고전 텍스트 본문을 붙여넣으세요.\n\n빈 줄로 문단을 구분하면 학습 화면에 그대로 반영됩니다."}
+            className="flex-1 resize-none rounded-lg border border-brain-border bg-brain-surface px-4 py-3 text-[14px] leading-[1.9] text-brain-text focus:border-brain-accent focus:outline-none"
+            style={{ whiteSpace: "pre-wrap" }}
+          />
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between border-t border-brain-border bg-brain-surface px-5 py-3">
+          <span className="text-xs text-red-500">{error}</span>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="rounded-lg border border-brain-border px-4 py-2 text-sm text-brain-text-muted hover:text-brain-text"
+            >
+              취소
+            </button>
+            <button
+              onClick={save}
+              disabled={saving}
+              className="rounded-lg bg-brain-accent px-5 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {saving ? "저장 중..." : "저장"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AdminContent() {
   const [modules, setModules] = useState<AdminModuleDto[]>([]);
   const [selectedMod, setSelectedMod] = useState<AdminModuleDto | null>(null);
   const [lessons, setLessons] = useState<AdminLessonDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [editing, setEditing] = useState<AdminLessonDto | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     api.adminModules().then(setModules).finally(() => setLoading(false));
   }, []);
 
-  const selectMod = async (mod: AdminModuleDto) => {
-    setSelectedMod(mod);
+  const refreshLessons = async (mod: AdminModuleDto) => {
     const ls = await api.adminLessons(mod.id);
     setLessons(ls);
+    setChecked(new Set());
   };
+
+  const selectMod = async (mod: AdminModuleDto) => {
+    setSelectedMod(mod);
+    await refreshLessons(mod);
+  };
+
+  const toggleCheck = (id: string) => {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const deleteOne = async (l: AdminLessonDto) => {
+    if (!window.confirm(`레슨 "${l.title}"을(를) 삭제할까요?\n이 작업은 되돌릴 수 없습니다.`)) return;
+    setBusy(true);
+    try {
+      await api.adminDeleteLesson(l.id);
+      if (selectedMod) await refreshLessons(selectedMod);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "삭제 실패");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteChecked = async () => {
+    if (checked.size === 0) return;
+    if (!window.confirm(`선택한 레슨 ${checked.size}개를 삭제할까요?\n이 작업은 되돌릴 수 없습니다.`)) return;
+    setBusy(true);
+    try {
+      for (const id of checked) {
+        await api.adminDeleteLesson(id);
+      }
+      if (selectedMod) await refreshLessons(selectedMod);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "삭제 실패");
+      if (selectedMod) await refreshLessons(selectedMod);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const allChecked = lessons.length > 0 && checked.size === lessons.length;
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -207,15 +437,56 @@ function AdminContent() {
           <div className="text-center text-brain-text-muted text-sm py-16">모듈을 선택하세요.</div>
         ) : (
           <>
-            <h2 className="text-base font-semibold text-brain-text mb-4">{selectedMod.title}</h2>
+            <div className="mb-4 flex items-center justify-between max-w-2xl">
+              <h2 className="text-base font-semibold text-brain-text">{selectedMod.title}</h2>
+              <div className="flex items-center gap-2">
+                {checked.size > 0 && (
+                  <button
+                    onClick={deleteChecked}
+                    disabled={busy}
+                    className="rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
+                  >
+                    🗑 선택 삭제 ({checked.size})
+                  </button>
+                )}
+                <button
+                  onClick={() => setCreating(true)}
+                  className="rounded-lg bg-brain-accent px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
+                >
+                  + 새 레슨
+                </button>
+              </div>
+            </div>
+
+            {lessons.length > 0 && (
+              <label className="mb-2 flex max-w-2xl items-center gap-2 px-1 text-xs text-brain-text-muted">
+                <input
+                  type="checkbox"
+                  checked={allChecked}
+                  onChange={() =>
+                    setChecked(allChecked ? new Set() : new Set(lessons.map((l) => l.id)))
+                  }
+                />
+                전체 선택
+              </label>
+            )}
+
             <div className="space-y-2 max-w-2xl">
               {lessons.map((l, idx) => (
                 <div
                   key={l.id}
-                  className="bg-brain-surface border border-brain-border rounded-xl p-4"
+                  className={`bg-brain-surface border rounded-xl p-4 transition-colors ${
+                    checked.has(l.id) ? "border-brain-accent" : "border-brain-border"
+                  }`}
                 >
-                  <div className="flex items-start justify-between">
-                    <div>
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={checked.has(l.id)}
+                      onChange={() => toggleCheck(l.id)}
+                      className="mt-1"
+                    />
+                    <div className="flex-1 min-w-0">
                       <span className="text-xs text-brain-text-muted mr-2">#{idx + 1}</span>
                       <span className="text-sm font-medium text-brain-text">{l.title}</span>
                       {l.author && (
@@ -229,9 +500,24 @@ function AdminContent() {
                         </ul>
                       )}
                     </div>
-                    <span className="text-xs text-brain-text-soft">
-                      {l.text_excerpt_id ? "텍스트 있음" : "텍스트 없음"}
-                    </span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="text-xs text-brain-text-soft">
+                        {l.text_excerpt_id ? `${l.body.length.toLocaleString()}자` : "텍스트 없음"}
+                      </span>
+                      <button
+                        onClick={() => setEditing(l)}
+                        className="rounded-lg border border-brain-border px-2.5 py-1 text-xs text-brain-text-muted hover:border-brain-accent hover:text-brain-accent"
+                      >
+                        ✏️ 편집
+                      </button>
+                      <button
+                        onClick={() => deleteOne(l)}
+                        disabled={busy}
+                        className="rounded-lg border border-brain-border px-2.5 py-1 text-xs text-brain-text-muted hover:border-red-400 hover:text-red-500 disabled:opacity-50"
+                      >
+                        🗑
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -242,6 +528,24 @@ function AdminContent() {
           </>
         )}
       </div>
+
+      {/* Editor modal */}
+      {(editing || creating) && selectedMod && (
+        <LessonEditor
+          lesson={editing}
+          moduleId={selectedMod.id}
+          nextOrder={lessons.length + 1}
+          onSaved={async () => {
+            setEditing(null);
+            setCreating(false);
+            await refreshLessons(selectedMod);
+          }}
+          onClose={() => {
+            setEditing(null);
+            setCreating(false);
+          }}
+        />
+      )}
     </div>
   );
 }
