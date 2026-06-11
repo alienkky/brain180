@@ -1,7 +1,15 @@
 import { useEffect, useRef, useCallback } from "react";
 import cytoscape from "cytoscape";
 import type { Core } from "cytoscape";
-import type { V3Node, V3Edge } from "../types";
+import type { V3Node, V3Edge, EdgeDir } from "../types";
+
+// 화살표 방향 순환: 단방향 → 양방향 → 역방향 → 없음 → 단방향
+const DIR_CYCLE: Record<EdgeDir, EdgeDir> = {
+  forward: "both",
+  both: "back",
+  back: "none",
+  none: "forward",
+};
 
 interface Props {
   nodes: V3Node[];
@@ -53,7 +61,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
         position: { x: n.x, y: n.y },
       })),
       ...es.map((e) => ({
-        data: { id: e.id, source: e.from, target: e.to, label: e.label ?? "" },
+        data: { id: e.id, source: e.from, target: e.to, label: e.label ?? "", dir: e.dir ?? "forward" },
       })),
     ],
     []
@@ -92,8 +100,13 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
     edges.forEach((e) => {
       if (!existingEdgeIds.has(e.id)) {
         cy.add({
-          data: { id: e.id, source: e.from, target: e.to, label: e.label ?? "" },
+          data: { id: e.id, source: e.from, target: e.to, label: e.label ?? "", dir: e.dir ?? "forward" },
         });
+      } else {
+        const el = cy.getElementById(e.id);
+        const dir = e.dir ?? "forward";
+        if (el.data("dir") !== dir) el.data("dir", dir);
+        if (el.data("label") !== (e.label ?? "")) el.data("label", e.label ?? "");
       }
     });
   }, [nodes, edges]);
@@ -155,6 +168,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
             width: 2,
             "line-color": "#9ca3af",
             "target-arrow-color": "#9ca3af",
+            "source-arrow-color": "#9ca3af",
             "target-arrow-shape": "triangle",
             "curve-style": "bezier",
             label: "data(label)",
@@ -165,6 +179,18 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
             "text-background-padding": "2px",
           },
         },
+        {
+          selector: 'edge[dir="both"]',
+          style: { "source-arrow-shape": "triangle" },
+        },
+        {
+          selector: 'edge[dir="back"]',
+          style: { "target-arrow-shape": "none", "source-arrow-shape": "triangle" },
+        },
+        {
+          selector: 'edge[dir="none"]',
+          style: { "target-arrow-shape": "none" },
+        },
       ],
       layout: { name: "preset" },
       userZoomingEnabled: true,
@@ -174,37 +200,60 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
 
     cyRef.current = cy;
 
+    // 현재 그래프 수집 — dir 포함 (누락 시 드래그/삭제마다 방향 초기화됨)
+    const collectNodes = (excludeId?: string): V3Node[] => {
+      const arr: V3Node[] = [];
+      cy.nodes().forEach((n) => {
+        if (n.id() === excludeId) return;
+        arr.push({
+          id: n.id(),
+          label: n.data("label") as string,
+          x: n.position("x"),
+          y: n.position("y"),
+          kind: n.data("kind") as V3Node["kind"],
+        });
+      });
+      return arr;
+    };
+    const collectEdges = (excludeNodeId?: string): V3Edge[] => {
+      const arr: V3Edge[] = [];
+      cy.edges().forEach((e) => {
+        if (excludeNodeId && (e.data("source") === excludeNodeId || e.data("target") === excludeNodeId)) return;
+        arr.push({
+          id: e.id(),
+          from: e.data("source") as string,
+          to: e.data("target") as string,
+          label: e.data("label") as string,
+          dir: (e.data("dir") as EdgeDir) ?? "forward",
+        });
+      });
+      return arr;
+    };
+
     if (!readOnly) {
       // Node click: edge creation via two-click
       cy.on("tap", "node", (evt) => {
         const tappedId = evt.target.id();
         if (selectedRef.current && selectedRef.current !== tappedId) {
-          // Create edge
           const src = selectedRef.current;
-          const edgeLabel = "";
-          const newEdge: V3Edge = { id: newEdgeId(), from: src, to: tappedId, label: edgeLabel };
           cy.getElementById(src).removeClass("selected-source");
           selectedRef.current = null;
-          const currentNodes: V3Node[] = [];
-          cy.nodes().forEach((n) => {
-            currentNodes.push({
-              id: n.id(),
-              label: n.data("label") as string,
-              x: n.position("x"),
-              y: n.position("y"),
-              kind: n.data("kind") as V3Node["kind"],
-            });
-          });
-          const currentEdges: V3Edge[] = [];
-          cy.edges().forEach((e) => {
-            currentEdges.push({
-              id: e.id(),
-              from: e.data("source") as string,
-              to: e.data("target") as string,
-              label: e.data("label") as string,
-            });
-          });
-          onChangeRef.current?.(currentNodes, [...currentEdges, newEdge]);
+          // 이미 같은 두 노드를 잇는 엣지가 있으면 중복 생성 대신 방향 순환
+          const existing = cy.edges().filter(
+            (e) =>
+              (e.data("source") === src && e.data("target") === tappedId) ||
+              (e.data("source") === tappedId && e.data("target") === src)
+          );
+          if (existing.length > 0) {
+            const targetId = existing[0].id();
+            const nextEdges = collectEdges().map((e) =>
+              e.id === targetId ? { ...e, dir: DIR_CYCLE[e.dir ?? "forward"] } : e
+            );
+            onChangeRef.current?.(collectNodes(), nextEdges);
+            return;
+          }
+          const newEdge: V3Edge = { id: newEdgeId(), from: src, to: tappedId, label: "", dir: "forward" };
+          onChangeRef.current?.(collectNodes(), [...collectEdges(), newEdge]);
         } else {
           if (selectedRef.current) {
             cy.getElementById(selectedRef.current).removeClass("selected-source");
@@ -212,6 +261,15 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
           selectedRef.current = tappedId;
           evt.target.addClass("selected-source");
         }
+      });
+
+      // 화살표(엣지) 탭: 방향 순환 — 단방향 → 양방향 → 역방향 → 없음
+      cy.on("tap", "edge", (evt) => {
+        const id = evt.target.id();
+        const nextEdges = collectEdges().map((e) =>
+          e.id === id ? { ...e, dir: DIR_CYCLE[e.dir ?? "forward"] } : e
+        );
+        onChangeRef.current?.(collectNodes(), nextEdges);
       });
 
       // Double-click on background: add node
@@ -227,52 +285,14 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
           y: pos.y,
           kind: "concept",
         };
-        const currentNodes: V3Node[] = [];
-        cy.nodes().forEach((n) => {
-          currentNodes.push({
-            id: n.id(),
-            label: n.data("label") as string,
-            x: n.position("x"),
-            y: n.position("y"),
-            kind: n.data("kind") as V3Node["kind"],
-          });
-        });
-        const currentEdges: V3Edge[] = [];
-        cy.edges().forEach((e) => {
-          currentEdges.push({
-            id: e.id(),
-            from: e.data("source") as string,
-            to: e.data("target") as string,
-            label: e.data("label") as string,
-          });
-        });
-        onChangeRef.current?.([...currentNodes, newNode], currentEdges);
+        onChangeRef.current?.([...collectNodes(), newNode], collectEdges());
       });
 
       // Right-click: delete node
       cy.on("cxttap", "node", (evt) => {
         const id = evt.target.id();
         if (selectedRef.current === id) selectedRef.current = null;
-        const currentNodes: V3Node[] = [];
-        cy.nodes().forEach((n) => {
-          if (n.id() !== id) currentNodes.push({
-            id: n.id(),
-            label: n.data("label") as string,
-            x: n.position("x"),
-            y: n.position("y"),
-            kind: n.data("kind") as V3Node["kind"],
-          });
-        });
-        const currentEdges: V3Edge[] = [];
-        cy.edges().forEach((e) => {
-          if (e.data("source") !== id && e.data("target") !== id) currentEdges.push({
-            id: e.id(),
-            from: e.data("source") as string,
-            to: e.data("target") as string,
-            label: e.data("label") as string,
-          });
-        });
-        onChangeRef.current?.(currentNodes, currentEdges);
+        onChangeRef.current?.(collectNodes(id), collectEdges(id));
       });
 
       // 스마트 가이드: 드래그 중 다른 노드와 X/Y 중심 정렬 시 스냅 + 가이드라인
@@ -358,26 +378,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
       // Drag end: sync positions
       cy.on("dragfree", "node", () => {
         clearGuides();
-        const currentNodes: V3Node[] = [];
-        cy.nodes().forEach((n) => {
-          currentNodes.push({
-            id: n.id(),
-            label: n.data("label") as string,
-            x: n.position("x"),
-            y: n.position("y"),
-            kind: n.data("kind") as V3Node["kind"],
-          });
-        });
-        const currentEdges: V3Edge[] = [];
-        cy.edges().forEach((e) => {
-          currentEdges.push({
-            id: e.id(),
-            from: e.data("source") as string,
-            to: e.data("target") as string,
-            label: e.data("label") as string,
-          });
-        });
-        onChangeRef.current?.(currentNodes, currentEdges);
+        onChangeRef.current?.(collectNodes(), collectEdges());
       });
     }
 
@@ -417,6 +418,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
           from: e.data("source") as string,
           to: e.data("target") as string,
           label: e.data("label") as string,
+          dir: (e.data("dir") as EdgeDir) ?? "forward",
         });
       });
       onChangeRef.current?.([...currentNodes, newNode], currentEdges);
@@ -442,7 +444,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
       )}
       {!readOnly && (
         <p className="text-[11px] text-brain-text-soft px-1">
-          더블클릭 → 노드 추가 · 노드 클릭 후 다른 노드 클릭 → 연결 · 우클릭 → 삭제
+          더블클릭 → 노드 추가 · 노드 클릭 후 다른 노드 클릭 → 연결 · 화살표 클릭 → 방향 순환(→/↔/←/없음) · 우클릭 → 삭제
         </p>
       )}
       <div className="relative flex-1 min-h-0">

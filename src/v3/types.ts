@@ -37,11 +37,15 @@ export interface V3Node {
   kind?: "concept" | "anchor" | "target" | "lens";
 }
 
+/** 화살표 방향 — 클릭 순환: forward → both → back → none */
+export type EdgeDir = "forward" | "both" | "back" | "none";
+
 export interface V3Edge {
   id: string;
   from: string;
   to: string;
   label?: string;
+  dir?: EdgeDir;
 }
 
 export interface ChatMessage {
