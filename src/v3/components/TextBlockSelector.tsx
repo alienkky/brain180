@@ -307,19 +307,32 @@ export function TextBlockSelector({ body, blocks, onAddBlock, onRemoveBlock, hig
     [rangeAnchor, addBlockFromRange, addBlockFromWord],
   );
 
+  // pointerup 으로 탭을 처리한 직후 도착하는 synthetic click 전역 차단 윈도우.
+  // 블록 생성 시 단어가 알약으로 DOM 교체되는데, 그 자리에 떨어진 synthetic click 이
+  // 알약의 삭제 핸들러를 때려 방금 만든 블록이 즉시 사라지던 버그의 원인.
+  const suppressClickUntil = useRef(0);
+
   const handleWordPointerUp = useCallback(
     (w: WordInfo, e: React.PointerEvent) => {
       cancelLongPress();
       if (didLongPress.current) {
         didLongPress.current = false;
+        // 롱프레스 직후 synthetic click 이 앵커를 자기 자신과 매칭시켜
+        // 단일 블록을 만들며 묶기 모드를 끝내버리던 버그 방지
+        pointerTapHandledKey.current = w.key;
+        suppressClickUntil.current = Date.now() + 400;
+        window.setTimeout(() => {
+          if (pointerTapHandledKey.current === w.key) pointerTapHandledKey.current = null;
+        }, 400);
         return;
       }
       pointerTapHandledKey.current = w.key;
+      suppressClickUntil.current = Date.now() + 400;
       window.setTimeout(() => {
         if (pointerTapHandledKey.current === w.key) {
           pointerTapHandledKey.current = null;
         }
-      }, 300);
+      }, 400);
       executeWordTap(w, e.shiftKey);
     },
     [cancelLongPress, executeWordTap],
@@ -327,6 +340,8 @@ export function TextBlockSelector({ body, blocks, onAddBlock, onRemoveBlock, hig
 
   const handleWordClick = useCallback(
     (w: WordInfo, e: React.MouseEvent) => {
+      // pointerup 처리 직후의 synthetic click — reflow 로 옆 단어에 떨어져도 무시
+      if (Date.now() < suppressClickUntil.current) return;
       if (pointerTapHandledKey.current === w.key) {
         pointerTapHandledKey.current = null;
         return;
@@ -372,7 +387,11 @@ export function TextBlockSelector({ body, blocks, onAddBlock, onRemoveBlock, hig
                 <span
                   key={`${group.block.id}-${gi}`}
                   ref={isHighlighted ? highlightRef : undefined}
-                  onClick={() => onRemoveBlock(group.block.id)}
+                  onClick={() => {
+                    // 블록 생성 직후의 synthetic click 이 알약을 즉시 삭제하는 것 방지
+                    if (Date.now() < suppressClickUntil.current) return;
+                    onRemoveBlock(group.block.id);
+                  }}
                   className="inline-flex items-center cursor-pointer"
                   style={{
                     border: "1.5px solid var(--color-brain-accent)",
