@@ -301,9 +301,14 @@ export const lessons = pgTable(
     lexiconSource: lexiconSourceEnum("lexicon_source"),
     createdAt,
     updatedAt,
+    // 소프트 삭제 — 학습 세션이 restrict FK 로 참조하므로 하드 삭제 대신 숨김
+    deletedAt,
   },
   (table) => ({
-    moduleOrderIdx: uniqueIndex("lessons_module_order_idx").on(table.moduleId, table.order),
+    // 숨김 레슨이 order 자리를 계속 차지하지 않도록 부분 인덱스
+    moduleOrderIdx: uniqueIndex("lessons_module_order_idx")
+      .on(table.moduleId, table.order)
+      .where(sql`${table.deletedAt} IS NULL`),
     tutorPromptIdx: index("lessons_tutor_prompt_idx").on(table.tutorSystemPromptId),
   }),
 );

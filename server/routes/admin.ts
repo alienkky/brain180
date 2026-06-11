@@ -774,7 +774,11 @@ adminRouter.get(
         axisFocus: lessons.axisFocus,
       })
       .from(lessons)
-      .where(moduleId ? eq(lessons.moduleId, moduleId) : sql`true`)
+      .where(
+        moduleId
+          ? and(eq(lessons.moduleId, moduleId), isNull(lessons.deletedAt))
+          : isNull(lessons.deletedAt),
+      )
       .orderBy(asc(lessons.moduleId), asc(lessons.order));
     const data: AdminLessonDTO[] = [];
     for (const r of rows) {
@@ -961,15 +965,13 @@ adminRouter.delete(
       fail(res, 422, "validation_error", { message: "invalid_lesson_id" });
       return;
     }
-    // learning_sessions.lesson_id 가 onDelete:restrict — 학습 이력이 있는 레슨은
-    // 세션(과 그 cascade 자식: 아티팩트/튜터 메시지)을 먼저 지워야 삭제 가능.
-    const deleted = await db.transaction(async (tx) => {
-      await tx.delete(learningSessions).where(eq(learningSessions.lessonId, id));
-      return tx
-        .delete(lessons)
-        .where(eq(lessons.id, id))
-        .returning({ id: lessons.id });
-    });
+    // 소프트 삭제 — 학습 세션이 restrict FK 로 참조하므로 deleted_at 만 찍어
+    // 목록에서 숨기고 학생 학습 기록은 보존한다.
+    const deleted = await db
+      .update(lessons)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(lessons.id, id), isNull(lessons.deletedAt)))
+      .returning({ id: lessons.id });
     if (deleted.length === 0) {
       fail(res, 404, "not_found");
       return;

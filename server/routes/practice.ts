@@ -191,6 +191,7 @@ practiceRouter.get(
       WHERE ls.user_id = ${req.user!.id}
         AND ls.deleted_at IS NULL
         AND ca.deleted_at IS NULL
+        AND l.deleted_at IS NULL
       ORDER BY ca.session_id, ca.saved_at DESC
       LIMIT 20
     `);
@@ -353,7 +354,7 @@ practiceRouter.post(
     const lessonRow = await db
       .select({ id: lessons.id })
       .from(lessons)
-      .where(eq(lessons.id, body.lesson_id))
+      .where(and(eq(lessons.id, body.lesson_id), isNull(lessons.deletedAt)))
       .limit(1);
     if (lessonRow.length === 0) {
       fail(res, 404, "not_found", { message: "lesson_not_found" });

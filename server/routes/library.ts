@@ -133,7 +133,7 @@ libraryRouter.get(
         field: modules.field,
         difficulty: modules.difficulty,
         axisFocus: modules.axisFocus,
-        lessonCount: sql<number>`(SELECT COUNT(*)::int FROM ${lessons} WHERE ${lessons.moduleId} = ${modules.id})`,
+        lessonCount: sql<number>`(SELECT COUNT(*)::int FROM ${lessons} WHERE ${lessons.moduleId} = ${modules.id} AND ${lessons.deletedAt} IS NULL)`,
       })
       .from(modules)
       .orderBy(asc(modules.axis), asc(modules.order));
@@ -185,7 +185,7 @@ libraryRouter.get(
         sourceMeta: lessons.sourceMeta,
       })
       .from(lessons)
-      .where(eq(lessons.moduleId, moduleId))
+      .where(and(eq(lessons.moduleId, moduleId), isNull(lessons.deletedAt)))
       .orderBy(asc(lessons.order));
 
     const data: LessonDTO[] = [];
