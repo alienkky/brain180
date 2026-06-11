@@ -342,11 +342,16 @@ export function TextBlockSelector({ body, blocks, onAddBlock, onRemoveBlock, hig
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-brain-border bg-brain-surface px-4 py-2 text-[11px] text-brain-text-muted">
-        탭 = 블록 선택 · 블록 탭 = 해제 · Shift+클릭 = 범위 · 꾹 누르기 = 묶기 모드
-        {rangeAnchor && (
-          <span className="ml-2 rounded bg-brain-accent-soft px-2 py-0.5 text-brain-accent">
+      {/* 고정 높이 한 줄 — 묶기 모드 배지가 힌트를 대체. 높이가 변하면 본문이
+          밀려 롱프레스 중 탭 좌표가 어긋남(폴드 등 좁은 화면). */}
+      <div className="h-8 shrink-0 flex items-center overflow-hidden whitespace-nowrap border-b border-brain-border bg-brain-surface px-4 text-[11px] text-brain-text-muted">
+        {rangeAnchor ? (
+          <span className="rounded bg-brain-accent-soft px-2 py-0.5 text-brain-accent font-medium">
             묶기 모드: 마지막 단어를 탭하세요
+          </span>
+        ) : (
+          <span className="truncate">
+            탭 = 블록 선택 · 블록 탭 = 해제 · Shift+클릭 = 범위 · 꾹 누르기 = 묶기 모드
           </span>
         )}
       </div>

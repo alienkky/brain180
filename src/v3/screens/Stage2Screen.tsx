@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useProtocolStore } from "../store/useProtocolStore";
 import { NodeCanvas } from "../components/NodeCanvas";
 import { AICoach } from "../components/AICoach";
+import { SplitPane } from "../components/SplitPane";
 import type { V3Node } from "../types";
 import { toCanvasJson, STAGE_DESCRIPTIONS } from "../types";
 
@@ -50,39 +51,41 @@ export function Stage2Screen({
         {STAGE_DESCRIPTIONS[2]}
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left: Stage1 reference */}
-        <div className="w-[35%] border-r border-brain-border flex flex-col overflow-hidden">
-          <div className="px-4 py-2 border-b border-brain-border">
-            <span className="text-xs font-semibold text-brain-text-muted uppercase tracking-wide">
-              1부 참고 다이어그램
-            </span>
-          </div>
-          <div className="flex-1 overflow-hidden p-3">
-            {stage1.nodes.length > 0 ? (
-              <NodeCanvas
-                nodes={stage1.nodes}
-                edges={stage1.edges}
-                onChange={() => {}}
-                readOnly
-              />
-            ) : (
-              <div className="text-center text-brain-text-soft text-sm py-10">
-                1부에서 만든 다이어그램이 여기에 표시됩니다.
+      <SplitPane
+        storageKey="brain180-v3-split-stage2"
+        initial={35}
+        left={
+          <>
+            <div className="px-4 py-2 border-b border-brain-border">
+              <span className="text-xs font-semibold text-brain-text-muted uppercase tracking-wide">
+                1부 참고 다이어그램
+              </span>
+            </div>
+            <div className="flex-1 overflow-hidden p-3">
+              {stage1.nodes.length > 0 ? (
+                <NodeCanvas
+                  nodes={stage1.nodes}
+                  edges={stage1.edges}
+                  onChange={() => {}}
+                  readOnly
+                />
+              ) : (
+                <div className="text-center text-brain-text-soft text-sm py-10">
+                  1부에서 만든 다이어그램이 여기에 표시됩니다.
+                </div>
+              )}
+            </div>
+            {stage1.description && (
+              <div className="border-t border-brain-border p-3">
+                <p className="text-xs text-brain-text-muted mb-1">1부 설명</p>
+                <p className="text-xs text-brain-text leading-relaxed line-clamp-5">
+                  {stage1.description}
+                </p>
               </div>
             )}
-          </div>
-          {stage1.description && (
-            <div className="border-t border-brain-border p-3">
-              <p className="text-xs text-brain-text-muted mb-1">1부 설명</p>
-              <p className="text-xs text-brain-text leading-relaxed line-clamp-5">
-                {stage1.description}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Right: Stage2 work */}
+          </>
+        }
+        right={
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="flex border-b border-brain-border bg-brain-surface">
             <div className="px-4 py-2.5 text-xs font-medium text-brain-accent border-b-2 border-brain-accent">
@@ -169,7 +172,8 @@ export function Stage2Screen({
             )}
           </div>
         </div>
-      </div>
+        }
+      />
     </div>
   );
 }

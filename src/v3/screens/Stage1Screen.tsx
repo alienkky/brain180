@@ -3,6 +3,7 @@ import { useProtocolStore } from "../store/useProtocolStore";
 import { NodeCanvas } from "../components/NodeCanvas";
 import { AICoach } from "../components/AICoach";
 import { TextBlockSelector } from "../components/TextBlockSelector";
+import { SplitPane } from "../components/SplitPane";
 import type { BlockWord } from "../types";
 import { toCanvasJson, STAGE_DESCRIPTIONS } from "../types";
 
@@ -59,32 +60,34 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
         {STAGE_DESCRIPTIONS[1]}
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left: Text panel */}
-        <div className="w-[45%] border-r border-brain-border flex flex-col overflow-hidden">
-          <div className="px-4 py-2 border-b border-brain-border flex items-center justify-between">
-            <span className="text-xs font-semibold text-brain-text-muted uppercase tracking-wide">
-              텍스트 · {session.author}
-            </span>
-            <span className="text-xs text-brain-text-soft">{stage.blocks.length}개 블록 선택됨</span>
-          </div>
-          <div className="flex-1 overflow-hidden flex flex-col">
-            <h3 className="font-semibold text-base px-5 pt-3 pb-1 text-brain-text shrink-0">
-              {session.lessonTitle}
-            </h3>
-            <div className="flex-1 overflow-hidden">
-              <TextBlockSelector
-                body={session.textBody}
-                blocks={stage.blocks}
-                onAddBlock={handleAddBlock}
-                onRemoveBlock={handleRemoveBlock}
-                highlightedBlockId={highlightedBlockId}
-              />
+      <SplitPane
+        storageKey="brain180-v3-split-stage1"
+        initial={45}
+        left={
+          <>
+            <div className="px-4 py-2 border-b border-brain-border flex items-center justify-between">
+              <span className="text-xs font-semibold text-brain-text-muted uppercase tracking-wide">
+                텍스트 · {session.author}
+              </span>
+              <span className="text-xs text-brain-text-soft">{stage.blocks.length}개 블록 선택됨</span>
             </div>
-          </div>
-        </div>
-
-        {/* Right: Tabs + work area */}
+            <div className="flex-1 overflow-hidden flex flex-col">
+              <h3 className="font-semibold text-base px-5 pt-3 pb-1 text-brain-text shrink-0">
+                {session.lessonTitle}
+              </h3>
+              <div className="flex-1 overflow-hidden">
+                <TextBlockSelector
+                  body={session.textBody}
+                  blocks={stage.blocks}
+                  onAddBlock={handleAddBlock}
+                  onRemoveBlock={handleRemoveBlock}
+                  highlightedBlockId={highlightedBlockId}
+                />
+              </div>
+            </div>
+          </>
+        }
+        right={
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Tab bar */}
           <div className="flex border-b border-brain-border bg-brain-surface">
@@ -239,7 +242,8 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
             )}
           </div>
         </div>
-      </div>
+        }
+      />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useProtocolStore } from "../store/useProtocolStore";
 import { NodeCanvas } from "../components/NodeCanvas";
 import { AICoach } from "../components/AICoach";
+import { SplitPane } from "../components/SplitPane";
 import { STAGE_DESCRIPTIONS, toCanvasJson } from "../types";
 import { api } from "../../v2-shell/api";
 
@@ -38,9 +39,11 @@ export function Stage3Screen({
         {STAGE_DESCRIPTIONS[3]}
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left: Reference panel (Stage1 + Stage2) */}
-        <div className="w-[35%] border-r border-brain-border flex flex-col overflow-hidden">
+      <SplitPane
+        storageKey="brain180-v3-split-stage3"
+        initial={35}
+        left={
+          <>
           <div className="flex border-b border-brain-border">
             {([1, 2] as const).map((n) => (
               <button
@@ -110,9 +113,9 @@ export function Stage3Screen({
               )}
             </div>
           )}
-        </div>
-
-        {/* Right: Writing + AI */}
+          </>
+        }
+        right={
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="flex border-b border-brain-border bg-brain-surface">
             <div className="px-4 py-2.5 text-xs font-medium text-brain-accent border-b-2 border-brain-accent">
@@ -192,7 +195,8 @@ export function Stage3Screen({
             )}
           </div>
         </div>
-      </div>
+        }
+      />
     </div>
   );
 }
