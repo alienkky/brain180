@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import cytoscape from "cytoscape";
 import type { Core } from "cytoscape";
 import type { V3Node, V3Edge, EdgeDir } from "../types";
@@ -52,6 +52,13 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
   const selectedRef = useRef<string | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+
+  // 삭제 칩 — 노드 탭/엣지 롱프레스 시 해당 요소 위에 표시
+  const [deleteChip, setDeleteChip] = useState<{ x: number; y: number; kind: "node" | "edge"; id: string } | null>(null);
+  const deleteChipRef = useRef(deleteChip);
+  deleteChipRef.current = deleteChip;
+  // effect 내부 collect 헬퍼를 쓰는 삭제 실행자
+  const deleteElRef = useRef<(kind: "node" | "edge", id: string) => void>(() => {});
 
   // Build cytoscape elements
   const buildElements = useCallback(
@@ -265,6 +272,45 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
     };
 
     if (!readOnly) {
+      // 삭제 실행자 — 칩 버튼에서 호출
+      deleteElRef.current = (kind, id) => {
+        if (kind === "node") {
+          if (selectedRef.current === id) selectedRef.current = null;
+          onChangeRef.current?.(collectNodes(id), collectEdges(id));
+        } else {
+          onChangeRef.current?.(collectNodes(), collectEdges().filter((e) => e.id !== id));
+        }
+      };
+
+      // 칩 위치 계산 (rendered 좌표)
+      const chipPosForNode = (id: string) => {
+        const n = cy.getElementById(id);
+        if (n.empty()) return null;
+        const rp = n.renderedPosition();
+        const h = n.renderedOuterHeight();
+        return { x: rp.x, y: rp.y - h / 2 - 14 };
+      };
+
+      // 팬/줌/드래그 시 칩 위치 따라가기
+      const syncChip = () => {
+        const chip = deleteChipRef.current;
+        if (!chip) return;
+        if (chip.kind === "node") {
+          const p = chipPosForNode(chip.id);
+          if (!p) setDeleteChip(null);
+          else setDeleteChip({ ...chip, ...p });
+        } else {
+          const e = cy.getElementById(chip.id);
+          if (e.empty()) setDeleteChip(null);
+          else {
+            const mp = e.renderedMidpoint();
+            setDeleteChip({ ...chip, x: mp.x, y: mp.y - 14 });
+          }
+        }
+      };
+      cy.on("pan zoom resize", syncChip);
+      cy.on("position", "node", syncChip);
+
       // Node click: edge creation via two-click
       cy.on("tap", "node", (evt) => {
         const tappedId = evt.target.id();
@@ -272,6 +318,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
           const src = selectedRef.current;
           cy.getElementById(src).removeClass("selected-source");
           selectedRef.current = null;
+          setDeleteChip(null);
           // 이미 같은 두 노드를 잇는 엣지가 있으면 중복 생성 대신 방향 순환
           const existing = cy.edges().filter(
             (e) =>
@@ -294,16 +341,36 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
           }
           selectedRef.current = tappedId;
           evt.target.addClass("selected-source");
+          // 선택된 노드 위에 삭제 칩 표시
+          const p = chipPosForNode(tappedId);
+          if (p) setDeleteChip({ kind: "node", id: tappedId, ...p });
         }
+      });
+
+      // 배경 탭: 선택·삭제 칩 해제
+      cy.on("tap", (evt) => {
+        if (evt.target !== cy) return;
+        if (selectedRef.current) {
+          cy.getElementById(selectedRef.current).removeClass("selected-source");
+          selectedRef.current = null;
+        }
+        setDeleteChip(null);
       });
 
       // 화살표(엣지) 탭: 방향 순환 — 단방향 → 양방향 → 역방향 → 없음
       cy.on("tap", "edge", (evt) => {
+        setDeleteChip(null);
         const id = evt.target.id();
         const nextEdges = collectEdges().map((e) =>
           e.id === id ? { ...e, dir: DIR_CYCLE[e.dir ?? "forward"] } : e
         );
         onChangeRef.current?.(collectNodes(), nextEdges);
+      });
+
+      // 엣지 길게 누르기: 삭제 칩 표시
+      cy.on("taphold", "edge", (evt) => {
+        const mp = evt.target.renderedMidpoint();
+        setDeleteChip({ kind: "edge", id: evt.target.id(), x: mp.x, y: mp.y - 14 });
       });
 
       // Double-click on background: add node
@@ -326,6 +393,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
       cy.on("cxttap", "node", (evt) => {
         const id = evt.target.id();
         if (selectedRef.current === id) selectedRef.current = null;
+        setDeleteChip(null);
         onChangeRef.current?.(collectNodes(id), collectEdges(id));
       });
 
@@ -478,7 +546,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
       )}
       {!readOnly && (
         <p className="text-[11px] text-brain-text-soft px-1">
-          더블클릭 → 노드 추가 · 노드 클릭 후 다른 노드 클릭 → 연결 · 화살표 클릭 → 방향 순환(→/↔/←/없음) · 우클릭 → 삭제
+          더블클릭 → 노드 추가 · 노드 탭 후 다른 노드 탭 → 연결 · 화살표 탭 → 방향 순환(→/↔/←/없음) · 노드 탭 → ✕ 삭제 칩 · 화살표 꾹 누르기 → ✕ 삭제 칩
         </p>
       )}
       <div className="relative flex-1 min-h-0">
@@ -488,6 +556,23 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
           ref={guideRef}
           className="pointer-events-none absolute inset-0 rounded-lg"
         />
+        {/* 삭제 칩 — 선택된 노드/롱프레스한 엣지 위 */}
+        {deleteChip && !readOnly && (
+          <button
+            onClick={() => {
+              deleteElRef.current(deleteChip.kind, deleteChip.id);
+              setDeleteChip(null);
+            }}
+            className="absolute z-10 flex items-center gap-1 rounded-full bg-red-500 px-2.5 py-1 text-[11px] font-medium text-white shadow-md hover:bg-red-600 transition-colors"
+            style={{
+              left: deleteChip.x,
+              top: deleteChip.y,
+              transform: "translate(-50%, -100%)",
+            }}
+          >
+            ✕ 삭제
+          </button>
+        )}
       </div>
     </div>
   );
