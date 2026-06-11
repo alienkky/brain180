@@ -336,6 +336,125 @@ function LessonEditor({
   );
 }
 
+// 모듈(라이브러리) 생성 모달
+function ModuleCreateModal({
+  nextOrder,
+  onSaved,
+  onClose,
+}: {
+  nextOrder: number;
+  onSaved: () => void;
+  onClose: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [field, setField] = useState("philosophy");
+  const [difficulty, setDifficulty] = useState(3);
+  const [description, setDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const FIELD_OPTIONS = [
+    ["philosophy", "철학"],
+    ["science", "과학/수학"],
+    ["literature", "문학"],
+    ["art", "예술/음악"],
+    ["economics", "경제/사회"],
+    ["eastern", "동양 고전"],
+  ] as const;
+
+  const save = async () => {
+    if (!title.trim()) { setError("제목을 입력하세요."); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      await api.adminCreateModule({
+        title: title.trim(),
+        slug: `m-${Date.now().toString(36)}`,
+        axis: "cognitive",
+        field,
+        order: nextOrder,
+        difficulty,
+        description: description.trim() || undefined,
+      });
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "생성 실패");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-sm rounded-xl border border-brain-border bg-brain-bg shadow-xl">
+        <div className="flex items-center justify-between border-b border-brain-border bg-brain-surface px-5 py-3">
+          <h3 className="text-sm font-semibold text-brain-text">새 라이브러리</h3>
+          <button onClick={onClose} className="text-brain-text-muted hover:text-brain-text text-lg leading-none">✕</button>
+        </div>
+        <div className="flex flex-col gap-3 px-5 py-4">
+          <label className="flex flex-col gap-1 text-xs text-brain-text-muted">
+            제목 *
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="rounded-lg border border-brain-border bg-brain-surface px-3 py-2 text-sm text-brain-text focus:border-brain-accent focus:outline-none"
+            />
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1 text-xs text-brain-text-muted">
+              분야
+              <select
+                value={field}
+                onChange={(e) => setField(e.target.value)}
+                className="rounded-lg border border-brain-border bg-brain-surface px-3 py-2 text-sm text-brain-text focus:border-brain-accent focus:outline-none"
+              >
+                {FIELD_OPTIONS.map(([v, l]) => (
+                  <option key={v} value={v}>{l}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-brain-text-muted">
+              난이도 (1~5)
+              <input
+                type="number"
+                min={1}
+                max={5}
+                value={difficulty}
+                onChange={(e) => setDifficulty(Math.min(5, Math.max(1, Number(e.target.value))))}
+                className="rounded-lg border border-brain-border bg-brain-surface px-3 py-2 text-sm text-brain-text focus:border-brain-accent focus:outline-none"
+              />
+            </label>
+          </div>
+          <label className="flex flex-col gap-1 text-xs text-brain-text-muted">
+            설명
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+              className="resize-none rounded-lg border border-brain-border bg-brain-surface px-3 py-2 text-sm text-brain-text focus:border-brain-accent focus:outline-none"
+            />
+          </label>
+        </div>
+        <div className="flex items-center justify-between border-t border-brain-border bg-brain-surface px-5 py-3">
+          <span className="text-xs text-red-500">{error}</span>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="rounded-lg border border-brain-border px-4 py-2 text-sm text-brain-text-muted hover:text-brain-text">
+              취소
+            </button>
+            <button
+              onClick={save}
+              disabled={saving}
+              className="rounded-lg bg-brain-accent px-5 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {saving ? "생성 중..." : "생성"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AdminContent() {
   const [modules, setModules] = useState<AdminModuleDto[]>([]);
   const [selectedMod, setSelectedMod] = useState<AdminModuleDto | null>(null);
@@ -344,11 +463,36 @@ function AdminContent() {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<AdminLessonDto | null>(null);
   const [creating, setCreating] = useState(false);
+  const [creatingModule, setCreatingModule] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     api.adminModules().then(setModules).finally(() => setLoading(false));
   }, []);
+
+  const refreshModules = async () => {
+    const ms = await api.adminModules();
+    setModules(ms);
+    return ms;
+  };
+
+  const deleteModule = async (m: AdminModuleDto, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm(`라이브러리 "${m.title}"을(를) 삭제할까요?`)) return;
+    setBusy(true);
+    try {
+      await api.adminDeleteModule(m.id);
+      if (selectedMod?.id === m.id) {
+        setSelectedMod(null);
+        setLessons([]);
+      }
+      await refreshModules();
+    } catch {
+      alert("레슨이 남아 있는 라이브러리는 삭제할 수 없습니다.\n(숨김 처리된 레슨 포함) 레슨을 먼저 모두 삭제하세요.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const refreshLessons = async (mod: AdminModuleDto) => {
     const ls = await api.adminLessons(mod.id);
@@ -407,25 +551,41 @@ function AdminContent() {
       {/* Module list */}
       <div className="w-64 border-r border-brain-border flex flex-col overflow-hidden">
         <div className="px-4 py-3 border-b border-brain-border flex items-center justify-between">
-          <span className="text-xs font-semibold text-brain-text-muted uppercase">모듈</span>
+          <span className="text-xs font-semibold text-brain-text-muted uppercase">라이브러리</span>
+          <button
+            onClick={() => setCreatingModule(true)}
+            className="rounded-lg bg-brain-accent px-2 py-1 text-[11px] font-medium text-white hover:opacity-90"
+          >
+            + 추가
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto py-2">
           {loading ? (
             <div className="text-center text-brain-text-muted text-xs py-6">로딩...</div>
           ) : (
             modules.map((m) => (
-              <button
+              <div
                 key={m.id}
                 onClick={() => selectMod(m)}
-                className={`w-full text-left px-4 py-3 text-sm transition-colors ${
+                className={`group flex w-full cursor-pointer items-center gap-2 px-4 py-3 text-sm transition-colors ${
                   selectedMod?.id === m.id
                     ? "bg-brain-accent-soft text-brain-accent"
                     : "text-brain-text hover:bg-brain-surface-soft"
                 }`}
               >
-                <div className="font-medium truncate">{m.title}</div>
-                <div className="text-xs text-brain-text-muted">{m.lesson_count}레슨</div>
-              </button>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium truncate">{m.title}</div>
+                  <div className="text-xs text-brain-text-muted">{m.lesson_count}레슨</div>
+                </div>
+                <button
+                  onClick={(e) => deleteModule(m, e)}
+                  disabled={busy}
+                  className="shrink-0 rounded px-1.5 py-1 text-xs text-brain-text-soft opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100 disabled:opacity-30"
+                  title="라이브러리 삭제"
+                >
+                  🗑
+                </button>
+              </div>
             ))
           )}
         </div>
@@ -539,11 +699,24 @@ function AdminContent() {
             setEditing(null);
             setCreating(false);
             await refreshLessons(selectedMod);
+            await refreshModules();
           }}
           onClose={() => {
             setEditing(null);
             setCreating(false);
           }}
+        />
+      )}
+
+      {/* Module create modal */}
+      {creatingModule && (
+        <ModuleCreateModal
+          nextOrder={modules.length + 1}
+          onSaved={async () => {
+            setCreatingModule(false);
+            await refreshModules();
+          }}
+          onClose={() => setCreatingModule(false)}
         />
       )}
     </div>
