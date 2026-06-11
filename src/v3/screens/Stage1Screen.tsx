@@ -168,17 +168,19 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
               )}
 
               {tab === "canvas" && (
-                <div className="flex-1 overflow-hidden p-3">
-                  <NodeCanvas
-                    nodes={stage.nodes}
-                    edges={stage.edges}
-                    onChange={(ns, es) => setStage1Canvas(ns, es)}
-                    wordBank={wordBank}
-                  />
+                <div className="flex-1 overflow-hidden p-3 flex flex-col gap-3">
+                  <div className="flex-1 min-h-0">
+                    <NodeCanvas
+                      nodes={stage.nodes}
+                      edges={stage.edges}
+                      onChange={(ns, es) => setStage1Canvas(ns, es)}
+                      wordBank={wordBank}
+                    />
+                  </div>
                   <button
                     onClick={() => setTab("describe")}
                     disabled={stage.nodes.length === 0}
-                    className="mt-3 px-4 py-2 rounded-lg bg-brain-accent text-white text-sm disabled:opacity-40"
+                    className="shrink-0 self-start px-4 py-2 rounded-lg bg-brain-accent text-white text-sm disabled:opacity-40"
                   >
                     설명 단계로 →
                   </button>

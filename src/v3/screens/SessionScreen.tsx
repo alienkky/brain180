@@ -5,7 +5,7 @@ import { Stage2Screen } from "./Stage2Screen";
 import { Stage3Screen } from "./Stage3Screen";
 import type { ProtocolStage } from "../types";
 
-export function SessionScreen({ onComplete }: { onComplete: () => void }) {
+export function SessionScreen({ onComplete, onExit }: { onComplete: () => void; onExit: () => void }) {
   const session = useProtocolStore((s) => s.session)!;
   const { setStage } = useProtocolStore();
 
@@ -17,9 +17,16 @@ export function SessionScreen({ onComplete }: { onComplete: () => void }) {
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="px-4 py-2 border-b border-brain-border bg-brain-surface flex items-center gap-3">
-        <div className="flex flex-col">
-          <span className="text-sm font-semibold text-brain-text">{session.lessonTitle}</span>
-          <span className="text-xs text-brain-text-muted">{session.author} · {session.source}</span>
+        <button
+          onClick={onExit}
+          className="shrink-0 px-3 py-1.5 rounded-lg border border-brain-border text-xs text-brain-text-muted hover:text-brain-text hover:border-brain-accent/50 transition-colors"
+          title="진행 내용은 저장됩니다"
+        >
+          ← 나가기
+        </button>
+        <div className="flex flex-col min-w-0">
+          <span className="text-sm font-semibold text-brain-text truncate">{session.lessonTitle}</span>
+          <span className="text-xs text-brain-text-muted truncate">{session.author} · {session.source}</span>
         </div>
       </div>
 

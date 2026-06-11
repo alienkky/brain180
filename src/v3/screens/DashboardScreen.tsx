@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
 import { api } from "../../v2-shell/api";
 import type { ArtifactGalleryDto, ProgressEntryDto } from "../../v2-shell/api";
+import { useProtocolStore } from "../store/useProtocolStore";
 import type { V3User } from "../types";
 
 interface Props {
   user: V3User;
   onGoLibrary: () => void;
+  onResume: () => void;
 }
 
-export function DashboardScreen({ user, onGoLibrary }: Props) {
+export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
+  const session = useProtocolStore((s) => s.session);
+  const { clearSession } = useProtocolStore();
   const [progress, setProgress] = useState<ProgressEntryDto[]>([]);
   const [artifacts, setArtifacts] = useState<ArtifactGalleryDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +38,36 @@ export function DashboardScreen({ user, onGoLibrary }: Props) {
             오늘도 천재의 뇌로 읽기를 시작해봅시다.
           </p>
         </div>
+
+        {/* Resume in-progress session */}
+        {session && !session.completedAt && (
+          <div className="bg-brain-surface border border-brain-accent rounded-xl p-5 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-brain-text truncate">
+                진행 중인 학습 — {session.lessonTitle}
+              </h3>
+              <p className="text-xs text-brain-text-muted mt-0.5">
+                {session.author} · 현재 {session.currentStage}부
+              </p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={() => {
+                  if (window.confirm("진행 중인 학습을 삭제할까요? 작업 내용이 사라집니다.")) clearSession();
+                }}
+                className="px-3 py-2 rounded-lg border border-brain-border text-brain-text-muted text-xs hover:text-brain-text"
+              >
+                삭제
+              </button>
+              <button
+                onClick={onResume}
+                className="px-5 py-2 rounded-lg bg-brain-accent text-white text-sm font-medium hover:opacity-90 transition-opacity"
+              >
+                이어하기 →
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4">

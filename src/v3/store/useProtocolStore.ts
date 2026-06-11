@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type {
   V3SessionState,
   StageState,
@@ -52,7 +53,9 @@ interface ProtocolStore {
   markComplete: () => void;
 }
 
-export const useProtocolStore = create<ProtocolStore>((set) => ({
+export const useProtocolStore = create<ProtocolStore>()(
+  persist(
+    (set) => ({
   session: null,
 
   startSession: ({ sessionId, lessonId, lessonTitle, author, source, textBody }) =>
@@ -170,4 +173,13 @@ export const useProtocolStore = create<ProtocolStore>((set) => ({
           }
         : s
     ),
-}));
+    }),
+    {
+      name: "brain180-v3-session",
+      // 완료된 세션은 복원하지 않음 (새 학습 방해 방지)
+      partialize: (s) => ({
+        session: s.session && !s.session.completedAt ? s.session : null,
+      }),
+    }
+  )
+);

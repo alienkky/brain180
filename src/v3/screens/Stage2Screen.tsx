@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useProtocolStore } from "../store/useProtocolStore";
 import { NodeCanvas } from "../components/NodeCanvas";
 import { AICoach } from "../components/AICoach";
@@ -27,12 +27,15 @@ export function Stage2Screen({
 
   const [showAI, setShowAI] = useState(false);
 
-  // Init default nodes if empty
-  if (stage2.nodes.length === 0) {
-    setStage2Canvas(makeDefaultStage2Nodes(), [
-      { id: "lens_edge", from: "target_node", to: "lens_node", label: "→ 렌즈로 바라봄" },
-    ]);
-  }
+  // 최초 진입 시 기본 노드 세팅 (렌더 중 setState 금지 — effect 로)
+  useEffect(() => {
+    if (stage2.nodes.length === 0 && !stage2.done) {
+      setStage2Canvas(makeDefaultStage2Nodes(), [
+        { id: "lens_edge", from: "target_node", to: "lens_node", label: "→ 렌즈로 바라봄" },
+      ]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const canvasSnapshot = toCanvasJson(stage2.nodes, stage2.edges);
 
@@ -101,11 +104,11 @@ export function Stage2Screen({
           <div className={`flex flex-1 overflow-hidden ${showAI ? "flex-row" : ""}`}>
             {/* Canvas + description */}
             <div className={`flex flex-col overflow-hidden ${showAI ? "w-[55%] border-r border-brain-border" : "flex-1"}`}>
-              <div className="flex-1 overflow-hidden p-3">
-                <p className="text-xs text-brain-text-muted mb-2">
+              <div className="flex-1 overflow-hidden p-3 flex flex-col gap-2">
+                <p className="text-xs text-brain-text-muted shrink-0">
                   "대상" 노드와 "렌즈" 노드 이름을 더블클릭하여 수정하고, 저자의 관점을 추가 노드로 표현하세요.
                 </p>
-                <div className="h-[calc(100%-2rem)]">
+                <div className="flex-1 min-h-0">
                   <NodeCanvas
                     nodes={stage2.nodes}
                     edges={stage2.edges}

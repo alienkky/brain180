@@ -23,6 +23,7 @@ export function LibraryScreen({ onSessionStart }: Props) {
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState<string | null>(null);
   const { startSession } = useProtocolStore();
+  const existingSession = useProtocolStore((s) => s.session);
 
   useEffect(() => {
     api.modules().then(setModules).finally(() => setLoading(false));
@@ -38,6 +39,12 @@ export function LibraryScreen({ onSessionStart }: Props) {
     if (!lesson.text_excerpt_id) {
       alert("이 레슨에 텍스트가 등록되지 않았습니다.");
       return;
+    }
+    if (existingSession && !existingSession.completedAt) {
+      const ok = window.confirm(
+        `진행 중인 학습(${existingSession.lessonTitle})이 있습니다.\n새 레슨을 시작하면 기존 진행 내용이 사라집니다. 계속할까요?`
+      );
+      if (!ok) return;
     }
     setStarting(lesson.id);
     try {

@@ -133,7 +133,11 @@ export function V3Shell() {
       {/* Screen content */}
       <div className={`flex-1 overflow-hidden ${screen !== "session" && screen !== "complete" ? "flex" : ""}`}>
         {screen === "dashboard" && user && (
-          <DashboardScreen user={user} onGoLibrary={() => setScreen("library")} />
+          <DashboardScreen
+            user={user}
+            onGoLibrary={() => setScreen("library")}
+            onResume={() => setScreen("session")}
+          />
         )}
         {screen === "library" && (
           <LibraryScreen onSessionStart={() => setScreen("session")} />
@@ -141,6 +145,7 @@ export function V3Shell() {
         {screen === "session" && session && (
           <SessionScreen
             onComplete={() => setScreen("complete")}
+            onExit={() => setScreen("dashboard")}
           />
         )}
         {screen === "session" && !session && (
@@ -158,6 +163,19 @@ export function V3Shell() {
         )}
         {screen === "complete" && session && (
           <CompletionScreen onBack={() => setScreen("dashboard")} />
+        )}
+        {screen === "complete" && !session && (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center text-brain-text-muted">
+              <p className="mb-4">완료된 세션 정보가 없습니다.</p>
+              <button
+                onClick={() => setScreen("dashboard")}
+                className="px-4 py-2 rounded-lg bg-brain-accent text-white text-sm"
+              >
+                대시보드로
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>
