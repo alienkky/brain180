@@ -166,6 +166,13 @@ export function TextBlockSelector({ body, blocks, onAddBlock, onRemoveBlock, hig
     return map;
   }, [blocks, words, wordIndex]);
 
+  // 선택된 블록과 같은 텍스트 — 본문 내 동일 단어 연한 표시용 (v1/v2 동작)
+  const blockTexts = useMemo(() => {
+    const s = new Set<string>();
+    for (const b of blocks) s.add(b.text);
+    return s;
+  }, [blocks]);
+
   const renderGroups = useMemo<RenderGroup[]>(() => {
     const groups: RenderGroup[] = [];
     let currentBlock: BlockWord | null = null;
@@ -438,6 +445,8 @@ export function TextBlockSelector({ body, blocks, onAddBlock, onRemoveBlock, hig
                   const isPunct = /^[^\w가-힣]+$/.test(w.text);
                   if (isPunct) return <span key={w.key}>{w.text}</span>;
                   const isAnchor = rangeAnchor === w.key;
+                  // 선택된 블록과 같은 단어 — 본문 내 다른 등장 위치 연한 표시
+                  const isSameAsBlock = !isAnchor && blockTexts.has(w.text);
                   return (
                     <span
                       key={w.key}
@@ -450,16 +459,27 @@ export function TextBlockSelector({ body, blocks, onAddBlock, onRemoveBlock, hig
                         cursor: "pointer",
                         border: isAnchor
                           ? "1.5px dashed var(--color-brain-highlight)"
+                          : isSameAsBlock
+                          ? "1.5px dashed rgba(184,92,63,0.45)"
                           : "1.5px solid transparent",
-                        backgroundColor: isAnchor ? "rgba(198,138,61,0.10)" : "transparent",
-                        borderRadius: isAnchor ? "9999px" : undefined,
-                        padding: isAnchor ? "1px 7px" : "1px 2px",
-                        verticalAlign: isAnchor ? "middle" : undefined,
-                        color: isAnchor ? "var(--color-brain-highlight)" : undefined,
+                        backgroundColor: isAnchor
+                          ? "rgba(198,138,61,0.10)"
+                          : isSameAsBlock
+                          ? "rgba(184,92,63,0.06)"
+                          : "transparent",
+                        borderRadius: isAnchor || isSameAsBlock ? "9999px" : undefined,
+                        padding: isAnchor || isSameAsBlock ? "1px 7px" : "1px 2px",
+                        verticalAlign: isAnchor || isSameAsBlock ? "middle" : undefined,
+                        color: isAnchor
+                          ? "var(--color-brain-highlight)"
+                          : isSameAsBlock
+                          ? "var(--color-brain-accent)"
+                          : undefined,
                         fontWeight: isAnchor ? 500 : undefined,
                         userSelect: isAnchor ? "none" : undefined,
                         transition: "all 0.15s ease",
                       }}
+                      title={isSameAsBlock ? "선택된 블록과 같은 단어" : undefined}
                     >
                       {w.text}
                     </span>
