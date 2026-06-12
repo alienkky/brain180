@@ -198,9 +198,14 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
                   min={20}
                   max={75}
                   left={
-                    <div className="h-full min-h-0 p-3">
+                    <div className="h-full min-h-0 p-3 flex flex-col">
+                      <div className="shrink-0 pb-1 text-[11px] text-brain-text-soft">
+                        노드 {stage.nodes.length} · 연결 {stage.edges.length}
+                      </div>
                       {stage.nodes.length > 0 ? (
-                        <NodeCanvas nodes={stage.nodes} edges={stage.edges} onChange={() => {}} readOnly />
+                        <div className="flex-1 min-h-0">
+                          <NodeCanvas nodes={stage.nodes} edges={stage.edges} onChange={() => {}} readOnly />
+                        </div>
                       ) : (
                         <div className="flex h-full items-center justify-center text-sm text-brain-text-soft">
                           ② 시각화 단계에서 만든 다이어그램이 여기에 표시됩니다.

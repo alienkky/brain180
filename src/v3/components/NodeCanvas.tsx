@@ -523,6 +523,19 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
       });
     }
 
+    // 진단: cytoscape 는 끝점 노드가 없는 엣지를 경고만 남기고 조용히 건너뜀.
+    // 요청 대비 실제 추가된 엣지가 적으면 어떤 엣지가 왜 빠졌는지 기록.
+    if (cy.edges().length < edges.length) {
+      const nodeIds = new Set(nodes.map((n) => n.id));
+      const dropped = edges.filter(
+        (e) => !nodeIds.has(e.from) || !nodeIds.has(e.to)
+      );
+      console.warn(
+        `[NodeCanvas] 엣지 ${edges.length}개 중 ${cy.edges().length}개만 생성됨. 끝점 누락:`,
+        dropped.map((e) => `${e.id}: ${e.from} -> ${e.to}`)
+      );
+    }
+
     // 읽기전용(참고용) 캔버스: 저장된 좌표가 화면 밖이어도 전체가 보이게 맞춤
     if (readOnly && cy.elements().length > 0) {
       cy.fit(undefined, 30);
