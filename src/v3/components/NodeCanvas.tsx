@@ -523,7 +523,21 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
       });
     }
 
+    // 읽기전용(참고용) 캔버스: 저장된 좌표가 화면 밖이어도 전체가 보이게 맞춤
+    if (readOnly && cy.elements().length > 0) {
+      cy.fit(undefined, 30);
+    }
+
+    // 컨테이너 크기 변화 추적 — cytoscape 는 자동 리사이즈를 안 함.
+    // SplitPane 드래그/탭 전환 직후 크기 0→실측 전환 시 빈 캔버스로 남는 문제 방지.
+    const ro = new ResizeObserver(() => {
+      cy.resize();
+      if (readOnly && cy.elements().length > 0) cy.fit(undefined, 30);
+    });
+    ro.observe(containerRef.current);
+
     return () => {
+      ro.disconnect();
       cy.destroy();
       cyRef.current = null;
     };
