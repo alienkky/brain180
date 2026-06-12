@@ -191,9 +191,21 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
               )}
 
               {tab === "describe" && (
-                <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  {/* 위: 만든 다이어그램 보며 설명 작성 (읽기전용) */}
+                  <div className="h-[45%] min-h-0 shrink-0 border-b border-brain-border p-3">
+                    {stage.nodes.length > 0 ? (
+                      <NodeCanvas nodes={stage.nodes} edges={stage.edges} onChange={() => {}} readOnly />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-sm text-brain-text-soft">
+                        ② 시각화 단계에서 만든 다이어그램이 여기에 표시됩니다.
+                      </div>
+                    )}
+                  </div>
+                  {/* 아래: 설명 입력 */}
+                  <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
                   <p className="text-xs text-brain-text-muted">
-                    만든 다이어그램을 설명하세요. 어떤 구조를 발견했나요?
+                    위 다이어그램을 보며 설명하세요. 어떤 구조를 발견했나요?
                   </p>
                   <textarea
                     value={stage.description}
@@ -221,6 +233,7 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
                   {stage.messages.length === 0 && (
                     <p className="text-xs text-brain-text-soft">AI 피드백을 1회 이상 받아야 2부로 진행할 수 있습니다.</p>
                   )}
+                  </div>
                 </div>
               )}
             </div>
