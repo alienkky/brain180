@@ -357,9 +357,8 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
           }
           selectedRef.current = tappedId;
           evt.target.addClass("selected-source");
-          // 선택된 노드 위에 삭제 칩 표시
-          const p = chipPosForNode(tappedId);
-          if (p) setDeleteChip({ kind: "node", id: tappedId, ...p });
+          // 삭제 칩은 꾹 누르기(taphold)에서만 — 탭 선택 시엔 표시하지 않음
+          setDeleteChip(null);
         }
       });
 

@@ -7,15 +7,26 @@ import type { ReactNode } from "react";
 interface Props {
   left: ReactNode;
   right: ReactNode;
-  /** 왼쪽 패널 초기 비율 (%) */
+  /** 첫 번째 패널(왼쪽/위) 초기 비율 (%) */
   initial?: number;
   min?: number;
   max?: number;
   /** localStorage 저장 키 — 없으면 저장 안 함 */
   storageKey?: string;
+  /** vertical = 상하 분할 (left=위, right=아래) */
+  direction?: "horizontal" | "vertical";
 }
 
-export function SplitPane({ left, right, initial = 45, min = 25, max = 70, storageKey }: Props) {
+export function SplitPane({
+  left,
+  right,
+  initial = 45,
+  min = 25,
+  max = 70,
+  storageKey,
+  direction = "horizontal",
+}: Props) {
+  const isVertical = direction === "vertical";
   const [pct, setPct] = useState<number>(() => {
     if (storageKey) {
       const saved = Number(localStorage.getItem(storageKey));
@@ -31,16 +42,18 @@ export function SplitPane({ left, right, initial = 45, min = 25, max = 70, stora
   const onSplitPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     resizingRef.current = true;
-    document.body.style.cursor = "col-resize";
+    document.body.style.cursor = isVertical ? "row-resize" : "col-resize";
     document.body.style.userSelect = "none";
-  }, []);
+  }, [isVertical]);
 
   useEffect(() => {
     const onPointerMove = (e: PointerEvent) => {
       if (!resizingRef.current || !layoutRef.current) return;
       const rect = layoutRef.current.getBoundingClientRect();
-      if (rect.width <= 0) return;
-      const next = ((e.clientX - rect.left) / rect.width) * 100;
+      const size = isVertical ? rect.height : rect.width;
+      if (size <= 0) return;
+      const offset = isVertical ? e.clientY - rect.top : e.clientX - rect.left;
+      const next = (offset / size) * 100;
       setPct(Math.min(max, Math.max(min, next)));
     };
     const onPointerUp = () => {
@@ -58,27 +71,35 @@ export function SplitPane({ left, right, initial = 45, min = 25, max = 70, stora
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     };
-  }, [min, max, storageKey]);
+  }, [min, max, storageKey, isVertical]);
 
   return (
     <div
       ref={layoutRef}
       className="grid flex-1 overflow-hidden"
-      style={{ gridTemplateColumns: `${pct}% 10px minmax(0, 1fr)` }}
+      style={
+        isVertical
+          ? { gridTemplateRows: `${pct}% 10px minmax(0, 1fr)` }
+          : { gridTemplateColumns: `${pct}% 10px minmax(0, 1fr)` }
+      }
     >
-      <div className="flex min-h-0 flex-col overflow-hidden">{left}</div>
+      <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">{left}</div>
       <div
-        className="flex cursor-col-resize items-center justify-center border-x border-brain-border bg-brain-surface-soft transition-colors hover:bg-brain-accent-soft/60"
+        className={
+          isVertical
+            ? "flex cursor-row-resize items-center justify-center border-y border-brain-border bg-brain-surface-soft transition-colors hover:bg-brain-accent-soft/60"
+            : "flex cursor-col-resize items-center justify-center border-x border-brain-border bg-brain-surface-soft transition-colors hover:bg-brain-accent-soft/60"
+        }
         style={{ touchAction: "none" }}
         onPointerDown={onSplitPointerDown}
         role="separator"
-        aria-orientation="vertical"
-        aria-label="좌우 패널 너비 조절"
-        title="드래그해서 너비 조절"
+        aria-orientation={isVertical ? "horizontal" : "vertical"}
+        aria-label={isVertical ? "상하 패널 높이 조절" : "좌우 패널 너비 조절"}
+        title={isVertical ? "드래그해서 높이 조절" : "드래그해서 너비 조절"}
       >
-        <div className="h-12 w-1 rounded-full bg-brain-border" />
+        <div className={isVertical ? "h-1 w-12 rounded-full bg-brain-border" : "h-12 w-1 rounded-full bg-brain-border"} />
       </div>
-      <div className="flex min-h-0 flex-col overflow-hidden">{right}</div>
+      <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">{right}</div>
     </div>
   );
 }
