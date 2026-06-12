@@ -313,9 +313,23 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
       cy.on("pan zoom resize", syncChip);
       cy.on("position", "node", syncChip);
 
+      // 노드 꾹 누르기: 삭제 칩 표시 (탭 선택과 별개로 바로 삭제 가능)
+      let tapholdNodeId: string | null = null;
+      cy.on("taphold", "node", (evt) => {
+        const id = evt.target.id() as string;
+        tapholdNodeId = id;
+        const p = chipPosForNode(id);
+        if (p) setDeleteChip({ kind: "node", id, ...p });
+      });
+
       // Node click: edge creation via two-click
       cy.on("tap", "node", (evt) => {
         const tappedId = evt.target.id();
+        // taphold 후 release 의 tap 은 무시 — 칩 유지, 선택/연결 로직 스킵
+        if (tapholdNodeId === tappedId) {
+          tapholdNodeId = null;
+          return;
+        }
         if (selectedRef.current && selectedRef.current !== tappedId) {
           const src = selectedRef.current;
           cy.getElementById(src).removeClass("selected-source");
