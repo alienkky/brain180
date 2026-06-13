@@ -124,9 +124,11 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // 주의: elements 를 생성자에 넘기면 (이 설정 조합에서) 엣지가 그려지지 않는
+    // 렌더 버그 발생 — 노드는 보이고 연결선만 안 보임. 생성 후 cy.add() 경로는
+    // 정상 렌더되므로 (시각화 탭에서 증분 추가로 검증됨) 그 경로로 통일한다.
     const cy = cytoscape({
       container: containerRef.current,
-      elements: buildElements(nodes, edges),
       style: [
         {
           selector: "node",
@@ -240,6 +242,9 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
       userPanningEnabled: true,
       boxSelectionEnabled: false,
     });
+
+    // 생성자 elements 대신 add() — 위 주석 참고
+    cy.add(buildElements(nodes, edges));
 
     cyRef.current = cy;
 
