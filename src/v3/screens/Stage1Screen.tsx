@@ -204,7 +204,13 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
                       </div>
                       {stage.nodes.length > 0 ? (
                         <div className="flex-1 min-h-0">
-                          <NodeCanvas nodes={stage.nodes} edges={stage.edges} onChange={() => {}} readOnly />
+                          {/* readOnly 지만 노드 이동은 저장 — ② 시각화와 위치 연동 */}
+                          <NodeCanvas
+                            nodes={stage.nodes}
+                            edges={stage.edges}
+                            onChange={(ns, es) => setStage1Canvas(ns, es)}
+                            readOnly
+                          />
                         </div>
                       ) : (
                         <div className="flex h-full items-center justify-center text-sm text-brain-text-soft">

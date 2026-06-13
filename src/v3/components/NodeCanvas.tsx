@@ -145,11 +145,9 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // 주의: elements 를 생성자에 넘기면 (이 설정 조합에서) 엣지가 그려지지 않는
-    // 렌더 버그 발생 — 노드는 보이고 연결선만 안 보임. 생성 후 cy.add() 경로는
-    // 정상 렌더되므로 (시각화 탭에서 증분 추가로 검증됨) 그 경로로 통일한다.
     const cy = cytoscape({
       container: containerRef.current,
+      elements: buildElements(nodes, edges),
       style: [
         {
           selector: "node",
@@ -264,10 +262,17 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
       boxSelectionEnabled: false,
     });
 
-    // 생성자 elements 대신 add() — 위 주석 참고
-    cy.add(buildElements(nodes, edges));
-
     cyRef.current = cy;
+
+    // 일부 환경에서 초기 페인트에 엣지가 빠지는 현상 — 첫 프레임 뒤 강제 재렌더
+    const flushRaf = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (cyRef.current) {
+          cyRef.current.resize();
+          cyRef.current.forceRender();
+        }
+      });
+    });
 
     // 현재 그래프 수집 — dir 포함 (누락 시 드래그/삭제마다 방향 초기화됨)
     const collectNodes = (excludeId?: string): V3Node[] => {
@@ -549,6 +554,14 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
       });
     }
 
+    if (readOnly) {
+      // 읽기전용 캔버스도 노드 이동(드래그)은 가능 — 위치를 저장해 ②와 연동.
+      // (onChange 를 안 넘기는 참고용 캔버스는 그대로 저장 안 됨)
+      cy.on("dragfree", "node", () => {
+        onChangeRef.current?.(collectNodes(), collectEdges());
+      });
+    }
+
     // 읽기전용(참고용) 캔버스: 저장된 좌표가 화면 밖이어도 전체가 보이게 맞춤
     if (readOnly && cy.elements().length > 0) {
       cy.fit(undefined, 30);
@@ -563,6 +576,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
     ro.observe(containerRef.current);
 
     return () => {
+      cancelAnimationFrame(flushRaf);
       ro.disconnect();
       cy.destroy();
       cyRef.current = null;
