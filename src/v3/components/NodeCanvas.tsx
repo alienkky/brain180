@@ -62,6 +62,27 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
   // effect 내부 collect 헬퍼를 쓰는 삭제 실행자
   const deleteElRef = useRef<(kind: "node" | "edge", id: string) => void>(() => {});
 
+  // 고아 엣지 제거 — 끝점 노드가 없는 엣지가 하나라도 섞이면 cytoscape add 가
+  // throw 하면서 그 뒤 엣지 추가/동기화가 전부 중단된다 (③ 설명 탭 연결선 전멸,
+  // ② 시각화 새 노드 미반영의 원인). 과거 버전 잔재가 localStorage 영속으로
+  // 살아남을 수 있어 읽기 시점에 정리한다.
+  const sanitizeEdges = useCallback((ns: V3Node[], es: V3Edge[]) => {
+    const ids = new Set(ns.map((n) => n.id));
+    const valid: V3Edge[] = [];
+    const dropped: V3Edge[] = [];
+    for (const e of es) {
+      if (ids.has(e.from) && ids.has(e.to)) valid.push(e);
+      else dropped.push(e);
+    }
+    if (dropped.length > 0) {
+      console.warn(
+        `[NodeCanvas] 끝점 없는 엣지 ${dropped.length}개 제외:`,
+        dropped.map((e) => `${e.id}: ${e.from} -> ${e.to}`)
+      );
+    }
+    return valid;
+  }, []);
+
   // Build cytoscape elements
   const buildElements = useCallback(
     (ns: V3Node[], es: V3Edge[]) => [
@@ -69,11 +90,11 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
         data: { id: n.id, label: n.label, kind: n.kind ?? "concept" },
         position: { x: n.x, y: n.y },
       })),
-      ...es.map((e) => ({
+      ...sanitizeEdges(ns, es).map((e) => ({
         data: { id: e.id, source: e.from, target: e.to, label: e.label ?? "", dir: e.dir ?? "forward" },
       })),
     ],
-    []
+    [sanitizeEdges]
   );
 
   // Sync state → cytoscape (diff-based)
@@ -106,7 +127,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
         if (node.data("label") !== n.label) node.data("label", n.label);
       }
     });
-    edges.forEach((e) => {
+    sanitizeEdges(nodes, edges).forEach((e) => {
       if (!existingEdgeIds.has(e.id)) {
         cy.add({
           data: { id: e.id, source: e.from, target: e.to, label: e.label ?? "", dir: e.dir ?? "forward" },
@@ -118,7 +139,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
         if (el.data("label") !== (e.label ?? "")) el.data("label", e.label ?? "");
       }
     });
-  }, [nodes, edges]);
+  }, [nodes, edges, sanitizeEdges]);
 
   // Init cytoscape once
   useEffect(() => {
@@ -526,19 +547,6 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
         clearGuides();
         onChangeRef.current?.(collectNodes(), collectEdges());
       });
-    }
-
-    // 진단: cytoscape 는 끝점 노드가 없는 엣지를 경고만 남기고 조용히 건너뜀.
-    // 요청 대비 실제 추가된 엣지가 적으면 어떤 엣지가 왜 빠졌는지 기록.
-    if (cy.edges().length < edges.length) {
-      const nodeIds = new Set(nodes.map((n) => n.id));
-      const dropped = edges.filter(
-        (e) => !nodeIds.has(e.from) || !nodeIds.has(e.to)
-      );
-      console.warn(
-        `[NodeCanvas] 엣지 ${edges.length}개 중 ${cy.edges().length}개만 생성됨. 끝점 누락:`,
-        dropped.map((e) => `${e.id}: ${e.from} -> ${e.to}`)
-      );
     }
 
     // 읽기전용(참고용) 캔버스: 저장된 좌표가 화면 밖이어도 전체가 보이게 맞춤
