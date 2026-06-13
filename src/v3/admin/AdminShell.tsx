@@ -336,20 +336,23 @@ function LessonEditor({
   );
 }
 
-// 모듈(라이브러리) 생성 모달
-function ModuleCreateModal({
+// 모듈(라이브러리) 생성/편집 모달
+function ModuleEditModal({
+  module,
   nextOrder,
   onSaved,
   onClose,
 }: {
+  module: AdminModuleDto | null; // null = 새 라이브러리
   nextOrder: number;
   onSaved: () => void;
   onClose: () => void;
 }) {
-  const [title, setTitle] = useState("");
-  const [field, setField] = useState("philosophy");
-  const [difficulty, setDifficulty] = useState(3);
-  const [description, setDescription] = useState("");
+  const [title, setTitle] = useState(module?.title ?? "");
+  const [field, setField] = useState(module?.field ?? "philosophy");
+  const [difficulty, setDifficulty] = useState(module?.difficulty ?? 3);
+  const [description, setDescription] = useState(module?.description ?? "");
+  const [order, setOrder] = useState(module?.order ?? nextOrder);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -367,18 +370,28 @@ function ModuleCreateModal({
     setSaving(true);
     setError(null);
     try {
-      await api.adminCreateModule({
-        title: title.trim(),
-        slug: `m-${Date.now().toString(36)}`,
-        axis: "cognitive",
-        field,
-        order: nextOrder,
-        difficulty,
-        description: description.trim() || undefined,
-      });
+      if (module) {
+        await api.adminUpdateModule(module.id, {
+          title: title.trim(),
+          field,
+          order,
+          difficulty,
+          description: description.trim() || undefined,
+        });
+      } else {
+        await api.adminCreateModule({
+          title: title.trim(),
+          slug: `m-${Date.now().toString(36)}`,
+          axis: "cognitive",
+          field,
+          order: nextOrder,
+          difficulty,
+          description: description.trim() || undefined,
+        });
+      }
       onSaved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "생성 실패");
+      setError(e instanceof Error ? e.message : module ? "수정 실패" : "생성 실패");
     } finally {
       setSaving(false);
     }
@@ -388,7 +401,7 @@ function ModuleCreateModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-sm rounded-xl border border-brain-border bg-brain-bg shadow-xl">
         <div className="flex items-center justify-between border-b border-brain-border bg-brain-surface px-5 py-3">
-          <h3 className="text-sm font-semibold text-brain-text">새 라이브러리</h3>
+          <h3 className="text-sm font-semibold text-brain-text">{module ? "라이브러리 편집" : "새 라이브러리"}</h3>
           <button onClick={onClose} className="text-brain-text-muted hover:text-brain-text text-lg leading-none">✕</button>
         </div>
         <div className="flex flex-col gap-3 px-5 py-4">
@@ -425,6 +438,17 @@ function ModuleCreateModal({
               />
             </label>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1 text-xs text-brain-text-muted">
+              순서
+              <input
+                type="number"
+                value={order}
+                onChange={(e) => setOrder(Number(e.target.value))}
+                className="rounded-lg border border-brain-border bg-brain-surface px-3 py-2 text-sm text-brain-text focus:border-brain-accent focus:outline-none"
+              />
+            </label>
+          </div>
           <label className="flex flex-col gap-1 text-xs text-brain-text-muted">
             설명
             <textarea
@@ -446,7 +470,7 @@ function ModuleCreateModal({
               disabled={saving}
               className="rounded-lg bg-brain-accent px-5 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
             >
-              {saving ? "생성 중..." : "생성"}
+              {saving ? "저장 중..." : module ? "저장" : "생성"}
             </button>
           </div>
         </div>
@@ -464,6 +488,7 @@ function AdminContent() {
   const [editing, setEditing] = useState<AdminLessonDto | null>(null);
   const [creating, setCreating] = useState(false);
   const [creatingModule, setCreatingModule] = useState(false);
+  const [editingModule, setEditingModule] = useState<AdminModuleDto | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -577,6 +602,13 @@ function AdminContent() {
                   <div className="font-medium truncate">{m.title}</div>
                   <div className="text-xs text-brain-text-muted">{m.lesson_count}레슨</div>
                 </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setEditingModule(m); }}
+                  className="shrink-0 rounded px-1.5 py-1 text-xs text-brain-text-soft opacity-0 transition-opacity hover:text-brain-accent group-hover:opacity-100"
+                  title="라이브러리 편집"
+                >
+                  ✏️
+                </button>
                 <button
                   onClick={(e) => deleteModule(m, e)}
                   disabled={busy}
@@ -709,14 +741,24 @@ function AdminContent() {
       )}
 
       {/* Module create modal */}
-      {creatingModule && (
-        <ModuleCreateModal
+      {(creatingModule || editingModule) && (
+        <ModuleEditModal
+          module={editingModule}
           nextOrder={modules.length + 1}
           onSaved={async () => {
             setCreatingModule(false);
-            await refreshModules();
+            setEditingModule(null);
+            const ms = await refreshModules();
+            // 편집 중인 모듈이 선택돼 있으면 최신 값으로 갱신
+            if (selectedMod) {
+              const fresh = ms.find((m) => m.id === selectedMod.id);
+              if (fresh) setSelectedMod(fresh);
+            }
           }}
-          onClose={() => setCreatingModule(false)}
+          onClose={() => {
+            setCreatingModule(false);
+            setEditingModule(null);
+          }}
         />
       )}
     </div>

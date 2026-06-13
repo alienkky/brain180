@@ -444,7 +444,7 @@ export function TextBlockSelector({ body, blocks, onAddBlock, onRemoveBlock, hig
                           border: isAnchor
                             ? "1.5px dashed var(--color-brain-highlight)"
                             : "1.5px solid transparent",
-                          borderRadius: "6px",
+                          borderRadius: "9999px",
                           backgroundColor: isAnchor ? "rgba(198,138,61,0.10)" : "transparent",
                           color: isAnchor ? "var(--color-brain-highlight)" : undefined,
                           padding: "1px 2px",
@@ -491,7 +491,7 @@ export function TextBlockSelector({ body, blocks, onAddBlock, onRemoveBlock, hig
                           : isSameAsBlock
                           ? "rgba(184,92,63,0.06)"
                           : "transparent",
-                        borderRadius: "6px",
+                        borderRadius: "9999px",
                         padding: "1px 2px",
                         color: isAnchor
                           ? "var(--color-brain-highlight)"
