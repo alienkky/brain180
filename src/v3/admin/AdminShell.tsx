@@ -5,6 +5,7 @@ import type {
   AdminModuleDto,
   AdminLessonDto,
   AdminTutorRatingsDto,
+  AdminUserProgressDto,
 } from "../../v2-shell/api";
 import { useTheme, ACCENT_OPTIONS, HL_OPTIONS } from "../../v2-shell/useTheme";
 import type { Skin } from "../../v2-shell/useTheme";
@@ -60,97 +61,318 @@ function AdminDashboard() {
   );
 }
 
+const USER_STATUS_LABELS: Record<string, string> = {
+  pending_approval: "대기",
+  approved: "승인됨",
+  rejected: "거절됨",
+  suspended: "정지됨",
+};
+
+function statusBadgeClass(status: string) {
+  return status === "approved"
+    ? "bg-green-100 text-green-700"
+    : status === "pending_approval"
+    ? "bg-amber-100 text-amber-700"
+    : status === "rejected"
+    ? "bg-red-100 text-red-700"
+    : "bg-brain-surface-soft text-brain-text-muted";
+}
+
+// 회원 진도 상세 + 관리 액션 패널 (우측 드로어)
+function UserDetailDrawer({
+  user,
+  onClose,
+  onChanged,
+}: {
+  user: UserDto;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [prog, setProg] = useState<AdminUserProgressDto | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [tempPw, setTempPw] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    setTempPw(null);
+    api.adminUserProgress(user.id).then(setProg).catch(() => setProg(null)).finally(() => setLoading(false));
+  }, [user.id]);
+
+  const act = async (fn: () => Promise<unknown>, confirmMsg?: string) => {
+    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    setBusy(true);
+    try {
+      await fn();
+      onChanged();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "작업 실패");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resetPw = async () => {
+    if (!window.confirm(`${user.name}님의 비밀번호를 임시 비밀번호로 재설정할까요?`)) return;
+    setBusy(true);
+    try {
+      const r = await api.adminResetUserPassword(user.id);
+      setTempPw(r.temp_password);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "재설정 실패");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const fmt = (s: string | null) => (s ? new Date(s).toLocaleString("ko-KR") : "—");
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={onClose}>
+      <div
+        className="flex h-full w-full max-w-md flex-col overflow-hidden bg-brain-bg shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between border-b border-brain-border bg-brain-surface px-5 py-4">
+          <div className="min-w-0">
+            <div className="text-base font-semibold text-brain-text truncate">{user.name}</div>
+            <div className="text-xs text-brain-text-muted mt-0.5 truncate">{user.email}</div>
+            <div className="mt-2 flex items-center gap-2">
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusBadgeClass(user.status)}`}>
+                {USER_STATUS_LABELS[user.status] ?? user.status}
+              </span>
+              <span className="text-xs text-brain-text-soft">{user.role === "admin" ? "관리자" : "학습자"}</span>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-brain-text-muted hover:text-brain-text text-lg leading-none">✕</button>
+        </div>
+
+        {/* Actions */}
+        <div className="border-b border-brain-border px-5 py-3 space-y-2">
+          <div className="flex flex-wrap gap-2">
+            {user.status !== "approved" && (
+              <button onClick={() => act(() => api.adminApprove(user.id))} disabled={busy}
+                className="text-xs px-3 py-1.5 rounded-lg bg-green-600 text-white disabled:opacity-50 hover:bg-green-700">승인</button>
+            )}
+            {user.status === "pending_approval" && (
+              <button onClick={() => act(() => api.adminReject(user.id))} disabled={busy}
+                className="text-xs px-3 py-1.5 rounded-lg border border-brain-border text-brain-text-muted disabled:opacity-50 hover:text-brain-text">거절</button>
+            )}
+            {user.status === "approved" && (
+              <button onClick={() => act(() => api.adminSuspendUser(user.id), `${user.name}님을 정지할까요?`)} disabled={busy}
+                className="text-xs px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-700 disabled:opacity-50 hover:bg-amber-100">정지</button>
+            )}
+            <button
+              onClick={() => act(() => api.adminUpdateUser(user.id, { role: user.role === "admin" ? "user" : "admin" }),
+                user.role === "admin" ? `${user.name}님의 관리자 권한을 해제할까요?` : `${user.name}님을 관리자로 지정할까요?`)}
+              disabled={busy}
+              className="text-xs px-3 py-1.5 rounded-lg border border-brain-border text-brain-text-muted disabled:opacity-50 hover:text-brain-text">
+              {user.role === "admin" ? "관리자 해제" : "관리자 지정"}
+            </button>
+            <button onClick={resetPw} disabled={busy}
+              className="text-xs px-3 py-1.5 rounded-lg border border-brain-border text-brain-text-muted disabled:opacity-50 hover:text-brain-text">비밀번호 재설정</button>
+            <button onClick={() => act(() => api.adminDeleteUser(user.id), `${user.name}님을 삭제할까요?\n로그인이 차단되고 목록에서 사라집니다. (학습 기록은 보존)`)} disabled={busy}
+              className="text-xs px-3 py-1.5 rounded-lg border border-red-300 bg-red-50 text-red-600 disabled:opacity-50 hover:bg-red-100">삭제</button>
+          </div>
+          {tempPw && (
+            <div className="rounded-lg border border-brain-accent/40 bg-brain-accent-soft px-3 py-2 text-xs text-brain-text">
+              임시 비밀번호: <span className="font-mono font-semibold select-all">{tempPw}</span>
+              <div className="text-brain-text-muted mt-0.5">회원에게 전달 후 로그인하여 변경하도록 안내하세요.</div>
+            </div>
+          )}
+        </div>
+
+        {/* Progress */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+          {loading ? (
+            <div className="text-center text-brain-text-muted text-sm py-8">진도 불러오는 중...</div>
+          ) : !prog ? (
+            <div className="text-center text-brain-text-soft text-sm py-8">진도 정보 없음</div>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  ["학습 레슨", prog.summary.lesson_count],
+                  ["총 세션", prog.summary.session_count],
+                  ["저장 작업", prog.summary.artifact_count],
+                ].map(([label, val]) => (
+                  <div key={label as string} className="rounded-lg border border-brain-border bg-brain-surface p-3 text-center">
+                    <div className="text-lg font-bold text-brain-text">{val as number}</div>
+                    <div className="text-[11px] text-brain-text-muted mt-0.5">{label as string}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="text-xs text-brain-text-muted">
+                최근 활동: {fmt(prog.summary.last_started_at)}
+              </div>
+
+              <div>
+                <h4 className="text-xs font-semibold text-brain-text-muted uppercase mb-2">레슨별 진행</h4>
+                {prog.lessons.length === 0 ? (
+                  <p className="text-xs text-brain-text-soft">학습한 레슨 없음</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {prog.lessons.map((l) => (
+                      <div key={l.lesson_id} className="flex items-center justify-between rounded-lg border border-brain-border bg-brain-surface px-3 py-2">
+                        <div className="min-w-0">
+                          <div className="text-sm text-brain-text truncate">{l.lesson_title}</div>
+                          <div className="text-[11px] text-brain-text-muted truncate">{l.module_title}</div>
+                        </div>
+                        <span className="shrink-0 text-xs text-brain-text-soft ml-2">{l.session_count}회</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h4 className="text-xs font-semibold text-brain-text-muted uppercase mb-2">최근 세션</h4>
+                {prog.recent_sessions.length === 0 ? (
+                  <p className="text-xs text-brain-text-soft">세션 없음</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {prog.recent_sessions.map((s) => (
+                      <div key={s.session_id} className="rounded-lg border border-brain-border bg-brain-surface px-3 py-2">
+                        <div className="text-sm text-brain-text truncate">{s.lesson_title}</div>
+                        <div className="text-[11px] text-brain-text-muted mt-0.5">
+                          {fmt(s.started_at)} · 노드작업 {s.artifact_count}개 · {s.ended_at ? "완료" : "진행중"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AdminUsers() {
   const [users, setUsers] = useState<UserDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState<string | null>(null);
+  const [selected, setSelected] = useState<UserDto | null>(null);
+  const [filter, setFilter] = useState<"all" | "pending_approval" | "approved" | "suspended">("all");
+  const [query, setQuery] = useState("");
 
   const load = () => {
     setLoading(true);
-    api.adminUsers().then(setUsers).finally(() => setLoading(false));
+    api.adminUsers().then((us) => {
+      setUsers(us);
+      // 드로어 열려 있으면 최신 객체로 갱신
+      setSelected((cur) => (cur ? us.find((u) => u.id === cur.id) ?? null : null));
+    }).finally(() => setLoading(false));
   };
   useEffect(load, []);
 
-  const approve = async (id: string) => {
+  const approve = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     setActing(id);
     await api.adminApprove(id).catch(() => {});
     load();
     setActing(null);
   };
-  const reject = async (id: string) => {
+  const reject = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     setActing(id);
     await api.adminReject(id).catch(() => {});
     load();
     setActing(null);
   };
 
-  const STATUS_LABELS: Record<string, string> = {
-    pending_approval: "대기",
-    approved: "승인됨",
-    rejected: "거절됨",
-    suspended: "정지됨",
+  const counts = {
+    all: users.length,
+    pending_approval: users.filter((u) => u.status === "pending_approval").length,
+    approved: users.filter((u) => u.status === "approved").length,
+    suspended: users.filter((u) => u.status === "suspended").length,
   };
+
+  const visible = users.filter((u) => {
+    if (filter !== "all" && u.status !== filter) return false;
+    const q = query.trim().toLowerCase();
+    if (q && !u.name.toLowerCase().includes(q) && !u.email.toLowerCase().includes(q)) return false;
+    return true;
+  });
 
   return (
     <div className="p-6 space-y-4 max-w-4xl">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-brain-text">회원 관리</h2>
-        <button onClick={load} className="text-xs text-brain-text-muted hover:text-brain-text">
-          새로고침
-        </button>
+        <button onClick={load} className="text-xs text-brain-text-muted hover:text-brain-text">새로고침</button>
       </div>
+
+      {/* 필터 + 검색 */}
+      <div className="flex flex-wrap items-center gap-2">
+        {([
+          ["all", "전체"],
+          ["pending_approval", "대기"],
+          ["approved", "승인됨"],
+          ["suspended", "정지됨"],
+        ] as const).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setFilter(key)}
+            className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors ${
+              filter === key
+                ? "bg-brain-accent text-white"
+                : "bg-brain-surface border border-brain-border text-brain-text-muted hover:text-brain-text"
+            }`}
+          >
+            {label} {counts[key]}
+          </button>
+        ))}
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="이름·이메일 검색"
+          className="ml-auto rounded-lg border border-brain-border bg-brain-surface px-3 py-1.5 text-xs text-brain-text focus:border-brain-accent focus:outline-none"
+        />
+      </div>
+
       {loading ? (
         <div className="text-center text-brain-text-muted py-12">로딩 중...</div>
       ) : (
         <div className="space-y-2">
-          {users.map((u) => (
+          {visible.map((u) => (
             <div
               key={u.id}
-              className="flex items-center justify-between bg-brain-surface border border-brain-border rounded-xl px-4 py-3"
+              onClick={() => setSelected(u)}
+              className="flex cursor-pointer items-center justify-between bg-brain-surface border border-brain-border rounded-xl px-4 py-3 hover:border-brain-accent/50 transition-colors"
             >
-              <div>
-                <div className="text-sm font-medium text-brain-text">{u.name}</div>
-                <div className="text-xs text-brain-text-muted mt-0.5">
-                  {u.email} · {u.role}
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-brain-text truncate">{u.name}</div>
+                <div className="text-xs text-brain-text-muted mt-0.5 truncate">
+                  {u.email} · {u.role === "admin" ? "관리자" : "학습자"}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span
-                  className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                    u.status === "approved"
-                      ? "bg-green-100 text-green-700"
-                      : u.status === "pending_approval"
-                      ? "bg-amber-100 text-amber-700"
-                      : "bg-brain-surface-soft text-brain-text-muted"
-                  }`}
-                >
-                  {STATUS_LABELS[u.status] ?? u.status}
+              <div className="flex items-center gap-2 shrink-0">
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusBadgeClass(u.status)}`}>
+                  {USER_STATUS_LABELS[u.status] ?? u.status}
                 </span>
                 {u.status === "pending_approval" && (
                   <>
-                    <button
-                      onClick={() => approve(u.id)}
-                      disabled={acting === u.id}
-                      className="text-xs px-3 py-1 rounded-lg bg-green-600 text-white disabled:opacity-50 hover:bg-green-700"
-                    >
-                      승인
-                    </button>
-                    <button
-                      onClick={() => reject(u.id)}
-                      disabled={acting === u.id}
-                      className="text-xs px-3 py-1 rounded-lg bg-brain-surface border border-brain-border text-brain-text-muted disabled:opacity-50 hover:text-brain-text"
-                    >
-                      거절
-                    </button>
+                    <button onClick={(e) => approve(u.id, e)} disabled={acting === u.id}
+                      className="text-xs px-3 py-1 rounded-lg bg-green-600 text-white disabled:opacity-50 hover:bg-green-700">승인</button>
+                    <button onClick={(e) => reject(u.id, e)} disabled={acting === u.id}
+                      className="text-xs px-3 py-1 rounded-lg bg-brain-surface border border-brain-border text-brain-text-muted disabled:opacity-50 hover:text-brain-text">거절</button>
                   </>
                 )}
+                <span className="text-brain-text-soft text-xs">›</span>
               </div>
             </div>
           ))}
-          {users.length === 0 && (
-            <div className="text-center text-brain-text-muted py-12 text-sm">회원 없음</div>
+          {visible.length === 0 && (
+            <div className="text-center text-brain-text-muted py-12 text-sm">해당 회원 없음</div>
           )}
         </div>
+      )}
+
+      {selected && (
+        <UserDetailDrawer user={selected} onClose={() => setSelected(null)} onChanged={load} />
       )}
     </div>
   );

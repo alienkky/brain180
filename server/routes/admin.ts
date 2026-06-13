@@ -1411,3 +1411,22 @@ adminRouter.post(
     ok(res, toUserDTO(row));
   }),
 );
+
+// DELETE /api/admin/users/:id — 소프트 삭제 (학습 이력 보존, 로그인 차단)
+adminRouter.delete(
+  "/users/:id",
+  asyncHandler(async (req, res) => {
+    const id = String(req.params["id"] ?? "");
+    if (!UUID_RE.test(id)) { fail(res, 422, "validation_error", { message: "invalid_user_id" }); return; }
+    if (id === req.user!.id) { fail(res, 409, "cannot_modify_self"); return; }
+    const updated = await db
+      .update(users)
+      .set({ deletedAt: new Date(), status: "suspended", approvedAt: null, approvedById: null })
+      .where(and(eq(users.id, id), isNull(users.deletedAt)))
+      .returning({ id: users.id });
+    if (updated.length === 0) { fail(res, 404, "not_found"); return; }
+    // 활성 세션 무효화 — 삭제 즉시 로그아웃
+    await lucia.invalidateUserSessions(id).catch(() => {});
+    res.status(204).end();
+  }),
+);

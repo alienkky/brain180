@@ -544,6 +544,10 @@ export const api = {
     }),
   adminUserProgress: (userId: string) =>
     call<AdminUserProgressDto>(`/api/admin/users/${userId}/progress`),
+  adminSuspendUser: (userId: string) =>
+    call<UserDto>(`/api/admin/users/${userId}/suspend`, { method: "POST" }),
+  adminDeleteUser: (userId: string) =>
+    call<void>(`/api/admin/users/${userId}`, { method: "DELETE" }),
   adminResetUserPassword: (userId: string) =>
     call<AdminResetPasswordDto>(`/api/admin/users/${userId}/reset-password`, {
       method: "POST",
