@@ -264,7 +264,17 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
 
     cyRef.current = cy;
 
-    // 일부 환경에서 초기 페인트에 엣지가 빠지는 현상 — 첫 프레임 뒤 강제 재렌더
+    // cytoscape 3.33.x 버그: 생성 틱에 들어간 요소의 스타일/지오메트리 캐시가
+    // stale 로 남아 visible=false·midpoint=undefined 가 됨 → 노드를 움직여
+    // 재계산되기 전까지 연결선(일부 노드 포함)이 안 그려짐. 캐시 강제 무효화.
+    // (격리 재현으로 확인: dirtyStyleCache 가 노드, dirtyBoundingBoxCache 가
+    //  엣지 지오메트리를 살림. 이후 추가되는 요소는 정상이라 init 1회면 충분)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const els = cy.elements() as any;
+    els.dirtyStyleCache();
+    els.dirtyBoundingBoxCache();
+
+    // 첫 프레임 뒤 강제 재렌더 — 위 재계산 결과 플러시
     const flushRaf = requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (cyRef.current) {
