@@ -711,21 +711,22 @@ function AdminContent() {
   const [creating, setCreating] = useState(false);
   const [creatingModule, setCreatingModule] = useState(false);
   const [editingModule, setEditingModule] = useState<AdminModuleDto | null>(null);
+  const [showDeleted, setShowDeleted] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    api.adminModules().then(setModules).finally(() => setLoading(false));
-  }, []);
+    api.adminModules(showDeleted).then(setModules).finally(() => setLoading(false));
+  }, [showDeleted]);
 
   const refreshModules = async () => {
-    const ms = await api.adminModules();
+    const ms = await api.adminModules(showDeleted);
     setModules(ms);
     return ms;
   };
 
   const deleteModule = async (m: AdminModuleDto, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm(`라이브러리 "${m.title}"을(를) 삭제할까요?`)) return;
+    if (!window.confirm(`라이브러리 "${m.title}"을(를) 숨길까요?\n학습 자료는 보존되며 '숨김 보기'에서 복원할 수 있습니다.`)) return;
     setBusy(true);
     try {
       await api.adminDeleteModule(m.id);
@@ -735,7 +736,20 @@ function AdminContent() {
       }
       await refreshModules();
     } catch {
-      alert("레슨이 남아 있는 라이브러리는 삭제할 수 없습니다.\n(숨김 처리된 레슨 포함) 레슨을 먼저 모두 삭제하세요.");
+      alert("삭제 실패");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const restoreModule = async (m: AdminModuleDto, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setBusy(true);
+    try {
+      await api.adminRestoreModule(m.id);
+      await refreshModules();
+    } catch {
+      alert("복원 실패");
     } finally {
       setBusy(false);
     }
@@ -806,6 +820,10 @@ function AdminContent() {
             + 추가
           </button>
         </div>
+        <label className="flex items-center gap-1.5 border-b border-brain-border px-4 py-2 text-[11px] text-brain-text-muted cursor-pointer">
+          <input type="checkbox" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} />
+          숨김 라이브러리 보기
+        </label>
         <div className="flex-1 overflow-y-auto py-2">
           {loading ? (
             <div className="text-center text-brain-text-muted text-xs py-6">로딩...</div>
@@ -815,30 +833,48 @@ function AdminContent() {
                 key={m.id}
                 onClick={() => selectMod(m)}
                 className={`group flex w-full cursor-pointer items-center gap-2 px-4 py-3 text-sm transition-colors ${
+                  m.deleted ? "opacity-50" : ""
+                } ${
                   selectedMod?.id === m.id
                     ? "bg-brain-accent-soft text-brain-accent"
                     : "text-brain-text hover:bg-brain-surface-soft"
                 }`}
               >
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">{m.title}</div>
+                  <div className="font-medium truncate">
+                    {m.deleted && <span className="text-red-500">🗑 </span>}
+                    {m.title}
+                  </div>
                   <div className="text-xs text-brain-text-muted">{m.lesson_count}레슨</div>
                 </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setEditingModule(m); }}
-                  className="shrink-0 rounded px-1.5 py-1 text-xs text-brain-text-soft opacity-0 transition-opacity hover:text-brain-accent group-hover:opacity-100"
-                  title="라이브러리 편집"
-                >
-                  ✏️
-                </button>
-                <button
-                  onClick={(e) => deleteModule(m, e)}
-                  disabled={busy}
-                  className="shrink-0 rounded px-1.5 py-1 text-xs text-brain-text-soft opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100 disabled:opacity-30"
-                  title="라이브러리 삭제"
-                >
-                  🗑
-                </button>
+                {m.deleted ? (
+                  <button
+                    onClick={(e) => restoreModule(m, e)}
+                    disabled={busy}
+                    className="shrink-0 rounded px-2 py-1 text-[11px] font-medium text-green-600 hover:bg-green-50 disabled:opacity-30"
+                    title="복원"
+                  >
+                    ↩ 복원
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setEditingModule(m); }}
+                      className="shrink-0 rounded px-1.5 py-1 text-xs text-brain-text-soft opacity-0 transition-opacity hover:text-brain-accent group-hover:opacity-100"
+                      title="라이브러리 편집"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      onClick={(e) => deleteModule(m, e)}
+                      disabled={busy}
+                      className="shrink-0 rounded px-1.5 py-1 text-xs text-brain-text-soft opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100 disabled:opacity-30"
+                      title="라이브러리 삭제(숨김)"
+                    >
+                      🗑
+                    </button>
+                  </>
+                )}
               </div>
             ))
           )}

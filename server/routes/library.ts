@@ -136,6 +136,7 @@ libraryRouter.get(
         lessonCount: sql<number>`(SELECT COUNT(*)::int FROM ${lessons} WHERE ${lessons.moduleId} = ${modules.id} AND ${lessons.deletedAt} IS NULL)`,
       })
       .from(modules)
+      .where(isNull(modules.deletedAt))
       .orderBy(asc(modules.axis), asc(modules.order));
 
     const data: ModuleListDTO[] = rows.map((r) => ({
@@ -166,7 +167,7 @@ libraryRouter.get(
     const moduleRow = await db
       .select({ id: modules.id })
       .from(modules)
-      .where(eq(modules.id, moduleId))
+      .where(and(eq(modules.id, moduleId), isNull(modules.deletedAt)))
       .limit(1);
     if (moduleRow.length === 0) {
       fail(res, 404, "not_found");

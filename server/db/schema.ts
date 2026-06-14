@@ -247,11 +247,18 @@ export const modules = pgTable(
     axisFocus: jsonb("axis_focus").$type<AxisWeights | Record<string, never>>().notNull().default({}),
     createdAt,
     updatedAt,
+    // 소프트 삭제 — 학습 자료(레슨/세션) 보존하며 숨김, 복원 가능
+    deletedAt,
   },
   (table) => ({
-    axisOrderIdx: uniqueIndex("modules_axis_order_idx").on(table.axis, table.order),
+    // 살아있는 모듈만 axis/order, slug 유일 — 숨긴 모듈이 자리를 막지 않음
+    axisOrderIdx: uniqueIndex("modules_axis_order_idx")
+      .on(table.axis, table.order)
+      .where(sql`${table.deletedAt} IS NULL`),
     lockedIdx: index("modules_is_locked_idx").on(table.isLocked),
-    slugIdx: uniqueIndex("modules_slug_idx").on(table.slug),
+    slugIdx: uniqueIndex("modules_slug_idx")
+      .on(table.slug)
+      .where(sql`${table.deletedAt} IS NULL`),
     difficultyCheck: check("modules_difficulty_check", sql`${table.difficulty} >= 1 AND ${table.difficulty} <= 5`),
   }),
 );

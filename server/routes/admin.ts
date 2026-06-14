@@ -459,6 +459,7 @@ interface AdminModuleDTO {
   description: string | null;
   axis_focus: Record<string, unknown>;
   lesson_count: number;
+  deleted: boolean;
 }
 
 async function moduleDTO(id: string): Promise<AdminModuleDTO | null> {
@@ -473,7 +474,8 @@ async function moduleDTO(id: string): Promise<AdminModuleDTO | null> {
       difficulty: modules.difficulty,
       description: modules.description,
       axisFocus: modules.axisFocus,
-      lessonCount: sql<number>`(SELECT COUNT(*)::int FROM ${lessons} WHERE ${lessons.moduleId} = ${modules.id})`,
+      deletedAt: modules.deletedAt,
+      lessonCount: sql<number>`(SELECT COUNT(*)::int FROM ${lessons} WHERE ${lessons.moduleId} = ${modules.id} AND ${lessons.deletedAt} IS NULL)`,
     })
     .from(modules)
     .where(eq(modules.id, id))
@@ -491,12 +493,14 @@ async function moduleDTO(id: string): Promise<AdminModuleDTO | null> {
     description: r.description ?? null,
     axis_focus: (r.axisFocus ?? {}) as Record<string, unknown>,
     lesson_count: Number(r.lessonCount ?? 0),
+    deleted: r.deletedAt !== null,
   };
 }
 
 adminRouter.get(
   "/modules",
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const includeDeleted = String(req.query["include_deleted"] ?? "") === "1";
     const rows = await db
       .select({
         id: modules.id,
@@ -508,9 +512,11 @@ adminRouter.get(
         difficulty: modules.difficulty,
         description: modules.description,
         axisFocus: modules.axisFocus,
-        lessonCount: sql<number>`(SELECT COUNT(*)::int FROM ${lessons} WHERE ${lessons.moduleId} = ${modules.id})`,
+        deletedAt: modules.deletedAt,
+        lessonCount: sql<number>`(SELECT COUNT(*)::int FROM ${lessons} WHERE ${lessons.moduleId} = ${modules.id} AND ${lessons.deletedAt} IS NULL)`,
       })
       .from(modules)
+      .where(includeDeleted ? sql`true` : isNull(modules.deletedAt))
       .orderBy(asc(modules.axis), asc(modules.order));
     const data: AdminModuleDTO[] = rows.map((r) => ({
       id: r.id,
@@ -523,6 +529,7 @@ adminRouter.get(
       description: r.description ?? null,
       axis_focus: (r.axisFocus ?? {}) as Record<string, unknown>,
       lesson_count: Number(r.lessonCount ?? 0),
+      deleted: r.deletedAt !== null,
     }));
     ok(res, data);
   }),
@@ -619,23 +626,40 @@ adminRouter.delete(
       fail(res, 422, "validation_error", { message: "invalid_module_id" });
       return;
     }
-    const childCount = await db
-      .select({ c: sql<number>`count(*)::int` })
-      .from(lessons)
-      .where(eq(lessons.moduleId, id));
-    if ((childCount[0]?.c ?? 0) > 0) {
-      fail(res, 409, "conflict", { message: "module_has_lessons" });
-      return;
-    }
+    // 소프트 삭제 — 학습 자료(레슨/세션) 보존. 레슨 유무와 무관하게 항상 가능.
     const deleted = await db
-      .delete(modules)
-      .where(eq(modules.id, id))
+      .update(modules)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(modules.id, id), isNull(modules.deletedAt)))
       .returning({ id: modules.id });
     if (deleted.length === 0) {
       fail(res, 404, "not_found");
       return;
     }
     res.status(204).end();
+  }),
+);
+
+// POST /api/admin/modules/:id/restore — 숨긴 모듈 복원
+adminRouter.post(
+  "/modules/:id/restore",
+  asyncHandler(async (req, res) => {
+    const id = req.params.id;
+    if (typeof id !== "string" || !UUID_RE.test(id)) {
+      fail(res, 422, "validation_error", { message: "invalid_module_id" });
+      return;
+    }
+    const restored = await db
+      .update(modules)
+      .set({ deletedAt: null })
+      .where(eq(modules.id, id))
+      .returning({ id: modules.id });
+    if (restored.length === 0) {
+      fail(res, 404, "not_found");
+      return;
+    }
+    const dto = await moduleDTO(id);
+    ok(res, dto);
   }),
 );
 

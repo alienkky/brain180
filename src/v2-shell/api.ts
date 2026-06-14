@@ -236,6 +236,7 @@ export interface AdminModuleDto {
   description: string | null;
   axis_focus: Record<string, unknown>;
   lesson_count: number;
+  deleted?: boolean;
 }
 
 export interface AdminModuleCreateInput {
@@ -552,7 +553,10 @@ export const api = {
     call<AdminResetPasswordDto>(`/api/admin/users/${userId}/reset-password`, {
       method: "POST",
     }),
-  adminModules: () => call<AdminModuleDto[]>("/api/admin/modules"),
+  adminModules: (includeDeleted = false) =>
+    call<AdminModuleDto[]>(`/api/admin/modules${includeDeleted ? "?include_deleted=1" : ""}`),
+  adminRestoreModule: (moduleId: string) =>
+    call<AdminModuleDto>(`/api/admin/modules/${moduleId}/restore`, { method: "POST" }),
   adminCreateModule: (input: AdminModuleCreateInput) =>
     call<AdminModuleDto>("/api/admin/modules", {
       method: "POST",

@@ -21,7 +21,7 @@ import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
 import { and, eq, desc, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { canvasArtifacts, learningSessions, lessons } from "../db/schema.js";
+import { canvasArtifacts, learningSessions, lessons, modules } from "../db/schema.js";
 import { ok, fail } from "../lib/envelope.js";
 import {
   parseBody,
@@ -354,7 +354,8 @@ practiceRouter.post(
     const lessonRow = await db
       .select({ id: lessons.id })
       .from(lessons)
-      .where(and(eq(lessons.id, body.lesson_id), isNull(lessons.deletedAt)))
+      .innerJoin(modules, eq(modules.id, lessons.moduleId))
+      .where(and(eq(lessons.id, body.lesson_id), isNull(lessons.deletedAt), isNull(modules.deletedAt)))
       .limit(1);
     if (lessonRow.length === 0) {
       fail(res, 404, "not_found", { message: "lesson_not_found" });
