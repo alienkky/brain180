@@ -23,6 +23,7 @@ interface Props {
 let nodeCounter = 0;
 const newId = () => `n${++nodeCounter}_${Date.now()}`;
 const newEdgeId = () => `e${++nodeCounter}_${Date.now()}`;
+const newGroupId = () => `g${++nodeCounter}_${Date.now()}`;
 
 // 노드 간 최소 여백 (모델 좌표)
 const GAP = 18;
@@ -105,6 +106,8 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
   const keyDeleteRef = useRef<() => void>(() => {});
   // 단어뱅크 클릭용 emit (effect 내부 emit 을 외부 콜백에서 호출)
   const emitRef = useRef<(ns: V3Node[], es: V3Edge[]) => void>(() => {});
+  // 그룹 선택 밴드 window 리스너 정리자
+  const bandCleanupRef = useRef<() => void>(() => {});
 
   // 새 노드가 prop 에 반영되면 대기 위치 초기화
   useEffect(() => {
@@ -132,17 +135,26 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
     return valid;
   }, []);
 
-  // Build cytoscape elements
+  // Build cytoscape elements — 그룹(부모) 노드를 먼저, 그 다음 일반 노드(parent 참조)
   const buildElements = useCallback(
-    (ns: V3Node[], es: V3Edge[]) => [
-      ...ns.map((n) => ({
-        data: { id: n.id, label: n.label, kind: n.kind ?? "concept" },
-        position: { x: n.x, y: n.y },
-      })),
-      ...sanitizeEdges(ns, es).map((e) => ({
-        data: { id: e.id, source: e.from, target: e.to, label: e.label ?? "", dir: e.dir ?? "forward" },
-      })),
-    ],
+    (ns: V3Node[], es: V3Edge[]) => {
+      const ordered = [...ns].sort((a, b) => (a.kind === "group" ? -1 : 0) - (b.kind === "group" ? -1 : 0));
+      const validParents = new Set(ns.filter((n) => n.kind === "group").map((n) => n.id));
+      return [
+        ...ordered.map((n) => ({
+          data: {
+            id: n.id,
+            label: n.label,
+            kind: n.kind ?? "concept",
+            ...(n.parent && validParents.has(n.parent) ? { parent: n.parent } : {}),
+          },
+          ...(n.kind === "group" ? {} : { position: { x: n.x, y: n.y } }),
+        })),
+        ...sanitizeEdges(ns, es).map((e) => ({
+          data: { id: e.id, source: e.from, target: e.to, label: e.label ?? "", dir: e.dir ?? "forward" },
+        })),
+      ];
+    },
     [sanitizeEdges]
   );
 
@@ -164,18 +176,28 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
       if (!newEdgeIds.has(e.id())) cy.remove(e);
     });
 
-    // Add new
+    // Add new — 그룹(부모) 먼저 추가해야 자식의 parent 참조가 유효
     let added = 0;
-    nodes.forEach((n) => {
+    const validParents = new Set(nodes.filter((n) => n.kind === "group").map((n) => n.id));
+    const ordered = [...nodes].sort(
+      (a, b) => (a.kind === "group" ? -1 : 0) - (b.kind === "group" ? -1 : 0),
+    );
+    ordered.forEach((n) => {
+      const parent = n.parent && validParents.has(n.parent) ? n.parent : undefined;
       if (!existingNodeIds.has(n.id)) {
         cy.add({
-          data: { id: n.id, label: n.label, kind: n.kind ?? "concept" },
-          position: { x: n.x, y: n.y },
+          data: { id: n.id, label: n.label, kind: n.kind ?? "concept", ...(parent ? { parent } : {}) },
+          ...(n.kind === "group" ? {} : { position: { x: n.x, y: n.y } }),
         });
         added++;
       } else {
         const node = cy.getElementById(n.id);
         if (node.data("label") !== n.label) node.data("label", n.label);
+        // 그룹 소속 변경 반영
+        if ((node.data("parent") ?? undefined) !== parent) {
+          node.move({ parent: parent ?? null });
+          added++;
+        }
       }
     });
     sanitizeEdges(nodes, edges).forEach((e) => {
@@ -253,6 +275,25 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
             "border-color": "#f59e0b",
             "border-width": 3,
             "background-opacity": 0.25,
+          },
+        },
+        {
+          // 그룹(컴파운드 부모) — 자식을 감싸는 반투명 박스, 라벨 상단
+          selector: 'node[kind="group"]',
+          style: {
+            "background-color": "#6b7280",
+            "background-opacity": 0.06,
+            "border-color": "#9ca3af",
+            "border-width": 1.5,
+            "border-style": "dashed",
+            shape: "roundrectangle",
+            label: "data(label)",
+            "text-valign": "top",
+            "text-halign": "center",
+            "font-size": "11px",
+            color: "#9ca3af",
+            padding: "16px",
+            "text-margin-y": -4,
           },
         },
         {
@@ -352,12 +393,14 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
       const arr: V3Node[] = [];
       cy.nodes().forEach((n) => {
         if (n.id() === excludeId) return;
+        // 그룹(부모)에서 자식 제외 시 자식의 parent 해제는 호출부에서 처리
         arr.push({
           id: n.id(),
           label: n.data("label") as string,
           x: n.position("x"),
           y: n.position("y"),
           kind: n.data("kind") as V3Node["kind"],
+          parent: (n.data("parent") as string) || undefined,
         });
       });
       return arr;
@@ -674,6 +717,88 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
         clearGuides();
         emit(collectNodes(), collectEdges());
       });
+
+      // ── 그룹 묶기: 배경 꾹 누르고 드래그 → 사각 영역 선택 → 그룹 생성 ──
+      let banding = false;
+      let bandStart: { x: number; y: number } | null = null; // rendered 좌표
+      let bandNow: { x: number; y: number } | null = null;
+
+      const drawBand = () => {
+        const canvas = guideRef.current;
+        const container = containerRef.current;
+        if (!canvas || !container || !bandStart || !bandNow) return;
+        if (canvas.width !== container.clientWidth) canvas.width = container.clientWidth;
+        if (canvas.height !== container.clientHeight) canvas.height = container.clientHeight;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const x = Math.min(bandStart.x, bandNow.x);
+        const y = Math.min(bandStart.y, bandNow.y);
+        const w = Math.abs(bandNow.x - bandStart.x);
+        const h = Math.abs(bandNow.y - bandStart.y);
+        ctx.fillStyle = "rgba(184,92,63,0.10)";
+        ctx.strokeStyle = "#B85C3F";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 4]);
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeRect(x, y, w, h);
+      };
+
+      const onBandMove = (e: PointerEvent) => {
+        if (!banding) return;
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        bandNow = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        drawBand();
+      };
+
+      const onBandUp = () => {
+        if (!banding) return;
+        banding = false;
+        cy.userPanningEnabled(true);
+        clearGuides();
+        cy.nodes().removeClass("selected-source");
+        if (!bandStart || !bandNow) return;
+        const x0 = Math.min(bandStart.x, bandNow.x);
+        const y0 = Math.min(bandStart.y, bandNow.y);
+        const x1 = Math.max(bandStart.x, bandNow.x);
+        const y1 = Math.max(bandStart.y, bandNow.y);
+        bandStart = null;
+        bandNow = null;
+        if (x1 - x0 < 12 || y1 - y0 < 12) return; // 너무 작은 영역 무시
+        // 영역 안에 든 (그룹 아닌, 최상위) 노드 수집
+        const inside: string[] = [];
+        cy.nodes().forEach((n) => {
+          if (n.data("kind") === "group") return;
+          if (!n.isChildless() ) return;
+          const rp = n.renderedPosition();
+          if (rp.x >= x0 && rp.x <= x1 && rp.y >= y0 && rp.y <= y1) inside.push(n.id());
+        });
+        if (inside.length < 2) return; // 2개 이상만 그룹화
+        const gid = newGroupId();
+        const insideSet = new Set(inside);
+        const nextNodes = collectNodes().map((n) =>
+          insideSet.has(n.id) ? { ...n, parent: gid } : n,
+        );
+        const groupNode: V3Node = { id: gid, label: "그룹", kind: "group", x: 0, y: 0 };
+        emit([groupNode, ...nextNodes], collectEdges());
+      };
+
+      cy.on("taphold", (evt) => {
+        if (evt.target !== cy) return; // 배경에서만
+        banding = true;
+        cy.userPanningEnabled(false);
+        const rp = evt.renderedPosition;
+        bandStart = { x: rp.x, y: rp.y };
+        bandNow = { x: rp.x, y: rp.y };
+        if (navigator.vibrate) navigator.vibrate(20);
+      });
+      window.addEventListener("pointermove", onBandMove);
+      window.addEventListener("pointerup", onBandUp);
+      bandCleanupRef.current = () => {
+        window.removeEventListener("pointermove", onBandMove);
+        window.removeEventListener("pointerup", onBandUp);
+      };
     }
 
     if (readOnly) {
@@ -700,6 +825,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
     return () => {
       cancelAnimationFrame(flushRaf);
       ro.disconnect();
+      bandCleanupRef.current();
       cy.destroy();
       cyRef.current = null;
     };
@@ -782,7 +908,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
       {!readOnly && (
         <div className="flex items-center justify-between gap-2 px-1">
           <p className="text-[11px] text-brain-text-soft flex-1 min-w-0">
-            더블클릭 → 노드 추가 · 노드 탭 후 다른 노드 탭 → 연결 · 화살표 탭 → 방향 순환 · 노드/화살표 꾹 누르기 또는 선택 후 Del → 삭제
+            더블클릭 → 노드 추가 · 노드 탭 후 다른 노드 탭 → 연결 · 화살표 탭 → 방향 순환 · 노드/화살표 꾹 누르기 또는 선택 후 Del → 삭제 · 배경 꾹 누르고 드래그 → 그룹 묶기
           </p>
           <div className="flex shrink-0 items-center gap-1">
             <button

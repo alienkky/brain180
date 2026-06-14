@@ -34,7 +34,9 @@ export interface V3Node {
   label: string;
   x: number;
   y: number;
-  kind?: "concept" | "anchor" | "target" | "lens";
+  kind?: "concept" | "anchor" | "target" | "lens" | "group";
+  /** 소속 그룹(컴파운드 부모) 노드 id */
+  parent?: string;
 }
 
 /** 화살표 방향 — 클릭 순환: forward → both → back → none */
