@@ -165,12 +165,14 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
     });
 
     // Add new
+    let added = 0;
     nodes.forEach((n) => {
       if (!existingNodeIds.has(n.id)) {
         cy.add({
           data: { id: n.id, label: n.label, kind: n.kind ?? "concept" },
           position: { x: n.x, y: n.y },
         });
+        added++;
       } else {
         const node = cy.getElementById(n.id);
         if (node.data("label") !== n.label) node.data("label", n.label);
@@ -181,6 +183,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
         cy.add({
           data: { id: e.id, source: e.from, target: e.to, label: e.label ?? "", dir: e.dir ?? "forward" },
         });
+        added++;
       } else {
         const el = cy.getElementById(e.id);
         const dir = e.dir ?? "forward";
@@ -188,6 +191,17 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
         if (el.data("label") !== (e.label ?? "")) el.data("label", e.label ?? "");
       }
     });
+
+    // cytoscape 3.33 캐시 버그: sync 로 들어온 요소도 stale 캐시로 visible=false /
+    // midpoint=undefined 가 됨 → 일부 노드·엣지 미페인트(2부 기본 대상 노드 누락 등).
+    // 추가가 있었으면 캐시 무효화 + 재렌더.
+    if (added > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const els = cy.elements() as any;
+      els.dirtyStyleCache();
+      els.dirtyBoundingBoxCache();
+      cy.forceRender();
+    }
   }, [nodes, edges, sanitizeEdges]);
 
   // Init cytoscape once
