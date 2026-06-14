@@ -39,8 +39,11 @@ interface ProtocolStore {
   clearSession: () => void;
   /** 임시저장 삭제 (대시보드 '삭제' 등) */
   discardSaved: (lessonId: string) => void;
-  /** 임시저장된 레슨 이어하기 — 서버 호출 없이 복원 */
-  resumeLesson: (lessonId: string) => void;
+  /** 임시저장된 레슨 이어하기 — 작업은 복원하되 본문/메타는 최신으로 교체 */
+  resumeLesson: (
+    lessonId: string,
+    fresh?: { sessionId?: string; lessonTitle?: string; author?: string; source?: string; textBody?: string },
+  ) => void;
   setStage: (stage: ProtocolStage) => void;
 
   // Stage 1
@@ -107,7 +110,7 @@ export const useProtocolStore = create<ProtocolStore>()(
       return { saved };
     }),
 
-  resumeLesson: (lessonId) =>
+  resumeLesson: (lessonId, fresh) =>
     set((s) => {
       const saved = { ...s.saved };
       const target = saved[lessonId];
@@ -117,7 +120,16 @@ export const useProtocolStore = create<ProtocolStore>()(
         saved[s.session.lessonId] = s.session;
       }
       delete saved[lessonId];
-      return { session: target, saved };
+      // 본문/저자/출처/세션ID는 항상 서버 최신값으로 — 관리자가 본문 수정 시 반영
+      const merged = {
+        ...target,
+        ...(fresh?.sessionId ? { sessionId: fresh.sessionId } : {}),
+        ...(fresh?.lessonTitle !== undefined ? { lessonTitle: fresh.lessonTitle } : {}),
+        ...(fresh?.author !== undefined ? { author: fresh.author } : {}),
+        ...(fresh?.source !== undefined ? { source: fresh.source } : {}),
+        ...(fresh?.textBody !== undefined ? { textBody: fresh.textBody } : {}),
+      };
+      return { session: merged, saved };
     }),
 
   setStage: (stage) =>

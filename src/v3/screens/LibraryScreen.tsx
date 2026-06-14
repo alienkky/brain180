@@ -22,7 +22,7 @@ export function LibraryScreen({ onSessionStart }: Props) {
   const [lessons, setLessons] = useState<LessonDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState<string | null>(null);
-  const { startSession, resumeLesson } = useProtocolStore();
+  const { startSession, resumeLesson, discardSaved } = useProtocolStore();
   const existingSession = useProtocolStore((s) => s.session);
   const savedMap = useProtocolStore((s) => s.saved);
 
@@ -54,31 +54,48 @@ export function LibraryScreen({ onSessionStart }: Props) {
       alert("이 레슨에 텍스트가 등록되지 않았습니다.");
       return;
     }
-    // 이미 진행 중인 레슨이면 그대로 이어서
-    if (existingSession?.lessonId === lesson.id && !existingSession.completedAt) {
-      onSessionStart();
-      return;
+
+    // 진행 중(현재 세션 또는 임시저장)이면 이어하기/처음부터 선택
+    const hasProgress =
+      (existingSession?.lessonId === lesson.id && !existingSession.completedAt) ||
+      !!savedMap[lesson.id];
+    let resume = true;
+    if (hasProgress) {
+      resume = window.confirm(
+        "이전에 진행하던 작업이 있습니다.\n\n확인 = 이어서 하기\n취소 = 처음부터 새로 시작 (기존 작업 삭제)"
+      );
     }
-    // 임시저장이 있으면 서버 호출 없이 복원 (현재 진행 중인 다른 레슨은 자동 임시저장)
-    if (savedMap[lesson.id]) {
-      resumeLesson(lesson.id);
-      onSessionStart();
-      return;
-    }
+
     setStarting(lesson.id);
     try {
+      // 본문/저자/출처는 항상 서버 최신값을 받아 반영 (관리자 본문 수정 대응)
       const [session, text] = await Promise.all([
         api.startSession(lesson.id, "practice"),
         api.text(lesson.text_excerpt_id),
       ]);
-      startSession({
+      const t = text as TextExcerptDto;
+      const meta = {
         sessionId: session.id,
         lessonId: lesson.id,
         lessonTitle: lesson.title,
-        author: (text as TextExcerptDto).author || selectedModule?.title || "",
-        source: (text as TextExcerptDto).source || "",
-        textBody: (text as TextExcerptDto).body || "",
-      });
+        author: t.author || selectedModule?.title || "",
+        source: t.source || "",
+        textBody: t.body || "",
+      };
+
+      if (hasProgress && resume) {
+        // 현재 진행 중 세션이면 임시저장으로 내린 뒤 최신 메타로 복원
+        if (existingSession?.lessonId === lesson.id && !existingSession.completedAt) {
+          useProtocolStore.setState((s) => ({
+            saved: { ...s.saved, [lesson.id]: existingSession },
+          }));
+        }
+        resumeLesson(lesson.id, meta);
+      } else {
+        // 처음부터: 임시저장 폐기 후 새 세션 (restoreSaved:false)
+        discardSaved(lesson.id);
+        startSession(meta, { restoreSaved: false });
+      }
       onSessionStart();
     } catch (e) {
       alert(e instanceof Error ? e.message : "세션을 시작할 수 없습니다.");
