@@ -49,22 +49,20 @@ export function LibraryScreen({ onSessionStart }: Props) {
     setLessons(ls);
   };
 
-  const startLesson = async (lesson: LessonDto) => {
+  // mode: "resume"=이어서, "fresh"=처음부터, "auto"=진행 없으면 새로(기본)
+  const startLesson = async (lesson: LessonDto, mode: "resume" | "fresh" | "auto" = "auto") => {
     if (!lesson.text_excerpt_id) {
       alert("이 레슨에 텍스트가 등록되지 않았습니다.");
       return;
     }
 
-    // 진행 중(현재 세션 또는 임시저장)이면 이어하기/처음부터 선택
     const hasProgress =
       (existingSession?.lessonId === lesson.id && !existingSession.completedAt) ||
       !!savedMap[lesson.id];
-    let resume = true;
-    if (hasProgress) {
-      resume = window.confirm(
-        "이전에 진행하던 작업이 있습니다.\n\n확인 = 이어서 하기\n취소 = 처음부터 새로 시작 (기존 작업 삭제)"
-      );
+    if (mode === "fresh" && hasProgress) {
+      if (!window.confirm("진행하던 작업을 삭제하고 처음부터 시작할까요?")) return;
     }
+    const resume = mode === "resume" || (mode === "auto" && hasProgress);
 
     setStarting(lesson.id);
     try {
@@ -218,13 +216,34 @@ export function LibraryScreen({ onSessionStart }: Props) {
                               </div>
                             )}
                           </div>
-                          <button
-                            onClick={() => startLesson(lesson)}
-                            disabled={starting === lesson.id}
-                            className="shrink-0 px-4 py-2 rounded-lg bg-brain-accent text-white text-xs font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
-                          >
-                            {starting === lesson.id ? "시작 중..." : prog ? "이어하기 →" : "학습 시작"}
-                          </button>
+                          <div className="shrink-0 flex flex-col items-stretch gap-1.5">
+                            {prog ? (
+                              <>
+                                <button
+                                  onClick={() => startLesson(lesson, "resume")}
+                                  disabled={starting === lesson.id}
+                                  className="px-4 py-2 rounded-lg bg-brain-accent text-white text-xs font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
+                                >
+                                  {starting === lesson.id ? "시작 중..." : "이어서 하기 →"}
+                                </button>
+                                <button
+                                  onClick={() => startLesson(lesson, "fresh")}
+                                  disabled={starting === lesson.id}
+                                  className="px-4 py-1.5 rounded-lg border border-brain-border text-brain-text-muted text-xs font-medium disabled:opacity-50 hover:text-brain-text hover:border-brain-accent/50 transition-colors"
+                                >
+                                  새로 시작
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                onClick={() => startLesson(lesson, "auto")}
+                                disabled={starting === lesson.id}
+                                className="px-4 py-2 rounded-lg bg-brain-accent text-white text-xs font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
+                              >
+                                {starting === lesson.id ? "시작 중..." : "학습 시작"}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
