@@ -24,23 +24,53 @@ let nodeCounter = 0;
 const newId = () => `n${++nodeCounter}_${Date.now()}`;
 const newEdgeId = () => `e${++nodeCounter}_${Date.now()}`;
 
-// 노드 겹침 판정 간격 (모델 좌표) — 라벨 노드 평균 크기 기준
-const CLEAR_X = 110;
-const CLEAR_Y = 48;
+// 노드 간 최소 여백 (모델 좌표)
+const GAP = 18;
+const APPROX_H = 38; // 라벨 노드 높이 ~ 글자높이+패딩
 
-// 기존 노드와 겹치지 않는 위치 탐색 — 원하는 지점부터 나선형으로 확장
-function findFreePosition(cy: Core, desiredX: number, desiredY: number): { x: number; y: number } {
-  const positions = cy.nodes().map((n) => n.position());
-  const isFree = (x: number, y: number) =>
-    positions.every((p) => Math.abs(p.x - x) > CLEAR_X || Math.abs(p.y - y) > CLEAR_Y);
-  if (isFree(desiredX, desiredY)) return { x: desiredX, y: desiredY };
-  for (let ring = 1; ring <= 8; ring++) {
+// 라벨 길이로 노드 너비 추정 (cytoscape width:label, padding 10 기준)
+function approxWidth(label: string): number {
+  // 한글/전각 ~14px, 영문/숫자 ~8px + 좌우 패딩 20
+  let w = 0;
+  for (const ch of label) w += /[ᄀ-퟿＀-￯]/.test(ch) ? 14 : 8;
+  return w + 20;
+}
+
+interface OccBox { x: number; y: number; w: number; h: number }
+
+// 기존 노드(+대기중)와 겹치지 않는 위치 탐색 — 원하는 지점부터 나선형 확장.
+// boundingBox 실측으로 긴 라벨도 정확히 회피.
+function findFreePosition(
+  cy: Core,
+  desiredX: number,
+  desiredY: number,
+  label: string,
+  extra: OccBox[] = [],
+): { x: number; y: number } {
+  const occ: OccBox[] = [];
+  cy.nodes().forEach((n) => {
+    const bb = n.boundingBox({ includeLabels: false, includeOverlays: false });
+    occ.push({ x: n.position("x"), y: n.position("y"), w: bb.w, h: bb.h });
+  });
+  occ.push(...extra);
+  const nw = approxWidth(label);
+  const nh = APPROX_H;
+  const overlaps = (x: number, y: number) =>
+    occ.some(
+      (o) =>
+        Math.abs(o.x - x) < (o.w + nw) / 2 + GAP &&
+        Math.abs(o.y - y) < (o.h + nh) / 2 + GAP,
+    );
+  if (!overlaps(desiredX, desiredY)) return { x: desiredX, y: desiredY };
+  const stepX = nw + GAP * 2;
+  const stepY = nh + GAP * 2;
+  for (let ring = 1; ring <= 12; ring++) {
     const steps = ring * 8;
     for (let k = 0; k < steps; k++) {
       const ang = (2 * Math.PI * k) / steps;
-      const tx = desiredX + Math.cos(ang) * ring * (CLEAR_X + 20);
-      const ty = desiredY + Math.sin(ang) * ring * (CLEAR_Y + 16);
-      if (isFree(tx, ty)) return { x: tx, y: ty };
+      const tx = desiredX + Math.cos(ang) * ring * stepX * 0.6;
+      const ty = desiredY + Math.sin(ang) * ring * stepY;
+      if (!overlaps(tx, ty)) return { x: tx, y: ty };
     }
   }
   return { x: desiredX, y: desiredY };
@@ -61,6 +91,25 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
   deleteChipRef.current = deleteChip;
   // effect 내부 collect 헬퍼를 쓰는 삭제 실행자
   const deleteElRef = useRef<(kind: "node" | "edge", id: string) => void>(() => {});
+
+  // 실행취소/다시실행 히스토리 (변경 직전 스냅샷 스택)
+  type Snap = { nodes: V3Node[]; edges: V3Edge[] };
+  const historyRef = useRef<{ past: Snap[]; future: Snap[] }>({ past: [], future: [] });
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+  const undoRef = useRef<() => void>(() => {});
+  const redoRef = useRef<() => void>(() => {});
+  // 같은 렌더 사이클에 다중 추가 시 겹침 방지용 대기 위치
+  const pendingRef = useRef<OccBox[]>([]);
+  // 키보드 삭제 핸들러 (effect 에서 채움)
+  const keyDeleteRef = useRef<() => void>(() => {});
+  // 단어뱅크 클릭용 emit (effect 내부 emit 을 외부 콜백에서 호출)
+  const emitRef = useRef<(ns: V3Node[], es: V3Edge[]) => void>(() => {});
+
+  // 새 노드가 prop 에 반영되면 대기 위치 초기화
+  useEffect(() => {
+    pendingRef.current = [];
+  }, [nodes]);
 
   // 고아 엣지 제거 — 끝점 노드가 없는 엣지가 하나라도 섞이면 cytoscape add 가
   // throw 하면서 그 뒤 엣지 추가/동기화가 전부 중단된다 (③ 설명 탭 연결선 전멸,
@@ -314,14 +363,65 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
       return arr;
     };
 
+    // 변경 발생 — 직전 cy 상태를 히스토리에 쌓고 onChange 발화
+    const emit = (ns: V3Node[], es: V3Edge[]) => {
+      const h = historyRef.current;
+      h.past.push({ nodes: collectNodes(), edges: collectEdges() });
+      if (h.past.length > 60) h.past.shift();
+      h.future = [];
+      setCanUndo(h.past.length > 0);
+      setCanRedo(false);
+      onChangeRef.current?.(ns, es);
+    };
+    emitRef.current = emit;
+
+    // 실행취소: 직전 스냅샷으로 (현재 상태는 future 로)
+    undoRef.current = () => {
+      const h = historyRef.current;
+      const prev = h.past.pop();
+      if (!prev) return;
+      h.future.push({ nodes: collectNodes(), edges: collectEdges() });
+      selectedRef.current = null;
+      setDeleteChip(null);
+      setCanUndo(h.past.length > 0);
+      setCanRedo(h.future.length > 0);
+      onChangeRef.current?.(prev.nodes, prev.edges);
+    };
+    redoRef.current = () => {
+      const h = historyRef.current;
+      const next = h.future.pop();
+      if (!next) return;
+      h.past.push({ nodes: collectNodes(), edges: collectEdges() });
+      selectedRef.current = null;
+      setDeleteChip(null);
+      setCanUndo(h.past.length > 0);
+      setCanRedo(h.future.length > 0);
+      onChangeRef.current?.(next.nodes, next.edges);
+    };
+
     if (!readOnly) {
+      // 키보드 삭제(Del/Backspace) — 선택 노드 또는 삭제칩 대상
+      keyDeleteRef.current = () => {
+        const chip = deleteChipRef.current;
+        const sel = selectedRef.current;
+        if (sel) {
+          selectedRef.current = null;
+          setDeleteChip(null);
+          emit(collectNodes(sel), collectEdges(sel));
+        } else if (chip) {
+          setDeleteChip(null);
+          if (chip.kind === "node") emit(collectNodes(chip.id), collectEdges(chip.id));
+          else emit(collectNodes(), collectEdges().filter((e) => e.id !== chip.id));
+        }
+      };
+
       // 삭제 실행자 — 칩 버튼에서 호출
       deleteElRef.current = (kind, id) => {
         if (kind === "node") {
           if (selectedRef.current === id) selectedRef.current = null;
-          onChangeRef.current?.(collectNodes(id), collectEdges(id));
+          emit(collectNodes(id), collectEdges(id));
         } else {
-          onChangeRef.current?.(collectNodes(), collectEdges().filter((e) => e.id !== id));
+          emit(collectNodes(), collectEdges().filter((e) => e.id !== id));
         }
       };
 
@@ -387,11 +487,11 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
             const nextEdges = collectEdges().map((e) =>
               e.id === targetId ? { ...e, dir: DIR_CYCLE[e.dir ?? "forward"] } : e
             );
-            onChangeRef.current?.(collectNodes(), nextEdges);
+            emit(collectNodes(), nextEdges);
             return;
           }
           const newEdge: V3Edge = { id: newEdgeId(), from: src, to: tappedId, label: "", dir: "forward" };
-          onChangeRef.current?.(collectNodes(), [...collectEdges(), newEdge]);
+          emit(collectNodes(), [...collectEdges(), newEdge]);
         } else {
           if (selectedRef.current) {
             cy.getElementById(selectedRef.current).removeClass("selected-source");
@@ -400,6 +500,8 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
           evt.target.addClass("selected-source");
           // 삭제 칩은 꾹 누르기(taphold)에서만 — 탭 선택 시엔 표시하지 않음
           setDeleteChip(null);
+          // Del/Backspace 삭제용 키보드 포커스 확보
+          containerRef.current?.focus({ preventScroll: true });
         }
       });
 
@@ -428,7 +530,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
         const nextEdges = collectEdges().map((e) =>
           e.id === id ? { ...e, dir: DIR_CYCLE[e.dir ?? "forward"] } : e
         );
-        onChangeRef.current?.(collectNodes(), nextEdges);
+        emit(collectNodes(), nextEdges);
       });
 
       // 엣지 길게 누르기: 삭제 칩 표시
@@ -443,15 +545,11 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
         if (evt.target !== cy) return;
         const label = window.prompt("노드 이름 입력:");
         if (!label?.trim()) return;
-        const pos = findFreePosition(cy, evt.position.x, evt.position.y);
-        const newNode: V3Node = {
-          id: newId(),
-          label: label.trim(),
-          x: pos.x,
-          y: pos.y,
-          kind: "concept",
-        };
-        onChangeRef.current?.([...collectNodes(), newNode], collectEdges());
+        const text = label.trim();
+        const pos = findFreePosition(cy, evt.position.x, evt.position.y, text, pendingRef.current);
+        pendingRef.current.push({ x: pos.x, y: pos.y, w: approxWidth(text), h: APPROX_H });
+        const newNode: V3Node = { id: newId(), label: text, x: pos.x, y: pos.y, kind: "concept" };
+        emit([...collectNodes(), newNode], collectEdges());
       });
 
       // Right-click: delete node
@@ -459,7 +557,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
         const id = evt.target.id();
         if (selectedRef.current === id) selectedRef.current = null;
         setDeleteChip(null);
-        onChangeRef.current?.(collectNodes(id), collectEdges(id));
+        emit(collectNodes(id), collectEdges(id));
       });
 
       // 스마트 가이드: 드래그 중 다른 노드와 X/Y 중심 정렬 시 스냅 + 가이드라인
@@ -560,7 +658,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
       // Drag end: sync positions
       cy.on("dragfree", "node", () => {
         clearGuides();
-        onChangeRef.current?.(collectNodes(), collectEdges());
+        emit(collectNodes(), collectEdges());
       });
     }
 
@@ -620,8 +718,11 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
       const { x, y } = findFreePosition(
         cy,
         (viewport.x1 + viewport.x2) / 2,
-        (viewport.y1 + viewport.y2) / 2
+        (viewport.y1 + viewport.y2) / 2,
+        word,
+        pendingRef.current,
       );
+      pendingRef.current.push({ x, y, w: approxWidth(word), h: APPROX_H });
       const newNode: V3Node = { id: newId(), label: word, x, y, kind: "concept" };
       const currentNodes: V3Node[] = [];
       cy.nodes().forEach((n) => {
@@ -643,7 +744,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
           dir: (e.data("dir") as EdgeDir) ?? "forward",
         });
       });
-      onChangeRef.current?.([...currentNodes, newNode], currentEdges);
+      emitRef.current([...currentNodes, newNode], currentEdges);
     },
     []
   );
@@ -665,12 +766,53 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
         </div>
       )}
       {!readOnly && (
-        <p className="text-[11px] text-brain-text-soft px-1">
-          더블클릭 → 노드 추가 · 노드 탭 후 다른 노드 탭 → 연결 · 화살표 탭 → 방향 순환(→/↔/←/없음) · 노드 탭 → ✕ 삭제 칩 · 화살표 꾹 누르기 → ✕ 삭제 칩
-        </p>
+        <div className="flex items-center justify-between gap-2 px-1">
+          <p className="text-[11px] text-brain-text-soft flex-1 min-w-0">
+            더블클릭 → 노드 추가 · 노드 탭 후 다른 노드 탭 → 연결 · 화살표 탭 → 방향 순환 · 노드/화살표 꾹 누르기 또는 선택 후 Del → 삭제
+          </p>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              onClick={() => undoRef.current()}
+              disabled={!canUndo}
+              title="실행취소 (Ctrl+Z)"
+              className="rounded-md border border-brain-border px-2 py-1 text-xs text-brain-text-muted hover:text-brain-text hover:border-brain-accent disabled:opacity-30 disabled:hover:border-brain-border"
+            >
+              ↶ 되돌리기
+            </button>
+            <button
+              onClick={() => redoRef.current()}
+              disabled={!canRedo}
+              title="다시실행 (Ctrl+Shift+Z)"
+              className="rounded-md border border-brain-border px-2 py-1 text-xs text-brain-text-muted hover:text-brain-text hover:border-brain-accent disabled:opacity-30 disabled:hover:border-brain-border"
+            >
+              ↷ 다시
+            </button>
+          </div>
+        </div>
       )}
       <div className="relative flex-1 min-h-0">
-        <div ref={containerRef} className="h-full rounded-lg border border-brain-border bg-brain-surface" />
+        <div
+          ref={containerRef}
+          tabIndex={readOnly ? undefined : 0}
+          onKeyDown={
+            readOnly
+              ? undefined
+              : (e) => {
+                  if (e.key === "Delete" || e.key === "Backspace") {
+                    e.preventDefault();
+                    keyDeleteRef.current();
+                  } else if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z")) {
+                    e.preventDefault();
+                    if (e.shiftKey) redoRef.current();
+                    else undoRef.current();
+                  } else if ((e.ctrlKey || e.metaKey) && (e.key === "y" || e.key === "Y")) {
+                    e.preventDefault();
+                    redoRef.current();
+                  }
+                }
+          }
+          className="h-full rounded-lg border border-brain-border bg-brain-surface outline-none focus:border-brain-accent/60"
+        />
         {/* 스마트 가이드 오버레이 — 드래그 정렬선 */}
         <canvas
           ref={guideRef}
