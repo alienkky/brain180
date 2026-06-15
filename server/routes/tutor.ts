@@ -231,12 +231,17 @@ function formatLessonTutorNotes(sourceMeta: unknown): string {
       ? meta.tutor_reference_notes.trim()
       : "";
   const sections: string[] = [];
-  if (cognitive) sections.push(`인지구조 분석:\n${cognitive}`);
-  if (questions) sections.push(`학습자에게 던질 질문:\n${questions}`);
-  if (notes) sections.push(`AI 튜터 참고 메모:\n${notes}`);
-  return sections.length > 0
-    ? sections.join("\n\n")
-    : "(관리자가 입력한 레슨별 참고자료 없음)";
+  if (cognitive) sections.push(`[1부 · 글의 인지구조 참고]\n${cognitive}`);
+  if (questions) sections.push(`[2부 · 저자의 대상과 렌즈 참고]\n${questions}`);
+  if (notes) sections.push(`[3부 · 종합·내재화 참고]\n${notes}`);
+  if (sections.length === 0) return "(관리자가 입력한 레슨별 참고자료 없음)";
+  return [
+    "아래는 이 레슨의 단계별 코치 참고 자료입니다. 학생 메시지의 [n부] 표시에 해당하는",
+    "단계 자료를 우선 활용해 더 깊고 구체적인 피드백을 주되, 정답을 그대로 알려주지 말고",
+    "학생이 스스로 도달하도록 유도하세요.",
+    "",
+    sections.join("\n\n"),
+  ].join("\n");
 }
 
 function asyncHandler(

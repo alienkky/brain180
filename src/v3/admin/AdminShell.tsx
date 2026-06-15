@@ -398,6 +398,10 @@ function LessonEditor({
   const [order, setOrder] = useState(lesson?.order ?? nextOrder);
   const [body, setBody] = useState(lesson?.body ?? "");
   const [objectives, setObjectives] = useState((lesson?.objectives ?? []).join("\n"));
+  // AI 코치 단계별 참고 자료 (lesson.sourceMeta → 프롬프트 {{lesson_tutor_notes}})
+  const [coach1, setCoach1] = useState(lesson?.cognitive_structure_analysis ?? "");
+  const [coach2, setCoach2] = useState(lesson?.learner_questions ?? "");
+  const [coach3, setCoach3] = useState(lesson?.tutor_reference_notes ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -431,6 +435,9 @@ function LessonEditor({
           author: author.trim(),
           source: source.trim(),
           objectives: objList,
+          cognitive_structure_analysis: coach1.trim(),
+          learner_questions: coach2.trim(),
+          tutor_reference_notes: coach3.trim(),
         });
       } else {
         await api.adminCreateLesson({
@@ -441,6 +448,9 @@ function LessonEditor({
           author: author.trim() || undefined,
           source: source.trim() || undefined,
           objectives: objList.length ? objList : undefined,
+          cognitive_structure_analysis: coach1.trim() || undefined,
+          learner_questions: coach2.trim() || undefined,
+          tutor_reference_notes: coach3.trim() || undefined,
         });
       }
       onSaved();
@@ -525,13 +535,57 @@ function LessonEditor({
               </button>
             </div>
           </div>
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder={"고전 텍스트 본문을 붙여넣으세요.\n\n빈 줄로 문단을 구분하면 학습 화면에 그대로 반영됩니다."}
-            className="flex-1 resize-none rounded-lg border border-brain-border bg-brain-surface px-4 py-3 text-[14px] leading-[1.9] text-brain-text focus:border-brain-accent focus:outline-none"
-            style={{ whiteSpace: "pre-wrap" }}
-          />
+          <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4">
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder={"고전 텍스트 본문을 붙여넣으세요.\n\n빈 줄로 문단을 구분하면 학습 화면에 그대로 반영됩니다."}
+              className="min-h-[220px] flex-1 resize-none rounded-lg border border-brain-border bg-brain-surface px-4 py-3 text-[14px] leading-[1.9] text-brain-text focus:border-brain-accent focus:outline-none"
+              style={{ whiteSpace: "pre-wrap" }}
+            />
+
+            {/* AI 코치 단계별 참고 자료 — 답변 고급화용. 학습자에겐 안 보임 */}
+            <details className="rounded-lg border border-brain-border bg-brain-surface-soft" open>
+              <summary className="cursor-pointer px-4 py-2.5 text-sm font-medium text-brain-text">
+                🤖 AI 코치 참고 자료 (1·2·3부) — 학습자 비공개
+              </summary>
+              <div className="flex flex-col gap-3 px-4 pb-4">
+                <p className="text-[11px] text-brain-text-muted leading-relaxed">
+                  각 부에서 AI 코치가 참고해 더 깊은 피드백을 주는 자료입니다. 학습 화면엔 노출되지 않습니다.
+                </p>
+                <label className="flex flex-col gap-1 text-xs text-brain-text-muted">
+                  1부 · 글의 인지구조 (핵심 개념·논리 구조·사고 흐름)
+                  <textarea
+                    value={coach1}
+                    onChange={(e) => setCoach1(e.target.value)}
+                    rows={3}
+                    placeholder="예: 이 글은 '길들임'을 시간·반복·관계의 축으로 전개한다. 핵심 노드: 길들이다/책임/유일성..."
+                    className="resize-none rounded-lg border border-brain-border bg-brain-surface px-3 py-2 text-sm text-brain-text focus:border-brain-accent focus:outline-none"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-brain-text-muted">
+                  2부 · 저자의 대상과 렌즈 (저자가 무엇을 어떤 관점으로 봤나)
+                  <textarea
+                    value={coach2}
+                    onChange={(e) => setCoach2(e.target.value)}
+                    rows={3}
+                    placeholder="예: 대상=관계 맺기, 렌즈=시간 투자와 책임. 학생에게 '왜 길들임이 시간을 요구하는가' 질문 유도..."
+                    className="resize-none rounded-lg border border-brain-border bg-brain-surface px-3 py-2 text-sm text-brain-text focus:border-brain-accent focus:outline-none"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-brain-text-muted">
+                  3부 · 종합·내재화 (자기 삶에 적용·확장 포인트)
+                  <textarea
+                    value={coach3}
+                    onChange={(e) => setCoach3(e.target.value)}
+                    rows={3}
+                    placeholder="예: 학생이 자신의 관계/습관에 '길들임의 렌즈'를 적용하도록. 피상적 요약은 되묻기..."
+                    className="resize-none rounded-lg border border-brain-border bg-brain-surface px-3 py-2 text-sm text-brain-text focus:border-brain-accent focus:outline-none"
+                  />
+                </label>
+              </div>
+            </details>
+          </div>
         </div>
 
         {/* Footer */}
