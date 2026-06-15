@@ -134,9 +134,9 @@ export function Stage3Screen({
             </button>
           </div>
 
-          <div className={`flex flex-1 overflow-hidden ${showAI ? "flex-row" : ""}`}>
+          <div className={`flex flex-1 overflow-hidden ${showAI ? "flex-col md:flex-row" : ""}`}>
             {/* Writing area */}
-            <div className={`flex flex-col overflow-hidden ${showAI ? "w-[55%] border-r border-brain-border" : "flex-1"}`}>
+            <div className={`flex flex-col overflow-hidden ${showAI ? "flex-1 min-h-0 md:flex-none md:w-[55%] border-b md:border-b-0 md:border-r border-brain-border" : "flex-1"}`}>
               <div className="flex-1 p-4 flex flex-col gap-3">
                 <p className="text-xs text-brain-text-muted">
                   1부와 2부를 종합하여 저자의 렌즈로 바라본 한 편의 글을 완성하세요.

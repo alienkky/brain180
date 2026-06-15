@@ -117,9 +117,9 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
             </button>
           </div>
 
-          <div className={`flex flex-1 overflow-hidden ${showAI ? "flex-row" : ""}`}>
+          <div className={`flex flex-1 overflow-hidden ${showAI ? "flex-col md:flex-row" : ""}`}>
             {/* Tab content */}
-            <div className={`flex flex-col overflow-hidden ${showAI ? "w-[55%] border-r border-brain-border" : "flex-1"}`}>
+            <div className={`flex flex-col overflow-hidden ${showAI ? "flex-1 min-h-0 md:flex-none md:w-[55%] border-b md:border-b-0 md:border-r border-brain-border" : "flex-1"}`}>
               {tab === "blocks" && (
                 <div className="flex-1 overflow-y-auto p-4">
                   <p className="text-xs text-brain-text-muted mb-3">

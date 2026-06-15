@@ -104,9 +104,9 @@ export function Stage2Screen({
             </button>
           </div>
 
-          <div className={`flex flex-1 overflow-hidden ${showAI ? "flex-row" : ""}`}>
+          <div className={`flex flex-1 overflow-hidden ${showAI ? "flex-col md:flex-row" : ""}`}>
             {/* Canvas + description */}
-            <div className={`flex flex-col overflow-hidden ${showAI ? "w-[55%] border-r border-brain-border" : "flex-1"}`}>
+            <div className={`flex flex-col overflow-hidden ${showAI ? "flex-1 min-h-0 md:flex-none md:w-[55%] border-b md:border-b-0 md:border-r border-brain-border" : "flex-1"}`}>
               <div className="flex-1 overflow-hidden p-3 flex flex-col gap-2">
                 <p className="text-xs text-brain-text-muted shrink-0">
                   "대상" 노드와 "렌즈" 노드 이름을 더블클릭하여 수정하고, 저자의 관점을 추가 노드로 표현하세요.

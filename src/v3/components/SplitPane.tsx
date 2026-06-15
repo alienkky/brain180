@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 interface Props {
   left: ReactNode;
@@ -26,7 +27,9 @@ export function SplitPane({
   storageKey,
   direction = "horizontal",
 }: Props) {
-  const isVertical = direction === "vertical";
+  // 모바일에서는 좌우 분할을 항상 상하 적층으로 전환 (좁은 폭 대응)
+  const isMobile = useIsMobile();
+  const isVertical = isMobile ? true : direction === "vertical";
   const [pct, setPct] = useState<number>(() => {
     if (storageKey) {
       const saved = Number(localStorage.getItem(storageKey));

@@ -87,11 +87,11 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
   onChangeRef.current = onChange;
 
   // 삭제 칩 — 노드 탭/엣지 롱프레스 시 해당 요소 위에 표시
-  const [deleteChip, setDeleteChip] = useState<{ x: number; y: number; kind: "node" | "edge"; id: string } | null>(null);
+  const [deleteChip, setDeleteChip] = useState<{ x: number; y: number; kind: "node" | "edge" | "group"; id: string } | null>(null);
   const deleteChipRef = useRef(deleteChip);
   deleteChipRef.current = deleteChip;
   // effect 내부 collect 헬퍼를 쓰는 삭제 실행자
-  const deleteElRef = useRef<(kind: "node" | "edge", id: string) => void>(() => {});
+  const deleteElRef = useRef<(kind: "node" | "edge" | "group", id: string) => void>(() => {});
 
   // 실행취소/다시실행 히스토리 (변경 직전 스냅샷 스택)
   type Snap = { nodes: V3Node[]; edges: V3Edge[] };
@@ -467,18 +467,18 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
           emit(collectNodes(sel), collectEdges(sel));
         } else if (chip) {
           setDeleteChip(null);
-          if (chip.kind === "node") emit(collectNodes(chip.id), collectEdges(chip.id));
-          else emit(collectNodes(), collectEdges().filter((e) => e.id !== chip.id));
+          if (chip.kind === "edge") emit(collectNodes(), collectEdges().filter((e) => e.id !== chip.id));
+          else emit(collectNodes(chip.id), collectEdges(chip.id)); // node/group
         }
       };
 
-      // 삭제 실행자 — 칩 버튼에서 호출
+      // 삭제 실행자 — 칩 버튼에서 호출. group = 그룹만 제거(자식 보존=해제)
       deleteElRef.current = (kind, id) => {
-        if (kind === "node") {
+        if (kind === "edge") {
+          emit(collectNodes(), collectEdges().filter((e) => e.id !== id));
+        } else {
           if (selectedRef.current === id) selectedRef.current = null;
           emit(collectNodes(id), collectEdges(id));
-        } else {
-          emit(collectNodes(), collectEdges().filter((e) => e.id !== id));
         }
       };
 
@@ -495,7 +495,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
       const syncChip = () => {
         const chip = deleteChipRef.current;
         if (!chip) return;
-        if (chip.kind === "node") {
+        if (chip.kind !== "edge") {
           const p = chipPosForNode(chip.id);
           if (!p) setDeleteChip(null);
           else setDeleteChip({ ...chip, ...p });
@@ -516,8 +516,9 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
       cy.on("taphold", "node", (evt) => {
         const id = evt.target.id() as string;
         tapholdNodeId = id;
+        const isGroup = evt.target.data("kind") === "group";
         const p = chipPosForNode(id);
-        if (p) setDeleteChip({ kind: "node", id, ...p });
+        if (p) setDeleteChip({ kind: isGroup ? "group" : "node", id, ...p });
       });
 
       // Node click: edge creation via two-click
@@ -908,7 +909,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
       {!readOnly && (
         <div className="flex items-center justify-between gap-2 px-1">
           <p className="text-[11px] text-brain-text-soft flex-1 min-w-0">
-            더블클릭 → 노드 추가 · 노드 탭 후 다른 노드 탭 → 연결 · 화살표 탭 → 방향 순환 · 노드/화살표 꾹 누르기 또는 선택 후 Del → 삭제 · 배경 꾹 누르고 드래그 → 그룹 묶기
+            더블클릭 → 노드 추가 · 노드 탭 후 다른 노드 탭 → 연결 · 화살표 탭 → 방향 순환 · 노드/화살표 꾹 누르기 또는 선택 후 Del → 삭제 · 배경 꾹 누르고 드래그 → 그룹 묶기 · 그룹 박스 꾹 누르기 → 해제
           </p>
           <div className="flex shrink-0 items-center gap-1">
             <button
@@ -961,21 +962,25 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
           ref={guideRef}
           className="pointer-events-none absolute inset-0 rounded-lg"
         />
-        {/* 삭제 칩 — 선택된 노드/롱프레스한 엣지 위 */}
+        {/* 삭제/해제 칩 — 롱프레스한 노드·엣지·그룹 위 */}
         {deleteChip && !readOnly && (
           <button
             onClick={() => {
               deleteElRef.current(deleteChip.kind, deleteChip.id);
               setDeleteChip(null);
             }}
-            className="absolute z-10 flex items-center gap-1 rounded-full bg-red-500 px-2.5 py-1 text-[11px] font-medium text-white shadow-md hover:bg-red-600 transition-colors"
+            className={`absolute z-10 flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium text-white shadow-md transition-colors ${
+              deleteChip.kind === "group"
+                ? "bg-gray-600 hover:bg-gray-700"
+                : "bg-red-500 hover:bg-red-600"
+            }`}
             style={{
               left: deleteChip.x,
               top: deleteChip.y,
               transform: "translate(-50%, -100%)",
             }}
           >
-            ✕ 삭제
+            {deleteChip.kind === "group" ? "⊟ 그룹 해제" : "✕ 삭제"}
           </button>
         )}
       </div>
