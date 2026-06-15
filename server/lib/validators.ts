@@ -127,6 +127,8 @@ export const CanvasJson = z.object({
   nodes: z.array(CanvasNode).max(500),
   edges: z.array(CanvasEdge).max(1000),
   paths: z.array(CanvasPath).max(1000).optional(),
+  // v3 1부 블록 추출 보존용 — 검증은 느슨하게, payload 에 그대로 저장/복원
+  blocks: z.array(z.record(z.unknown())).max(500).optional(),
 });
 
 export const PutArtifactBody = z.object({

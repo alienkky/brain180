@@ -21,17 +21,22 @@ export function SessionScreen({ onComplete, onExit }: { onComplete: () => void; 
   const revRef = useRef(0);
   const nodesKey = JSON.stringify(session.stage1.nodes.map((n) => [n.id, n.label, Math.round(n.x), Math.round(n.y)]));
   const edgesKey = JSON.stringify(session.stage1.edges.map((e) => [e.id, e.from, e.to, e.dir]));
+  const blocksKey = JSON.stringify(session.stage1.blocks.map((b) => b.id));
   useEffect(() => {
     if (session.completedAt) return;
-    if (session.stage1.nodes.length === 0) return; // 저장할 다이어그램 없음
+    // 블록 추출 또는 다이어그램 중 하나라도 있으면 저장
+    if (session.stage1.nodes.length === 0 && session.stage1.blocks.length === 0) return;
     const sid = session.sessionId;
-    const canvas = toCanvasJson(session.stage1.nodes, session.stage1.edges);
+    const canvas = {
+      ...toCanvasJson(session.stage1.nodes, session.stage1.edges),
+      blocks: session.stage1.blocks as unknown as Record<string, unknown>[],
+    };
     const t = window.setTimeout(() => {
       api.putArtifact(sid, canvas, ++revRef.current).catch(() => {});
     }, 1500);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodesKey, edgesKey, session.sessionId, session.completedAt]);
+  }, [nodesKey, edgesKey, blocksKey, session.sessionId, session.completedAt]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">

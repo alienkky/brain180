@@ -140,6 +140,8 @@ export interface CanvasJson {
   nodes: CanvasNode[];
   edges: CanvasEdge[];
   paths?: CanvasPath[];
+  /** v3 1부 블록 추출 보존용 (서버는 payload 에 그대로 저장) */
+  blocks?: Record<string, unknown>[];
 }
 
 export interface ArtifactDto {

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../v2-shell/api";
 import type { ArtifactGalleryDto, ProgressEntryDto, TextExcerptDto } from "../../v2-shell/api";
 import { useProtocolStore } from "../store/useProtocolStore";
-import type { V3User, V3Node, V3Edge } from "../types";
+import type { V3User, V3Node, V3Edge, BlockWord } from "../types";
 
 interface Props {
   user: V3User;
@@ -13,7 +13,7 @@ interface Props {
 export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
   const session = useProtocolStore((s) => s.session);
   const savedMap = useProtocolStore((s) => s.saved);
-  const { clearSession, startSession, setStage1Canvas, resumeLesson, discardSaved } = useProtocolStore();
+  const { clearSession, startSession, setStage1Canvas, setBlocks, resumeLesson, discardSaved } = useProtocolStore();
   const [loadingArtifact, setLoadingArtifact] = useState<string | null>(null);
 
   const [progress, setProgress] = useState<ProgressEntryDto[]>([]);
@@ -86,6 +86,11 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
             id: e.id, from: e.from, to: e.to, label: e.label,
           }));
           setStage1Canvas(ns, es);
+          // 저장된 블록 추출 복원
+          const savedBlocks = artifact.canvas_json.blocks;
+          if (Array.isArray(savedBlocks) && savedBlocks.length > 0) {
+            setBlocks(savedBlocks as unknown as BlockWord[]);
+          }
         }
       }
       onResume();
