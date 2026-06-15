@@ -27,8 +27,11 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
   };
   useEffect(reload, []);
 
-  // 레슨별 진도 — 같은 기기 localStorage 임시저장 우선(단계·설명까지 보존)
+  // 레슨별 진도 — 현재 메모리 세션 또는 localStorage 임시저장(단계·설명까지 보존)
   const progressFor = (lessonId: string) => {
+    if (session && session.lessonId === lessonId && !session.completedAt) {
+      return { stage: session.currentStage };
+    }
     const s = savedMap[lessonId];
     return s ? { stage: s.currentStage } : null;
   };
@@ -38,6 +41,11 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
   // 없으면 DB 의 1부 다이어그램만 복원.
   const loadArtifact = async (a: ArtifactGalleryDto) => {
     if (loadingArtifact) return;
+    // 현재 메모리에 그 레슨이 진행 중이면 그대로 재개 (블록·설명 등 전부 보존)
+    if (session && !session.completedAt && session.lessonId === a.lesson.id) {
+      onResume();
+      return;
+    }
     if (session && !session.completedAt && session.lessonId !== a.lesson.id) {
       const ok = window.confirm(
         `진행 중인 학습(${session.lessonTitle})이 있습니다.\n다른 기록을 불러올까요? (현재 진행은 자동 저장됩니다)`
