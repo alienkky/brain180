@@ -825,9 +825,18 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
 
     // 컨테이너 크기 변화 추적 — cytoscape 는 자동 리사이즈를 안 함.
     // SplitPane 드래그/탭 전환 직후 크기 0→실측 전환 시 빈 캔버스로 남는 문제 방지.
+    // 편집 캔버스도 첫 유효 크기를 얻는 순간 1회 fit — 모바일 좁은 영역에서
+    // init 시 컨테이너 높이가 0 이라 노드가 뷰포트 밖에 그려지던 문제 해결.
+    let didInitialFit = readOnly;
     const ro = new ResizeObserver(() => {
       cy.resize();
-      if (readOnly && cy.elements().length > 0) cy.fit(undefined, 30);
+      const el = containerRef.current;
+      if (readOnly && cy.elements().length > 0) {
+        cy.fit(undefined, 30);
+      } else if (!didInitialFit && el && el.clientWidth > 0 && el.clientHeight > 0 && cy.elements().length > 0) {
+        cy.fit(undefined, 40);
+        didInitialFit = true;
+      }
     });
     ro.observe(containerRef.current);
 
