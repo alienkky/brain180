@@ -106,8 +106,11 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
     if (!window.confirm(`"${a.lesson.title}" 학습 기록을 삭제할까요?`)) return;
     try {
       await api.deleteArtifact(a.artifact_id);
-      discardSaved(a.lesson.id);
-      if (session?.lessonId === a.lesson.id) clearSession();
+      // 삭제한 시도가 현재 진행 중인 바로 그 세션일 때만 메모리/임시저장 정리
+      if (session && session.sessionId === a.session_id) {
+        discardSaved(a.lesson.id);
+        clearSession();
+      }
       reload();
     } catch (err) {
       alert(err instanceof Error ? err.message : "삭제 실패");

@@ -156,8 +156,8 @@ practiceRouter.get(
     // per session, not the same lesson over and over — and so soft-deleting
     // the visible card cannot be silently undone by a previous snapshot
     // bubbling up.
-    // 레슨당 1장(최신 스냅샷)만 — 같은 레슨을 여러 번 진행해 세션이 늘어도
-    // 대시보드엔 가장 최근 진행 1개만 노출 (중복 카드 방지).
+    // 세션(학습 시도)별 1장(최신 스냅샷). 빈 작업(노드·블록 모두 0)은 제외해
+    // 새로 시작 직후의 빈 세션이 목록을 채우지 않도록 함. 최신순 정렬.
     const rows = await db.execute<{
       artifact_id: string;
       session_id: string;
@@ -173,7 +173,7 @@ practiceRouter.get(
       objectives: string[];
       axis_focus: Record<string, unknown> | null;
     }>(sql`
-      SELECT DISTINCT ON (l.id)
+      SELECT DISTINCT ON (ca.session_id)
         ca.id          AS artifact_id,
         ca.session_id  AS session_id,
         ca.mode        AS mode,
@@ -194,9 +194,17 @@ practiceRouter.get(
         AND ls.deleted_at IS NULL
         AND ca.deleted_at IS NULL
         AND l.deleted_at IS NULL
-      ORDER BY l.id, ca.saved_at DESC
-      LIMIT 20
+        AND (
+          (jsonb_typeof(ca.payload->'nodes') = 'array' AND jsonb_array_length(ca.payload->'nodes') > 0)
+          OR (jsonb_typeof(ca.payload->'blocks') = 'array' AND jsonb_array_length(ca.payload->'blocks') > 0)
+        )
+      ORDER BY ca.session_id, ca.saved_at DESC
+      LIMIT 50
     `);
+    // 최신순으로 정렬 (DISTINCT ON 은 session_id 순서라 재정렬)
+    rows.rows.sort(
+      (a, b) => new Date(b.saved_at).getTime() - new Date(a.saved_at).getTime(),
+    );
 
     const dto: ArtifactGalleryDTO[] = rows.rows.map((row) => {
       const payload = row.payload as { nodes?: unknown[]; edges?: unknown[] };
@@ -242,7 +250,7 @@ practiceRouter.delete(
     const rows = await db
       .select({
         id: canvasArtifacts.id,
-        lessonId: learningSessions.lessonId,
+        sessionId: canvasArtifacts.sessionId,
       })
       .from(canvasArtifacts)
       .innerJoin(learningSessions, eq(canvasArtifacts.sessionId, learningSessions.id))
@@ -260,25 +268,12 @@ practiceRouter.delete(
       return;
     }
 
-    // 대시보드는 레슨당 1카드 → 삭제 시 그 레슨의 모든 세션 스냅샷을 함께 제거
-    // (한 세션만 지우면 다른 세션 카드가 다시 떠 삭제가 안 된 것처럼 보임)
-    const sessionIds = await db
-      .select({ id: learningSessions.id })
-      .from(learningSessions)
-      .where(
-        and(
-          eq(learningSessions.userId, req.user!.id),
-          eq(learningSessions.lessonId, rows[0].lessonId),
-          isNull(learningSessions.deletedAt),
-        ),
-      );
-    const ids = sessionIds.map((s) => s.id);
-    if (ids.length > 0) {
-      await db
-        .update(canvasArtifacts)
-        .set({ deletedAt: new Date() })
-        .where(and(inArray(canvasArtifacts.sessionId, ids), isNull(canvasArtifacts.deletedAt)));
-    }
+    // 시도(세션)별 카드 → 그 세션의 모든 스냅샷만 소프트삭제
+    // (자동저장이 세션당 여러 스냅샷 행을 남기므로 최신 1개만 지우면 안 됨)
+    await db
+      .update(canvasArtifacts)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(canvasArtifacts.sessionId, rows[0].sessionId), isNull(canvasArtifacts.deletedAt)));
 
     ok(res, { id: artifactId });
   }),
