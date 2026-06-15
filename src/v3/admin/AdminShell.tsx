@@ -808,9 +808,9 @@ function AdminContent() {
   const allChecked = lessons.length > 0 && checked.size === lessons.length;
 
   return (
-    <div className="flex h-full overflow-hidden">
-      {/* Module list */}
-      <div className="w-64 border-r border-brain-border flex flex-col overflow-hidden">
+    <div className="flex flex-col md:flex-row h-full overflow-hidden">
+      {/* Module list — 모바일: 상단(높이 제한) / 데스크톱: 좌측 */}
+      <div className="w-full md:w-64 max-h-[38vh] md:max-h-none border-b md:border-b-0 md:border-r border-brain-border flex flex-col overflow-hidden shrink-0">
         <div className="px-4 py-3 border-b border-brain-border flex items-center justify-between">
           <span className="text-xs font-semibold text-brain-text-muted uppercase">라이브러리</span>
           <button
@@ -1210,19 +1210,37 @@ export function AdminShell({ user, onLogout, onSwitchToLearning }: Props) {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-brain-bg">
-      {/* Sidebar */}
-      <div className="w-52 border-r border-brain-border bg-brain-surface flex flex-col shrink-0">
-        <div className="px-4 py-4 border-b border-brain-border">
+    <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-brain-bg">
+      {/* Sidebar — 데스크톱: 좌측 세로 / 모바일·태블릿 세로: 상단 가로 바 */}
+      <div className="md:w-52 border-b md:border-b-0 md:border-r border-brain-border bg-brain-surface flex flex-col shrink-0 overflow-hidden">
+        <div className="hidden md:flex md:flex-col px-4 py-4 border-b border-brain-border">
           <div className="text-sm font-bold text-brain-text">Brain180</div>
           <div className="text-xs text-brain-text-muted mt-0.5">관리자 모드</div>
         </div>
-        <nav className="flex-1 py-2">
+        {/* 모바일 상단 줄: 로고 + 학습자/로그아웃 */}
+        <div className="md:hidden flex items-center gap-2 px-3 py-2 border-b border-brain-border">
+          <span className="text-sm font-bold text-brain-text shrink-0">Brain180</span>
+          <span className="text-[11px] text-brain-text-muted shrink-0">관리자</span>
+          <div className="ml-auto flex items-center gap-2 shrink-0">
+            {onSwitchToLearning && (
+              <button
+                onClick={onSwitchToLearning}
+                className="text-[11px] bg-brain-accent-soft text-brain-accent px-2 py-1 rounded-md font-medium whitespace-nowrap"
+              >
+                📖 학습자
+              </button>
+            )}
+            <button onClick={onLogout} className="text-[11px] text-brain-text-muted whitespace-nowrap">
+              로그아웃
+            </button>
+          </div>
+        </div>
+        <nav className="flex flex-row md:flex-col overflow-x-auto md:overflow-x-hidden md:flex-1 py-1 md:py-2 px-1 md:px-0 gap-1 md:gap-0">
           {NAV_ITEMS.map((item) => (
             <button
               key={item.id}
               onClick={() => setScreen(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors text-left ${
+              className={`shrink-0 md:w-full flex items-center gap-1.5 md:gap-3 px-3 py-2 md:py-2.5 text-xs md:text-sm rounded-lg md:rounded-none transition-colors text-left whitespace-nowrap ${
                 screen === item.id
                   ? "bg-brain-accent-soft text-brain-accent font-medium"
                   : "text-brain-text hover:bg-brain-surface-soft"
@@ -1233,7 +1251,8 @@ export function AdminShell({ user, onLogout, onSwitchToLearning }: Props) {
             </button>
           ))}
         </nav>
-        <div className="border-t border-brain-border p-3 space-y-2">
+        {/* 데스크톱 하단: 학습자/계정/로그아웃 */}
+        <div className="hidden md:block border-t border-brain-border p-3 space-y-2">
           {onSwitchToLearning && (
             <button
               onClick={onSwitchToLearning}
@@ -1253,7 +1272,7 @@ export function AdminShell({ user, onLogout, onSwitchToLearning }: Props) {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">{PANELS[screen]}</div>
+      <div className="flex-1 min-h-0 overflow-y-auto">{PANELS[screen]}</div>
     </div>
   );
 }

@@ -92,37 +92,37 @@ export function V3Shell() {
     >
       {/* Top nav (non-session screens) */}
       {screen !== "session" && screen !== "complete" && (
-        <header className="h-12 border-b border-brain-border bg-brain-surface flex items-center px-4 gap-4 shrink-0">
-          <span className="text-sm font-bold text-brain-text">Brain180</span>
-          <nav className="flex gap-1 ml-2">
+        <header className="h-12 border-b border-brain-border bg-brain-surface flex items-center px-3 sm:px-4 gap-2 sm:gap-4 shrink-0 overflow-hidden">
+          <span className="text-sm font-bold text-brain-text shrink-0">Brain180</span>
+          <nav className="flex gap-1 min-w-0">
             {(["dashboard", "library"] as V3Screen[]).map((s) => (
               <button
                 key={s}
                 onClick={() => setScreen(s)}
-                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                className={`px-2 sm:px-3 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
                   screen === s
                     ? "bg-brain-accent-soft text-brain-accent"
                     : "text-brain-text-muted hover:text-brain-text"
                 }`}
               >
-                {s === "dashboard" ? "대시보드" : "레슨 라이브러리"}
+                {s === "dashboard" ? "대시보드" : s === "library" ? "라이브러리" : s}
               </button>
             ))}
           </nav>
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-2 sm:gap-3 shrink-0">
             {/* Admin: show switch-back button */}
             {user?.role === "admin" && (
               <button
                 onClick={() => setAdminMode(true)}
-                className="px-3 py-1 rounded-md text-xs font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors border border-amber-300"
+                className="px-2 sm:px-3 py-1 rounded-md text-xs font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors border border-amber-300 whitespace-nowrap"
               >
-                🔧 관리자 패널
+                🔧<span className="hidden sm:inline"> 관리자 패널</span>
               </button>
             )}
-            <span className="text-xs text-brain-text-muted">{user?.name}</span>
+            <span className="hidden md:inline text-xs text-brain-text-muted truncate max-w-[120px]">{user?.name}</span>
             <button
               onClick={handleLogout}
-              className="text-xs text-brain-text-muted hover:text-brain-text transition-colors"
+              className="text-xs text-brain-text-muted hover:text-brain-text transition-colors whitespace-nowrap"
             >
               로그아웃
             </button>
