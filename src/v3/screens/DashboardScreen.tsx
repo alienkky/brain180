@@ -27,13 +27,13 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
   };
   useEffect(reload, []);
 
-  // 레슨별 진도 — 현재 메모리 세션 또는 localStorage 임시저장(단계·설명까지 보존)
-  const progressFor = (lessonId: string) => {
-    if (session && session.lessonId === lessonId && !session.completedAt) {
+  // 시도별 진도 — 그 카드의 session_id 가 현재 메모리/임시저장과 일치할 때만
+  const progressFor = (a: ArtifactGalleryDto) => {
+    if (session && session.sessionId === a.session_id && !session.completedAt) {
       return { stage: session.currentStage };
     }
-    const s = savedMap[lessonId];
-    return s ? { stage: s.currentStage } : null;
+    const s = savedMap[a.lesson.id];
+    return s && s.sessionId === a.session_id ? { stage: s.currentStage } : null;
   };
 
   // 저장된 학습 기록 불러오기 → 이어하기.
@@ -41,14 +41,15 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
   // 없으면 DB 의 1부 다이어그램만 복원.
   const loadArtifact = async (a: ArtifactGalleryDto) => {
     if (loadingArtifact) return;
-    // 현재 메모리에 그 레슨이 진행 중이면 그대로 재개 (블록·설명 등 전부 보존)
-    if (session && !session.completedAt && session.lessonId === a.lesson.id) {
+    // 바로 이 세션이 메모리에 진행 중이면 그대로 재개 (블록·설명 등 보존)
+    if (session && !session.completedAt && session.sessionId === a.session_id) {
       onResume();
       return;
     }
-    if (session && !session.completedAt && session.lessonId !== a.lesson.id) {
+    // 다른 진행 중 세션이 있으면 확인 (자동저장되므로 손실 없음)
+    if (session && !session.completedAt && session.sessionId !== a.session_id) {
       const ok = window.confirm(
-        `진행 중인 학습(${session.lessonTitle})이 있습니다.\n다른 기록을 불러올까요? (현재 진행은 자동 저장됩니다)`
+        `진행 중인 학습(${session.lessonTitle})이 있습니다.\n이 기록을 불러올까요? (현재 진행은 자동 저장됩니다)`
       );
       if (!ok) return;
     }
@@ -72,11 +73,12 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
         source: t.source || "",
         textBody: t.body || "",
       };
-      if (savedMap[a.lesson.id]) {
+      // 임시저장이 '바로 이 세션'일 때만 완전 복원, 아니면 그 기록의 DB 내용 복원
+      if (savedMap[a.lesson.id]?.sessionId === a.session_id) {
         // 같은 기기 임시저장 — 단계/설명/메시지까지 완전 복원
         resumeLesson(a.lesson.id, meta);
       } else {
-        // 다른 기기/완료 기록 — DB 1부 캔버스만 복원
+        // 다른 시도/기기 기록 — DB 의 1부 캔버스+블록 복원
         startSession(meta, { restoreSaved: false });
         if (artifact) {
           const ns: V3Node[] = artifact.canvas_json.nodes.map((n) => ({
@@ -202,7 +204,7 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
             <h3 className="text-sm font-semibold text-brain-text mb-3">최근 학습 기록</h3>
             <div className="space-y-2">
               {artifacts.slice(0, 8).map((a) => {
-                const prog = progressFor(a.lesson.id);
+                const prog = progressFor(a);
                 return (
                   <div
                     key={a.artifact_id}
@@ -223,7 +225,7 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
                       </div>
                       <div className="text-xs text-brain-text-muted mt-0.5">
                         노드 {a.node_count}개 · 엣지 {a.edge_count}개 ·{" "}
-                        {new Date(a.saved_at).toLocaleDateString("ko-KR")}
+                        {new Date(a.saved_at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
