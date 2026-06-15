@@ -386,15 +386,26 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
     els.dirtyStyleCache();
     els.dirtyBoundingBoxCache();
 
-    // 첫 프레임 뒤 강제 재렌더 — 위 재계산 결과 플러시
-    const flushRaf = requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (cyRef.current) {
-          cyRef.current.resize();
-          cyRef.current.forceRender();
-        }
-      });
-    });
+    // 컨테이너가 유효 크기를 얻을 때까지 rAF 폴링 후 1회 resize+fit.
+    // 모바일 좁은 영역/탭 전환 시 init 시점 높이가 0 이라 ResizeObserver 의
+    // 초기 콜백만으론 노드가 뷰포트 밖에 남던 문제 → rAF 로 확실히 맞춤.
+    let rafId = 0;
+    let initialFitDone = false;
+    let tries = 0;
+    const tryInitialFit = () => {
+      const cy2 = cyRef.current;
+      const el = containerRef.current;
+      if (!cy2 || !el) return;
+      cy2.resize();
+      if (el.clientWidth > 0 && el.clientHeight > 0) {
+        if (cy2.elements().length > 0) cy2.fit(undefined, 40);
+        cy2.forceRender();
+        initialFitDone = true;
+        return;
+      }
+      if (tries++ < 60) rafId = requestAnimationFrame(tryInitialFit);
+    };
+    rafId = requestAnimationFrame(tryInitialFit);
 
     // 현재 그래프 수집 — dir 포함 (누락 시 드래그/삭제마다 방향 초기화됨)
     const collectNodes = (excludeId?: string): V3Node[] => {
@@ -825,23 +836,21 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
 
     // 컨테이너 크기 변화 추적 — cytoscape 는 자동 리사이즈를 안 함.
     // SplitPane 드래그/탭 전환 직후 크기 0→실측 전환 시 빈 캔버스로 남는 문제 방지.
-    // 편집 캔버스도 첫 유효 크기를 얻는 순간 1회 fit — 모바일 좁은 영역에서
-    // init 시 컨테이너 높이가 0 이라 노드가 뷰포트 밖에 그려지던 문제 해결.
-    let didInitialFit = readOnly;
     const ro = new ResizeObserver(() => {
       cy.resize();
       const el = containerRef.current;
       if (readOnly && cy.elements().length > 0) {
         cy.fit(undefined, 30);
-      } else if (!didInitialFit && el && el.clientWidth > 0 && el.clientHeight > 0 && cy.elements().length > 0) {
+      } else if (!initialFitDone && el && el.clientWidth > 0 && el.clientHeight > 0 && cy.elements().length > 0) {
+        // rAF 폴링이 놓친 경우의 안전망
         cy.fit(undefined, 40);
-        didInitialFit = true;
+        initialFitDone = true;
       }
     });
     ro.observe(containerRef.current);
 
     return () => {
-      cancelAnimationFrame(flushRaf);
+      cancelAnimationFrame(rafId);
       ro.disconnect();
       bandCleanupRef.current();
       cy.destroy();
