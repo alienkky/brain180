@@ -132,6 +132,7 @@ export function SplitPane({
         {/* 2구간: 드래그(양쪽 다 보임) — 이동 그립 */}
         <div
           onPointerDown={collapsed === "none" ? onSplitPointerDown : undefined}
+          style={{ touchAction: "none" }}
           className={
             "flex items-center justify-center transition-colors hover:bg-brain-accent-soft/50 " +
             (collapsed === "none"
@@ -142,7 +143,7 @@ export function SplitPane({
           }
           title={collapsed === "none" ? "드래그해서 크기 조절" : undefined}
         >
-          <div className={isVertical ? "flex gap-[3px]" : "flex flex-col gap-[3px]"}>
+          <div className={"pointer-events-none " + (isVertical ? "flex gap-[3px]" : "flex flex-col gap-[3px]")}>
             <span className="block h-[3px] w-[3px] rounded-full bg-brain-text-soft" />
             <span className="block h-[3px] w-[3px] rounded-full bg-brain-text-soft" />
             <span className="block h-[3px] w-[3px] rounded-full bg-brain-text-soft" />
