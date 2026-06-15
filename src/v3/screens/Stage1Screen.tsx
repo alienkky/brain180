@@ -23,8 +23,15 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
 
   const [tab, setTab] = useState<Tab>("blocks");
   const [showAI, setShowAI] = useState(false);
+  const [aiSubmit, setAiSubmit] = useState<{ text: string; nonce: number } | undefined>();
   // 칩 클릭 시 본문에서 강조할 블록 id
   const [highlightedBlockId, setHighlightedBlockId] = useState<string | null>(null);
+
+  const requestFeedback = () => {
+    if (!stage.description.trim()) return;
+    setShowAI(true);
+    setAiSubmit({ text: stage.description, nonce: Date.now() });
+  };
 
   const handleAddBlock = (block: BlockWord) => {
     // 같은 위치를 덮는 기존 블록이 있으면 추가하지 않음 (중복 방지)
@@ -233,7 +240,7 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
                   />
                   <div className="flex gap-2">
                     <button
-                      onClick={() => setShowAI(true)}
+                      onClick={requestFeedback}
                       disabled={!stage.description.trim()}
                       className="px-4 py-2 rounded-lg bg-brain-surface border border-brain-accent text-brain-accent text-sm disabled:opacity-40 hover:bg-brain-accent-soft"
                     >
@@ -267,6 +274,7 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
                   onIterate={() => incrementIteration(1)}
                   stagePrefix="[1부 시각화 설명]"
                   canvasSnapshot={canvasSnapshot}
+                  autoSubmit={aiSubmit}
                   placeholder={`다이어그램 설명을 입력하세요...\n\n예: "이 텍스트에서 ○○과 ○○의 관계를 발견했습니다..."`}
                 />
               </div>

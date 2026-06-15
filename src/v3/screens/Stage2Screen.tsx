@@ -27,6 +27,14 @@ export function Stage2Screen({
     useProtocolStore();
 
   const [showAI, setShowAI] = useState(false);
+  const [aiSubmit, setAiSubmit] = useState<{ text: string; nonce: number } | undefined>();
+
+  // 작성한 설명을 코치 패널 열며 즉시 전송 — 이중 입력 제거
+  const requestFeedback = () => {
+    if (!stage2.description.trim()) return;
+    setShowAI(true);
+    setAiSubmit({ text: stage2.description, nonce: Date.now() });
+  };
 
   // 최초 진입 시 기본 노드 세팅 (렌더 중 setState 금지 — effect 로)
   useEffect(() => {
@@ -135,7 +143,7 @@ export function Stage2Screen({
                     ← 1부
                   </button>
                   <button
-                    onClick={() => setShowAI(true)}
+                    onClick={requestFeedback}
                     disabled={!stage2.description.trim()}
                     className="px-4 py-1.5 rounded-lg bg-brain-surface border border-brain-accent text-brain-accent text-sm disabled:opacity-40 hover:bg-brain-accent-soft"
                   >
@@ -166,6 +174,7 @@ export function Stage2Screen({
                   onIterate={() => incrementIteration(2)}
                   stagePrefix="[2부 인지구조 설명]"
                   canvasSnapshot={canvasSnapshot}
+                  autoSubmit={aiSubmit}
                   placeholder="저자가 어떤 대상을 어떤 렌즈로 보았는지 설명하세요..."
                 />
               </div>

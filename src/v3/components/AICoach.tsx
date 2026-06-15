@@ -12,6 +12,8 @@ interface Props {
   stagePrefix: string; // "[1부 시각화 설명]" etc.
   canvasSnapshot?: CanvasJson | null;
   placeholder?: string;
+  /** nonce 가 바뀌면 text 를 자동 전송 (작성한 설명을 바로 피드백) */
+  autoSubmit?: { text: string; nonce: number };
 }
 
 export function AICoach({
@@ -23,19 +25,23 @@ export function AICoach({
   stagePrefix,
   canvasSnapshot,
   placeholder,
+  autoSubmit,
 }: Props) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const loadingRef = useRef(false);
+  loadingRef.current = loading;
+  const lastNonce = useRef(0);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const send = async () => {
-    const text = input.trim();
-    if (!text || loading) return;
-    setInput("");
+  const send = async (override?: string) => {
+    const text = (override ?? input).trim();
+    if (!text || loadingRef.current) return;
+    if (override === undefined) setInput("");
     const userMsg: ChatMessage = { role: "user", content: `${stagePrefix}\n\n${text}` };
     onMessage(userMsg);
     onIterate();
@@ -59,6 +65,15 @@ export function AICoach({
       setLoading(false);
     }
   };
+
+  // 작성한 설명 자동 전송 — AI 피드백 버튼이 nonce 를 올리면 1회 발화
+  useEffect(() => {
+    if (autoSubmit && autoSubmit.nonce !== lastNonce.current && autoSubmit.text.trim()) {
+      lastNonce.current = autoSubmit.nonce;
+      void send(autoSubmit.text);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSubmit]);
 
   return (
     <div className="flex flex-col h-full">
@@ -128,7 +143,7 @@ export function AICoach({
           className="flex-1 resize-none text-sm rounded-lg border border-brain-border bg-brain-surface px-3 py-2 focus:outline-none focus:border-brain-accent text-brain-text placeholder-brain-text-soft"
         />
         <button
-          onClick={send}
+          onClick={() => send()}
           disabled={loading || !input.trim()}
           className="self-end px-4 py-2 rounded-lg bg-brain-accent text-white text-sm font-medium disabled:opacity-40 hover:opacity-90 transition-opacity"
         >

@@ -20,7 +20,14 @@ export function Stage3Screen({
   const { setStage3Writing, addMessage, incrementIteration, markComplete } = useProtocolStore();
 
   const [showAI, setShowAI] = useState(false);
+  const [aiSubmit, setAiSubmit] = useState<{ text: string; nonce: number } | undefined>();
   const [refTab, setRefTab] = useState<1 | 2>(1);
+
+  const requestFeedback = () => {
+    if (!stage3.description.trim()) return;
+    setShowAI(true);
+    setAiSubmit({ text: stage3.description, nonce: Date.now() });
+  };
 
   const handleComplete = () => {
     // 1부 다이어그램을 아티팩트로 저장 — 대시보드 '최근 학습 기록'에서 다시 불러옴
@@ -158,7 +165,7 @@ export function Stage3Screen({
                       ← 2부
                     </button>
                     <button
-                      onClick={() => setShowAI(true)}
+                      onClick={requestFeedback}
                       disabled={!stage3.description.trim()}
                       className="px-4 py-1.5 rounded-lg bg-brain-surface border border-brain-accent text-brain-accent text-sm disabled:opacity-40 hover:bg-brain-accent-soft"
                     >
@@ -189,6 +196,7 @@ export function Stage3Screen({
                   onMessage={(msg) => addMessage(3, msg)}
                   onIterate={() => incrementIteration(3)}
                   stagePrefix="[3부 종합 글쓰기]"
+                  autoSubmit={aiSubmit}
                   placeholder="완성한 글에 대한 설명을 함께 보내거나, AI에게 질문하세요..."
                 />
               </div>
