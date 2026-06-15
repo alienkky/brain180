@@ -92,34 +92,36 @@ export function LibraryScreen({ onSessionStart }: Props) {
 
     setStarting(lesson.id);
     try {
-      // 본문/저자/출처는 항상 서버 최신값을 받아 반영 (관리자 본문 수정 대응)
-      const [session, text] = await Promise.all([
-        api.startSession(lesson.id, "practice"),
-        api.text(lesson.text_excerpt_id),
-      ]);
-      const t = text as TextExcerptDto;
-      const meta = {
-        sessionId: session.id,
-        lessonId: lesson.id,
-        lessonTitle: lesson.title,
-        author: t.author || selectedModule?.title || "",
-        source: t.source || "",
-        textBody: t.body || "",
+      // 본문/저자/출처는 항상 서버 최신값으로 (관리자 본문 수정 대응)
+      const text = (await api.text(lesson.text_excerpt_id)) as TextExcerptDto;
+      const freshMeta = {
+        author: text.author || selectedModule?.title || "",
+        source: text.source || "",
+        textBody: text.body || "",
       };
 
-      if (hasProgress && resume) {
-        // 현재 진행 중 세션이면 임시저장으로 내린 뒤 최신 메타로 복원
+      // ── 이어하기: 새 DB 세션을 만들지 않고 기존 진행을 그대로 재개 ──
+      if (resume && hasProgress) {
         if (existingSession?.lessonId === lesson.id && !existingSession.completedAt) {
-          useProtocolStore.setState((s) => ({
-            saved: { ...s.saved, [lesson.id]: existingSession },
-          }));
+          // 메모리에 진행 중 — 본문만 최신화하고 그대로 재개 (블록·노드 보존)
+          useProtocolStore.setState((s) =>
+            s.session ? { session: { ...s.session, ...freshMeta } } : s,
+          );
+        } else {
+          // 임시저장본 복원 — 기존 sessionId 유지(sessionId 미전달), 본문만 최신화
+          resumeLesson(lesson.id, freshMeta);
         }
-        resumeLesson(lesson.id, meta);
-      } else {
-        // 처음부터: 임시저장 폐기 후 새 세션 (restoreSaved:false)
-        discardSaved(lesson.id);
-        startSession(meta, { restoreSaved: false });
+        onSessionStart();
+        return;
       }
+
+      // ── 처음부터 / 신규: 새 DB 세션 생성 ──
+      const session = await api.startSession(lesson.id, "practice");
+      discardSaved(lesson.id);
+      startSession(
+        { sessionId: session.id, lessonId: lesson.id, lessonTitle: lesson.title, ...freshMeta },
+        { restoreSaved: false },
+      );
       onSessionStart();
     } catch (e) {
       alert(e instanceof Error ? e.message : "세션을 시작할 수 없습니다.");
