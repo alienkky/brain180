@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../v2-shell/api";
 import type { ModuleDto, LessonDto, TextExcerptDto } from "../../v2-shell/api";
 import { useProtocolStore } from "../store/useProtocolStore";
+import { toCanvasJson } from "../types";
 
 interface Props {
   onSessionStart: () => void;
@@ -68,7 +69,24 @@ export function LibraryScreen({ onSessionStart }: Props) {
       (existingSession?.lessonId === lesson.id && !existingSession.completedAt) ||
       !!savedMap[lesson.id];
     if (mode === "fresh" && hasProgress) {
-      if (!window.confirm("진행하던 작업을 삭제하고 처음부터 시작할까요?")) return;
+      if (!window.confirm("진행하던 작업을 저장하고 새로 시작할까요?\n기존 진행은 '최근 학습 기록'에 보관됩니다.")) return;
+      // 기존 진행을 DB에 보존 (최근 학습 기록에서 다시 불러올 수 있게)
+      const prev =
+        existingSession?.lessonId === lesson.id && !existingSession.completedAt
+          ? existingSession
+          : savedMap[lesson.id];
+      if (prev && (prev.stage1.nodes.length > 0 || prev.stage1.blocks.length > 0)) {
+        await api
+          .putArtifact(
+            prev.sessionId,
+            {
+              ...toCanvasJson(prev.stage1.nodes, prev.stage1.edges),
+              blocks: prev.stage1.blocks as unknown as Record<string, unknown>[],
+            },
+            1,
+          )
+          .catch(() => {});
+      }
     }
     const resume = mode === "resume" || (mode === "auto" && hasProgress);
 
