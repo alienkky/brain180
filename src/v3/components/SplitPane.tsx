@@ -94,9 +94,14 @@ export function SplitPane({
 
   const stop = (e: React.PointerEvent) => e.stopPropagation();
 
-  // 접기/펼치기 버튼 — 방향별 글리프
-  const btnClass =
-    "flex items-center justify-center rounded bg-brain-surface border border-brain-border text-[10px] leading-none text-brain-text-muted hover:text-brain-accent hover:border-brain-accent px-1.5 py-0.5";
+  // 가장자리 접기/펼치기 영역 — 라인 안에 묻히는 글리프(테두리·배경 없음)
+  const zoneClass =
+    "flex items-center justify-center text-[9px] leading-none text-brain-text-soft hover:text-brain-accent transition-colors cursor-pointer select-none";
+
+  // 첫 패널(위/왼쪽) 글리프
+  const firstGlyph = isVertical ? (collapsed === "first" ? "▼" : "▲") : collapsed === "first" ? "▶" : "◀";
+  // 둘째 패널(아래/오른쪽) 글리프
+  const secondGlyph = isVertical ? (collapsed === "second" ? "▲" : "▼") : collapsed === "second" ? "◀" : "▶";
 
   return (
     <div
@@ -105,42 +110,53 @@ export function SplitPane({
       style={isVertical ? { gridTemplateRows: template } : { gridTemplateColumns: template }}
     >
       <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">{left}</div>
+      {/* 핸들 — 3등분: [위/왼 접기] · [드래그] · [아래/오른 접기] */}
       <div
         className={
-          (isVertical
-            ? "flex-row cursor-row-resize border-y "
-            : "flex-col cursor-col-resize border-x ") +
-          "flex items-center justify-center gap-1.5 border-brain-border bg-brain-surface-soft transition-colors hover:bg-brain-accent-soft/60" +
-          (collapsed !== "none" ? " cursor-default" : "")
+          (isVertical ? "grid-cols-3 border-y " : "grid-rows-3 border-x ") +
+          "grid border-brain-border bg-brain-surface-soft"
         }
         style={{ touchAction: "none" }}
-        onPointerDown={onSplitPointerDown}
         role="separator"
         aria-orientation={isVertical ? "horizontal" : "vertical"}
-        aria-label={isVertical ? "상하 패널 높이 조절" : "좌우 패널 너비 조절"}
-        title={collapsed === "none" ? "드래그해서 크기 조절" : undefined}
       >
-        {/* 첫 패널(위/왼쪽) 접기·펼치기 */}
-        <button
-          onPointerDown={stop}
+        {/* 1구간: 첫 패널 접기/펼치기 */}
+        <div
           onClick={() => setCollapsed((c) => (c === "first" ? "none" : "first"))}
-          className={btnClass}
+          onPointerDown={stop}
+          className={zoneClass}
           title={collapsed === "first" ? "펼치기" : isVertical ? "본문 접기" : "왼쪽 접기"}
         >
-          {isVertical ? (collapsed === "first" ? "▼" : "▲") : collapsed === "first" ? "▶" : "◀"}
-        </button>
-        {collapsed === "none" && (
-          <div className={isVertical ? "h-1 w-8 rounded-full bg-brain-border" : "h-8 w-1 rounded-full bg-brain-border"} />
-        )}
-        {/* 둘째 패널(아래/오른쪽) 접기·펼치기 */}
-        <button
-          onPointerDown={stop}
+          {firstGlyph}
+        </div>
+        {/* 2구간: 드래그(양쪽 다 보임) — 이동 그립 */}
+        <div
+          onPointerDown={collapsed === "none" ? onSplitPointerDown : undefined}
+          className={
+            "flex items-center justify-center transition-colors hover:bg-brain-accent-soft/50 " +
+            (collapsed === "none"
+              ? isVertical
+                ? "cursor-row-resize"
+                : "cursor-col-resize"
+              : "cursor-default opacity-40")
+          }
+          title={collapsed === "none" ? "드래그해서 크기 조절" : undefined}
+        >
+          <div className={isVertical ? "flex gap-[3px]" : "flex flex-col gap-[3px]"}>
+            <span className="block h-[3px] w-[3px] rounded-full bg-brain-text-soft" />
+            <span className="block h-[3px] w-[3px] rounded-full bg-brain-text-soft" />
+            <span className="block h-[3px] w-[3px] rounded-full bg-brain-text-soft" />
+          </div>
+        </div>
+        {/* 3구간: 둘째 패널 접기/펼치기 */}
+        <div
           onClick={() => setCollapsed((c) => (c === "second" ? "none" : "second"))}
-          className={btnClass}
+          onPointerDown={stop}
+          className={zoneClass}
           title={collapsed === "second" ? "펼치기" : isVertical ? "하단 접기" : "오른쪽 접기"}
         >
-          {isVertical ? (collapsed === "second" ? "▲" : "▼") : collapsed === "second" ? "◀" : "▶"}
-        </button>
+          {secondGlyph}
+        </div>
       </div>
       <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">{right}</div>
     </div>
