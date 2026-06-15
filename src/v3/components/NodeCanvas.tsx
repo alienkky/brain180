@@ -952,6 +952,9 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
                 }
           }
           className="h-full rounded-lg border border-brain-border bg-brain-surface outline-none focus:border-brain-accent/60"
+          // 펜/터치 드래그가 브라우저 패닝(화면 밀림)으로 새지 않게 — cytoscape 가
+          // 포인터를 온전히 처리하도록 제스처 차단 (읽기전용도 노드 이동 지원)
+          style={{ touchAction: "none" }}
         />
         {/* 스마트 가이드 오버레이 — 드래그 정렬선 */}
         <canvas
