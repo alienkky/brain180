@@ -156,6 +156,8 @@ practiceRouter.get(
     // per session, not the same lesson over and over — and so soft-deleting
     // the visible card cannot be silently undone by a previous snapshot
     // bubbling up.
+    // 레슨당 1장(최신 스냅샷)만 — 같은 레슨을 여러 번 진행해 세션이 늘어도
+    // 대시보드엔 가장 최근 진행 1개만 노출 (중복 카드 방지).
     const rows = await db.execute<{
       artifact_id: string;
       session_id: string;
@@ -171,7 +173,7 @@ practiceRouter.get(
       objectives: string[];
       axis_focus: Record<string, unknown> | null;
     }>(sql`
-      SELECT DISTINCT ON (ca.session_id)
+      SELECT DISTINCT ON (l.id)
         ca.id          AS artifact_id,
         ca.session_id  AS session_id,
         ca.mode        AS mode,
@@ -192,7 +194,7 @@ practiceRouter.get(
         AND ls.deleted_at IS NULL
         AND ca.deleted_at IS NULL
         AND l.deleted_at IS NULL
-      ORDER BY ca.session_id, ca.saved_at DESC
+      ORDER BY l.id, ca.saved_at DESC
       LIMIT 20
     `);
 
@@ -240,7 +242,7 @@ practiceRouter.delete(
     const rows = await db
       .select({
         id: canvasArtifacts.id,
-        sessionId: canvasArtifacts.sessionId,
+        lessonId: learningSessions.lessonId,
       })
       .from(canvasArtifacts)
       .innerJoin(learningSessions, eq(canvasArtifacts.sessionId, learningSessions.id))
@@ -258,15 +260,25 @@ practiceRouter.delete(
       return;
     }
 
-    await db
-      .update(canvasArtifacts)
-      .set({ deletedAt: new Date() })
+    // 대시보드는 레슨당 1카드 → 삭제 시 그 레슨의 모든 세션 스냅샷을 함께 제거
+    // (한 세션만 지우면 다른 세션 카드가 다시 떠 삭제가 안 된 것처럼 보임)
+    const sessionIds = await db
+      .select({ id: learningSessions.id })
+      .from(learningSessions)
       .where(
         and(
-          eq(canvasArtifacts.sessionId, rows[0].sessionId),
-          isNull(canvasArtifacts.deletedAt),
+          eq(learningSessions.userId, req.user!.id),
+          eq(learningSessions.lessonId, rows[0].lessonId),
+          isNull(learningSessions.deletedAt),
         ),
       );
+    const ids = sessionIds.map((s) => s.id);
+    if (ids.length > 0) {
+      await db
+        .update(canvasArtifacts)
+        .set({ deletedAt: new Date() })
+        .where(and(inArray(canvasArtifacts.sessionId, ids), isNull(canvasArtifacts.deletedAt)));
+    }
 
     ok(res, { id: artifactId });
   }),
