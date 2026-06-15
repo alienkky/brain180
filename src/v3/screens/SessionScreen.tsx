@@ -1,8 +1,11 @@
+import { useEffect, useRef } from "react";
 import { useProtocolStore } from "../store/useProtocolStore";
 import { ProtocolNav } from "../components/ProtocolNav";
 import { Stage1Screen } from "./Stage1Screen";
 import { Stage2Screen } from "./Stage2Screen";
 import { Stage3Screen } from "./Stage3Screen";
+import { api } from "../../v2-shell/api";
+import { toCanvasJson } from "../types";
 import type { ProtocolStage } from "../types";
 
 export function SessionScreen({ onComplete, onExit }: { onComplete: () => void; onExit: () => void }) {
@@ -12,6 +15,23 @@ export function SessionScreen({ onComplete, onExit }: { onComplete: () => void; 
   const stage = session.currentStage;
 
   const goTo = (s: ProtocolStage) => setStage(s);
+
+  // 진행 중 자동 저장 — 1부 다이어그램이 생기면 DB(canvas_artifacts)에 스냅샷 저장.
+  // 멈춰도 '최근 학습 기록'에 남고 다른 기기/재로그인 시 불러올 수 있음.
+  const revRef = useRef(0);
+  const nodesKey = JSON.stringify(session.stage1.nodes.map((n) => [n.id, n.label, Math.round(n.x), Math.round(n.y)]));
+  const edgesKey = JSON.stringify(session.stage1.edges.map((e) => [e.id, e.from, e.to, e.dir]));
+  useEffect(() => {
+    if (session.completedAt) return;
+    if (session.stage1.nodes.length === 0) return; // 저장할 다이어그램 없음
+    const sid = session.sessionId;
+    const canvas = toCanvasJson(session.stage1.nodes, session.stage1.edges);
+    const t = window.setTimeout(() => {
+      api.putArtifact(sid, canvas, ++revRef.current).catch(() => {});
+    }, 1500);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodesKey, edgesKey, session.sessionId, session.completedAt]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">

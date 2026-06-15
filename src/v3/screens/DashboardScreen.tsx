@@ -12,15 +12,35 @@ interface Props {
 
 export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
   const session = useProtocolStore((s) => s.session);
-  const { clearSession, startSession, setStage1Canvas } = useProtocolStore();
+  const savedMap = useProtocolStore((s) => s.saved);
+  const { clearSession, startSession, setStage1Canvas, resumeLesson, discardSaved } = useProtocolStore();
   const [loadingArtifact, setLoadingArtifact] = useState<string | null>(null);
 
-  // 저장된 학습 기록 클릭 → 1부 다이어그램 복원 + 세션 재구성
+  const [progress, setProgress] = useState<ProgressEntryDto[]>([]);
+  const [artifacts, setArtifacts] = useState<ArtifactGalleryDto[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const reload = () => {
+    Promise.all([api.progress(), api.artifacts()])
+      .then(([p, a]) => { setProgress(p); setArtifacts(a); })
+      .finally(() => setLoading(false));
+  };
+  useEffect(reload, []);
+
+  // 레슨별 진도 — 같은 기기 localStorage 임시저장 우선(단계·설명까지 보존)
+  const progressFor = (lessonId: string) => {
+    const s = savedMap[lessonId];
+    return s ? { stage: s.currentStage } : null;
+  };
+
+  // 저장된 학습 기록 불러오기 → 이어하기.
+  // 같은 기기에 임시저장이 있으면 완전 복원(단계/설명/메시지),
+  // 없으면 DB 의 1부 다이어그램만 복원.
   const loadArtifact = async (a: ArtifactGalleryDto) => {
     if (loadingArtifact) return;
-    if (session && !session.completedAt) {
+    if (session && !session.completedAt && session.lessonId !== a.lesson.id) {
       const ok = window.confirm(
-        `진행 중인 학습(${session.lessonTitle})이 있습니다.\n기록을 불러오면 기존 진행 내용이 사라집니다. 계속할까요?`
+        `진행 중인 학습(${session.lessonTitle})이 있습니다.\n다른 기록을 불러올까요? (현재 진행은 자동 저장됩니다)`
       );
       if (!ok) return;
     }
@@ -36,33 +56,29 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
         api.startSession(a.lesson.id, "practice"),
       ]);
       const t = text as TextExcerptDto;
-      // 아티팩트 복원은 항상 새 세션으로 (임시저장 무시, 현재 진행은 자동 보관)
-      startSession(
-        {
-          sessionId: newSession.id,
-          lessonId: a.lesson.id,
-          lessonTitle: a.lesson.title,
-          author: t.author || "",
-          source: t.source || "",
-          textBody: t.body || "",
-        },
-        { restoreSaved: false }
-      );
-      if (artifact) {
-        const ns: V3Node[] = artifact.canvas_json.nodes.map((n) => ({
-          id: n.id,
-          label: n.label,
-          x: n.x,
-          y: n.y,
-          kind: "concept",
-        }));
-        const es: V3Edge[] = artifact.canvas_json.edges.map((e) => ({
-          id: e.id,
-          from: e.from,
-          to: e.to,
-          label: e.label,
-        }));
-        setStage1Canvas(ns, es);
+      const meta = {
+        sessionId: newSession.id,
+        lessonId: a.lesson.id,
+        lessonTitle: a.lesson.title,
+        author: t.author || "",
+        source: t.source || "",
+        textBody: t.body || "",
+      };
+      if (savedMap[a.lesson.id]) {
+        // 같은 기기 임시저장 — 단계/설명/메시지까지 완전 복원
+        resumeLesson(a.lesson.id, meta);
+      } else {
+        // 다른 기기/완료 기록 — DB 1부 캔버스만 복원
+        startSession(meta, { restoreSaved: false });
+        if (artifact) {
+          const ns: V3Node[] = artifact.canvas_json.nodes.map((n) => ({
+            id: n.id, label: n.label, x: n.x, y: n.y, kind: "concept",
+          }));
+          const es: V3Edge[] = artifact.canvas_json.edges.map((e) => ({
+            id: e.id, from: e.from, to: e.to, label: e.label,
+          }));
+          setStage1Canvas(ns, es);
+        }
       }
       onResume();
     } catch (e) {
@@ -71,15 +87,19 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
       setLoadingArtifact(null);
     }
   };
-  const [progress, setProgress] = useState<ProgressEntryDto[]>([]);
-  const [artifacts, setArtifacts] = useState<ArtifactGalleryDto[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    Promise.all([api.progress(), api.artifacts()])
-      .then(([p, a]) => { setProgress(p); setArtifacts(a); })
-      .finally(() => setLoading(false));
-  }, []);
+  const deleteArtifact = async (a: ArtifactGalleryDto, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm(`"${a.lesson.title}" 학습 기록을 삭제할까요?`)) return;
+    try {
+      await api.deleteArtifact(a.artifact_id);
+      discardSaved(a.lesson.id);
+      if (session?.lessonId === a.lesson.id) clearSession();
+      reload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "삭제 실패");
+    }
+  };
 
   const totalLessons = progress.length;
   const totalSessions = progress.reduce((s, p) => s + p.session_count, 0);
@@ -165,26 +185,50 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
           <div>
             <h3 className="text-sm font-semibold text-brain-text mb-3">최근 학습 기록</h3>
             <div className="space-y-2">
-              {artifacts.slice(0, 5).map((a) => (
-                <button
-                  key={a.artifact_id}
-                  onClick={() => loadArtifact(a)}
-                  disabled={loadingArtifact !== null}
-                  className="w-full flex items-center justify-between bg-brain-surface border border-brain-border rounded-lg px-4 py-3 text-left hover:border-brain-accent/50 transition-colors disabled:opacity-60"
-                  title="클릭하면 저장된 다이어그램을 불러옵니다"
-                >
-                  <div>
-                    <div className="text-sm text-brain-text">{a.lesson.title}</div>
-                    <div className="text-xs text-brain-text-muted mt-0.5">
-                      노드 {a.node_count}개 · 엣지 {a.edge_count}개 ·{" "}
-                      {new Date(a.saved_at).toLocaleDateString("ko-KR")}
+              {artifacts.slice(0, 8).map((a) => {
+                const prog = progressFor(a.lesson.id);
+                return (
+                  <div
+                    key={a.artifact_id}
+                    className="flex items-center justify-between gap-3 bg-brain-surface border border-brain-border rounded-lg px-4 py-3 hover:border-brain-accent/50 transition-colors"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-brain-text truncate">{a.lesson.title}</span>
+                        {prog ? (
+                          <span className="shrink-0 text-[11px] px-1.5 py-0.5 rounded-full bg-brain-accent-soft text-brain-accent font-medium">
+                            {prog.stage}부 진행 중
+                          </span>
+                        ) : (
+                          <span className="shrink-0 text-[11px] px-1.5 py-0.5 rounded-full bg-brain-surface-soft text-brain-text-muted">
+                            저장됨
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-brain-text-muted mt-0.5">
+                        노드 {a.node_count}개 · 엣지 {a.edge_count}개 ·{" "}
+                        {new Date(a.saved_at).toLocaleDateString("ko-KR")}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={() => loadArtifact(a)}
+                        disabled={loadingArtifact !== null}
+                        className="px-3 py-1.5 rounded-lg bg-brain-accent text-white text-xs font-medium disabled:opacity-50 hover:opacity-90"
+                      >
+                        {loadingArtifact === a.artifact_id ? "여는 중..." : prog ? "이어하기 →" : "불러오기 →"}
+                      </button>
+                      <button
+                        onClick={(e) => deleteArtifact(a, e)}
+                        className="px-2 py-1.5 rounded-lg border border-brain-border text-brain-text-muted text-xs hover:border-red-400 hover:text-red-500"
+                        title="기록 삭제"
+                      >
+                        🗑
+                      </button>
                     </div>
                   </div>
-                  <span className="text-xs text-brain-text-soft">
-                    {loadingArtifact === a.artifact_id ? "불러오는 중..." : "불러오기 →"}
-                  </span>
-                </button>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
