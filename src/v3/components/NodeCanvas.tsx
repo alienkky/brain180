@@ -168,9 +168,17 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
     const newNodeIds = new Set(nodes.map((n) => n.id));
     const newEdgeIds = new Set(edges.map((e) => e.id));
 
-    // Remove deleted
+    // Remove deleted — 그룹(부모) 제거 시 cytoscape 가 자식도 cascade 삭제하므로,
+    // 살아남을 자식은 먼저 부모에서 분리한 뒤 제거 (그룹 해제 시 자식 보존)
     cy.nodes().forEach((n) => {
-      if (!newNodeIds.has(n.id())) cy.remove(n);
+      if (!newNodeIds.has(n.id())) {
+        if (!n.isChildless()) {
+          n.children().forEach((c) => {
+            if (newNodeIds.has(c.id())) c.move({ parent: null });
+          });
+        }
+        cy.remove(n);
+      }
     });
     cy.edges().forEach((e) => {
       if (!newEdgeIds.has(e.id())) cy.remove(e);
