@@ -305,17 +305,17 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
           },
         },
         {
-          // 드래그/탭 시 기본 회색 음영 제거 → 살짝 커지며 은은한 할로
+          // 드래그/탭 시 기본 회색 음영 제거 → 은은한 할로만(크기 불변).
+          // padding/border 를 키우면 boundingBox 가 부풀어 스마트커넥트 스냅이
+          // 어긋나므로 크기는 그대로 두고 underlay 할로 + 배경으로만 강조.
           selector: "node:active",
           style: {
             "overlay-opacity": 0,
             "underlay-color": "#B85C3F",
-            "underlay-opacity": 0.12,
-            "underlay-padding": 8,
-            "border-width": 2.5,
-            padding: "13px",
-            "background-opacity": 0.2,
-            "transition-property": "padding, border-width, background-opacity",
+            "underlay-opacity": 0.15,
+            "underlay-padding": 7,
+            "background-opacity": 0.22,
+            "transition-property": "background-opacity, underlay-opacity",
             "transition-duration": 120,
           },
         },
