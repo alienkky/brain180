@@ -39,15 +39,23 @@ export function LibraryScreen({ onSessionStart }: Props) {
     };
   };
 
-  useEffect(() => {
-    api.modules().then(setModules).finally(() => setLoading(false));
-  }, []);
-
   const selectModule = async (mod: ModuleDto) => {
     setSelectedModule(mod);
     const ls = await api.moduleLessons(mod.id);
     setLessons(ls);
   };
+
+  useEffect(() => {
+    api
+      .modules()
+      .then((ms) => {
+        setModules(ms);
+        // 첫 라이브러리 자동 선택 — 빈 화면 대신 바로 레슨 목록 표시
+        if (ms.length > 0) void selectModule(ms[0]);
+      })
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // mode: "resume"=이어서, "fresh"=처음부터, "auto"=진행 없으면 새로(기본)
   const startLesson = async (lesson: LessonDto, mode: "resume" | "fresh" | "auto" = "auto") => {
@@ -144,8 +152,22 @@ export function LibraryScreen({ onSessionStart }: Props) {
       {/* Lesson list */}
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {!selectedModule ? (
-          <div className="flex-1 flex items-center justify-center text-brain-text-muted text-sm">
-            왼쪽에서 라이브러리를 선택하세요.
+          <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-3">
+            <div className="text-5xl">🧠</div>
+            <h3 className="text-base font-semibold text-brain-text">천재의 뇌로 읽기</h3>
+            <p className="text-sm text-brain-text-muted max-w-xs leading-relaxed">
+              {modules.length > 0
+                ? "왼쪽에서 라이브러리를 선택하면 레슨 목록이 나타납니다."
+                : "아직 등록된 라이브러리가 없습니다. 관리자 패널에서 라이브러리와 레슨을 추가하세요."}
+            </p>
+            {modules.length > 0 && (
+              <button
+                onClick={() => selectModule(modules[0])}
+                className="mt-1 px-4 py-2 rounded-lg bg-brain-accent text-white text-sm font-medium hover:opacity-90"
+              >
+                {modules[0].title} 열기 →
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -155,13 +177,16 @@ export function LibraryScreen({ onSessionStart }: Props) {
                 {FIELD_LABELS[selectedModule.field] ?? selectedModule.field} · 난이도 {selectedModule.difficulty}/5
               </p>
             </div>
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex-1 overflow-y-auto p-4 md:p-6">
               {lessons.length === 0 ? (
-                <p className="text-sm text-brain-text-soft text-center py-12">
-                  이 라이브러리에 레슨이 없습니다.
-                </p>
+                <div className="flex flex-col items-center justify-center text-center gap-2 py-16">
+                  <div className="text-4xl">📭</div>
+                  <p className="text-sm text-brain-text-soft">
+                    이 라이브러리에 아직 레슨이 없습니다.
+                  </p>
+                </div>
               ) : (
-                <div className="grid grid-cols-1 gap-3 max-w-2xl">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 max-w-4xl mx-auto">
                   {lessons.map((lesson, idx) => {
                     const prog = lessonProgress(lesson.id);
                     return (
