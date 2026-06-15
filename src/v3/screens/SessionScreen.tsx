@@ -16,34 +16,49 @@ export function SessionScreen({ onComplete, onExit }: { onComplete: () => void; 
 
   const goTo = (s: ProtocolStage) => setStage(s);
 
-  // 진행 중 자동 저장 — 1부 다이어그램이 생기면 DB(canvas_artifacts)에 스냅샷 저장.
+  // 진행 중 자동 저장 — 1부 블록/다이어그램이 생기면 DB(canvas_artifacts)에 스냅샷 저장.
   // 멈춰도 '최근 학습 기록'에 남고 다른 기기/재로그인 시 불러올 수 있음.
   const revRef = useRef(0);
+  // 가장 최근 저장 대상 — 언마운트(나가기) 시 즉시 flush 용
+  const pendingRef = useRef<{ sid: string; canvas: Record<string, unknown> } | null>(null);
+  const savePending = () => {
+    const p = pendingRef.current;
+    if (!p) return;
+    pendingRef.current = null;
+    api.putArtifact(p.sid, p.canvas as never, ++revRef.current).catch(() => {});
+  };
+
   const nodesKey = JSON.stringify(session.stage1.nodes.map((n) => [n.id, n.label, Math.round(n.x), Math.round(n.y)]));
   const edgesKey = JSON.stringify(session.stage1.edges.map((e) => [e.id, e.from, e.to, e.dir]));
   const blocksKey = JSON.stringify(session.stage1.blocks.map((b) => b.id));
   useEffect(() => {
     if (session.completedAt) return;
-    // 블록 추출 또는 다이어그램 중 하나라도 있으면 저장
     if (session.stage1.nodes.length === 0 && session.stage1.blocks.length === 0) return;
-    const sid = session.sessionId;
-    const canvas = {
-      ...toCanvasJson(session.stage1.nodes, session.stage1.edges),
-      blocks: session.stage1.blocks as unknown as Record<string, unknown>[],
+    pendingRef.current = {
+      sid: session.sessionId,
+      canvas: {
+        ...toCanvasJson(session.stage1.nodes, session.stage1.edges),
+        blocks: session.stage1.blocks as unknown as Record<string, unknown>[],
+      },
     };
-    const t = window.setTimeout(() => {
-      api.putArtifact(sid, canvas, ++revRef.current).catch(() => {});
-    }, 1500);
+    const t = window.setTimeout(savePending, 1200);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodesKey, edgesKey, blocksKey, session.sessionId, session.completedAt]);
+
+  // 언마운트(나가기 등) 시 대기 중이던 저장을 즉시 flush — 디바운스 대기 중
+  // 화면을 떠나도 마지막 변경이 DB에 반영되도록 보장
+  useEffect(() => {
+    return () => savePending();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="px-4 py-2 border-b border-brain-border bg-brain-surface flex items-center gap-3">
         <button
-          onClick={onExit}
+          onClick={() => { savePending(); onExit(); }}
           className="shrink-0 px-3 py-1.5 rounded-lg border border-brain-border text-xs text-brain-text-muted hover:text-brain-text hover:border-brain-accent/50 transition-colors"
           title="진행 내용은 저장됩니다"
         >
