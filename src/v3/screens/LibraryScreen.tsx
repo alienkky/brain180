@@ -111,28 +111,28 @@ export function LibraryScreen({ onSessionStart }: Props) {
   }
 
   return (
-    <div className="flex h-full overflow-hidden">
-      {/* Module sidebar */}
-      <div className="w-56 border-r border-brain-border bg-brain-surface flex flex-col overflow-hidden">
-        <div className="px-4 py-3 border-b border-brain-border">
+    <div className="flex flex-col md:flex-row h-full overflow-hidden">
+      {/* Module sidebar — 모바일: 상단 가로 스크롤 / 데스크톱: 좌측 세로 */}
+      <div className="shrink-0 w-full md:w-56 border-b md:border-b-0 md:border-r border-brain-border bg-brain-surface flex flex-col overflow-hidden">
+        <div className="hidden md:block px-4 py-3 border-b border-brain-border">
           <span className="text-xs font-semibold text-brain-text-muted uppercase tracking-wide">라이브러리</span>
         </div>
-        <div className="flex-1 overflow-y-auto py-2">
+        <div className="flex flex-row md:flex-col overflow-x-auto md:overflow-x-hidden md:overflow-y-auto py-2 gap-1 md:gap-0 px-2 md:px-0">
           {modules.length === 0 ? (
-            <p className="text-xs text-brain-text-soft text-center py-8">라이브러리 없음</p>
+            <p className="text-xs text-brain-text-soft text-center py-8 w-full">라이브러리 없음</p>
           ) : (
             modules.map((mod) => (
               <button
                 key={mod.id}
                 onClick={() => selectModule(mod)}
-                className={`w-full text-left px-4 py-3 text-sm transition-colors ${
+                className={`shrink-0 md:w-full max-w-[60vw] md:max-w-none text-left px-4 py-2.5 md:py-3 text-sm rounded-lg md:rounded-none transition-colors ${
                   selectedModule?.id === mod.id
                     ? "bg-brain-accent-soft text-brain-accent font-medium"
                     : "text-brain-text hover:bg-brain-surface-soft"
                 }`}
               >
                 <div className="font-medium truncate">{mod.title}</div>
-                <div className="text-xs text-brain-text-muted mt-0.5">
+                <div className="text-xs text-brain-text-muted mt-0.5 truncate">
                   {FIELD_LABELS[mod.field] ?? mod.field} · {mod.lesson_count}레슨
                 </div>
               </button>
@@ -142,7 +142,7 @@ export function LibraryScreen({ onSessionStart }: Props) {
       </div>
 
       {/* Lesson list */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {!selectedModule ? (
           <div className="flex-1 flex items-center justify-center text-brain-text-muted text-sm">
             왼쪽에서 라이브러리를 선택하세요.
