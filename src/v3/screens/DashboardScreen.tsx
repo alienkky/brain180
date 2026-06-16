@@ -108,14 +108,15 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
     }
     setLoadingArtifact(a.artifact_id);
     try {
-      const [artifact, text, newSession] = await Promise.all([
+      // 새 세션을 만들지 않고 그 기록의 session_id 를 재사용 → 이어 작업 시
+      // 새 카드가 쌓이지 않고 같은 기록에 덮어쓰기됨
+      const [artifact, text] = await Promise.all([
         api.getArtifact(a.session_id),
         api.text(a.lesson.text_excerpt_id),
-        api.startSession(a.lesson.id, "practice"),
       ]);
       const t = text as TextExcerptDto;
       const meta = {
-        sessionId: newSession.id,
+        sessionId: a.session_id,
         lessonId: a.lesson.id,
         lessonTitle: a.lesson.title,
         author: t.author || "",
