@@ -3,6 +3,7 @@ import { useProtocolStore } from "../store/useProtocolStore";
 import { NodeCanvas } from "../components/NodeCanvas";
 import { AICoach } from "../components/AICoach";
 import { SplitPane } from "../components/SplitPane";
+import { MicButton } from "../components/MicButton";
 import { STAGE_DESCRIPTIONS, toCanvasJson } from "../types";
 import { api } from "../../v2-shell/api";
 
@@ -155,9 +156,16 @@ export function Stage3Screen({
             {/* Writing area */}
             <div className={`flex flex-col overflow-hidden ${showAI ? "flex-1 min-h-0 md:flex-none md:w-[55%] border-b md:border-b-0 md:border-r border-brain-border" : "flex-1"}`}>
               <div className="flex-1 p-4 flex flex-col gap-3">
-                <p className="text-xs text-brain-text-muted">
-                  1부와 2부를 종합하여 저자의 렌즈로 바라본 한 편의 글을 완성하세요.
-                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-brain-text-muted">
+                    1부와 2부를 종합하여 저자의 렌즈로 바라본 한 편의 글을 완성하세요.
+                  </p>
+                  <MicButton
+                    onText={(t) =>
+                      setStage3Writing(stage3.description ? `${stage3.description} ${t}` : t)
+                    }
+                  />
+                </div>
                 <textarea
                   value={stage3.description}
                   onChange={(e) => setStage3Writing(e.target.value)}

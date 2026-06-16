@@ -3,6 +3,7 @@ import { useProtocolStore } from "../store/useProtocolStore";
 import { NodeCanvas } from "../components/NodeCanvas";
 import { AICoach } from "../components/AICoach";
 import { SplitPane } from "../components/SplitPane";
+import { MicButton } from "../components/MicButton";
 import type { V3Node } from "../types";
 import { toCanvasJson, STAGE_DESCRIPTIONS } from "../types";
 
@@ -128,9 +129,16 @@ export function Stage2Screen({
                 </div>
               </div>
               <div className="border-t border-brain-border p-3 flex flex-col gap-2">
-                <label className="text-xs font-medium text-brain-text-muted">
-                  저자의 렌즈 설명 (글 또는 음성)
-                </label>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-xs font-medium text-brain-text-muted">
+                    저자의 렌즈 설명 (글 또는 음성)
+                  </label>
+                  <MicButton
+                    onText={(t) =>
+                      setStage2Description(stage2.description ? `${stage2.description} ${t}` : t)
+                    }
+                  />
+                </div>
                 <textarea
                   value={stage2.description}
                   onChange={(e) => setStage2Description(e.target.value)}

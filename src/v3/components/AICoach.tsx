@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { ChatMessage } from "../types";
 import { api } from "../../v2-shell/api";
 import type { CanvasJson } from "../../v2-shell/api";
+import { MicButton } from "./MicButton";
 
 // 경량 마크다운 렌더 — **굵게**, `코드`, ## 헤딩, > 인용, --- 구분선, 줄바꿈.
 // 외부 라이브러리 없이 채팅 답변용 최소 서식만 처리.
@@ -206,17 +207,20 @@ export function AICoach({
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) send();
           }}
-          placeholder={placeholder ?? "다이어그램 설명을 입력하세요... (Ctrl+Enter 전송)"}
+          placeholder={placeholder ?? "다이어그램 설명을 입력하세요... (Ctrl+Enter 전송 · 🎤 음성)"}
           rows={3}
           className="flex-1 resize-none text-sm rounded-lg border border-brain-border bg-brain-surface px-3 py-2 focus:outline-none focus:border-brain-accent text-brain-text placeholder-brain-text-soft"
         />
-        <button
-          onClick={() => send()}
-          disabled={loading || !input.trim()}
-          className="self-end px-4 py-2 rounded-lg bg-brain-accent text-white text-sm font-medium disabled:opacity-40 hover:opacity-90 transition-opacity"
-        >
-          전송
-        </button>
+        <div className="flex flex-col gap-1.5 self-end">
+          <MicButton onText={(t) => setInput((v) => (v ? `${v} ${t}` : t))} />
+          <button
+            onClick={() => send()}
+            disabled={loading || !input.trim()}
+            className="px-4 py-2 rounded-lg bg-brain-accent text-white text-sm font-medium disabled:opacity-40 hover:opacity-90 transition-opacity"
+          >
+            전송
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { NodeCanvas } from "../components/NodeCanvas";
 import { AICoach } from "../components/AICoach";
 import { TextBlockSelector } from "../components/TextBlockSelector";
 import { SplitPane } from "../components/SplitPane";
+import { MicButton } from "../components/MicButton";
 import type { BlockWord } from "../types";
 import { toCanvasJson, STAGE_DESCRIPTIONS } from "../types";
 
@@ -228,13 +229,20 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
                   }
                   right={
                   <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
-                  <p className="text-xs text-brain-text-muted">
-                    위 다이어그램을 보며 설명하세요. 어떤 구조를 발견했나요?
-                  </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-brain-text-muted">
+                      위 다이어그램을 보며 설명하세요. 어떤 구조를 발견했나요?
+                    </p>
+                    <MicButton
+                      onText={(t) =>
+                        setStage1Description(stage.description ? `${stage.description} ${t}` : t)
+                      }
+                    />
+                  </div>
                   <textarea
                     value={stage.description}
                     onChange={(e) => setStage1Description(e.target.value)}
-                    placeholder="이 텍스트의 핵심 구조는..."
+                    placeholder="이 텍스트의 핵심 구조는... (🎤 음성 입력 가능)"
                     rows={6}
                     className="flex-1 resize-none text-sm rounded-lg border border-brain-border bg-brain-surface px-3 py-2.5 focus:outline-none focus:border-brain-accent text-brain-text placeholder-brain-text-soft"
                   />
