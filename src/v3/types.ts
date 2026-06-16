@@ -88,25 +88,31 @@ export interface V3User {
   status: string;
 }
 
-// Converts V3Node/Edge → CanvasJson for API
+// Converts V3Node/Edge → CanvasJson for API.
+// 그룹(컴파운드 부모) 노드는 라벨이 비어 서버 검증(label.min(1))을 위반하므로
+// 제외 — group 정보는 v3nodes 에 별도 보존, AI 코치엔 의미 노드만 전달.
 export function toCanvasJson(nodes: V3Node[], edges: V3Edge[]) {
+  const visible = nodes.filter((n) => n.kind !== "group" && (n.label ?? "").trim() !== "");
+  const ids = new Set(visible.map((n) => n.id));
   return {
     version: 1 as const,
     viewport: { x: 0, y: 0, zoom: 1 },
-    nodes: nodes.map((n) => ({
+    nodes: visible.map((n) => ({
       id: n.id,
       type: "concept" as const,
       label: n.label,
       x: n.x,
       y: n.y,
     })),
-    edges: edges.map((e) => ({
-      id: e.id,
-      from: e.from,
-      to: e.to,
-      relation: "other" as const,
-      label: e.label,
-    })),
+    edges: edges
+      .filter((e) => ids.has(e.from) && ids.has(e.to))
+      .map((e) => ({
+        id: e.id,
+        from: e.from,
+        to: e.to,
+        relation: "other" as const,
+        label: e.label,
+      })),
   };
 }
 
