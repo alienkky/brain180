@@ -58,6 +58,35 @@ interface Props {
 
 let blockCounter = 0;
 
+// 한국어 조사 자동 제거 — 블록 선택 시 개념(명사) 단위로 정리.
+// (나에게→나, 소년은→소년, 여우가→여우). 휴리스틱 + 받침 규칙으로 오작동 최소화.
+const MULTI_JOSA = [
+  "에게서", "으로서", "으로써", "에서", "에게", "으로", "한테", "께서",
+  "처럼", "보다", "까지", "부터", "마다", "조차", "마저", "밖에", "라도",
+].sort((a, b) => b.length - a.length);
+
+function hasFinalConsonant(ch: string): boolean {
+  const c = ch.charCodeAt(0);
+  if (c < 0xac00 || c > 0xd7a3) return false;
+  return (c - 0xac00) % 28 !== 0;
+}
+
+function stripJosa(word: string): string {
+  if (word.length < 2) return word;
+  for (const j of MULTI_JOSA) {
+    if (word.length > j.length && word.endsWith(j)) return word.slice(0, -j.length);
+  }
+  const last = word[word.length - 1];
+  const prev = word[word.length - 2];
+  const fin = hasFinalConsonant(prev);
+  // 받침 유무에 따라 짝이 갈리는 조사 — 신뢰도 높음
+  if (fin && ["은", "이", "을", "과"].includes(last)) return word.slice(0, -1);
+  if (!fin && ["는", "가", "를", "와"].includes(last)) return word.slice(0, -1);
+  // 받침 무관 조사 — 어간이 2글자 이상 남을 때만 (과도 제거 방지)
+  if (word.length >= 3 && ["의", "도", "만", "에", "로"].includes(last)) return word.slice(0, -1);
+  return word;
+}
+
 export function TextBlockSelector({ body, blocks, onAddBlock, onRemoveBlock, highlightedBlockId }: Props) {
   const [rangeAnchor, setRangeAnchor] = useState<string | null>(null);
   // 강조 대상 블록 span — 칩 클릭 시 본문 위치로 스크롤
@@ -237,9 +266,10 @@ export function TextBlockSelector({ body, blocks, onAddBlock, onRemoveBlock, hig
 
   const addBlockFromWord = useCallback(
     (w: WordInfo) => {
+      // 단일 단어는 조사 제거해 개념(명사) 단위로. 원문 위치(charStart)는 원본 유지.
       onAddBlock({
         id: `blk-${++blockCounter}-${w.charStart}`,
-        text: w.text,
+        text: stripJosa(w.text),
         type: "other",
         selected: true,
         charStart: w.charStart,
