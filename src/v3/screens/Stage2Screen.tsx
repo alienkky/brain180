@@ -41,7 +41,8 @@ export function Stage2Screen({
   useEffect(() => {
     if (stage2.nodes.length === 0 && !stage2.done) {
       setStage2Canvas(makeDefaultStage2Nodes(), [
-        { id: "lens_edge", from: "target_node", to: "lens_node", label: "→ 렌즈로 바라봄" },
+        // 렌즈 → 대상 방향 화살표, 라벨엔 화살표 기호 제외
+        { id: "lens_edge", from: "lens_node", to: "target_node", label: "렌즈로 바라봄", dir: "forward" },
       ]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
