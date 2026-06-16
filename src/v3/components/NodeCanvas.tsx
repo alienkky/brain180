@@ -801,7 +801,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
         const nextNodes = collectNodes().map((n) =>
           insideSet.has(n.id) ? { ...n, parent: gid } : n,
         );
-        const groupNode: V3Node = { id: gid, label: "그룹", kind: "group", x: 0, y: 0 };
+        const groupNode: V3Node = { id: gid, label: "", kind: "group", x: 0, y: 0 };
         emit([groupNode, ...nextNodes], collectEdges());
       };
 
