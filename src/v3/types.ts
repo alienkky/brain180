@@ -116,6 +116,29 @@ export function toCanvasJson(nodes: V3Node[], edges: V3Edge[]) {
   };
 }
 
+// v3 세션 전체 상태를 관리자 열람용 스냅샷(jsonb)으로 직렬화.
+export function toProtocolSnapshot(session: V3SessionState) {
+  const stageSnap = (st: StageState) => ({
+    blocks: st.blocks.map((b) => ({ text: b.text, charStart: b.charStart ?? null })),
+    nodes: st.nodes,
+    edges: st.edges,
+    description: st.description,
+    iteration_count: st.iterationCount,
+    done: st.done,
+    message_count: st.messages.length,
+  });
+  return {
+    lesson_id: session.lessonId,
+    lesson_title: session.lessonTitle,
+    author: session.author,
+    current_stage: session.currentStage,
+    completed_at: session.completedAt ?? null,
+    stage1: stageSnap(session.stage1),
+    stage2: stageSnap(session.stage2),
+    stage3: stageSnap(session.stage3),
+  };
+}
+
 export const STAGE_LABELS: Record<ProtocolStage, string> = {
   1: "1부 · 글의 내용 이해하기",
   2: "2부 · 저자의 인지구조 이해하기",

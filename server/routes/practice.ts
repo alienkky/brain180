@@ -557,6 +557,45 @@ practiceRouter.put(
   }),
 );
 
+// ── PUT /api/practice/sessions/:id/v3-snapshot ──────────────────────
+// v3's 3-part protocol can't be expressed in the strict CanvasJson shape
+// (3 separate canvases + descriptions + a writing stage). We persist the
+// whole protocol state as a loose jsonb payload into canvas_artifacts so an
+// admin can later review the learner's full session. Owner-scoped write.
+practiceRouter.put(
+  "/sessions/:id/v3-snapshot",
+  userRateLimit,
+  asyncHandler(async (req, res) => {
+    const rawId = req.params.id;
+    const owned = await ensureOwnedSession(
+      req,
+      res,
+      typeof rawId === "string" ? rawId : "",
+    );
+    if (!owned) return;
+
+    const body = (req.body ?? {}) as { snapshot?: unknown };
+    if (typeof body.snapshot !== "object" || body.snapshot === null) {
+      fail(res, 422, "validation_error", { message: "snapshot_required" });
+      return;
+    }
+    // Cap raw size so a runaway client can't bloat the row.
+    const serialized = JSON.stringify(body.snapshot);
+    if (serialized.length > 200_000) {
+      fail(res, 422, "validation_error", { message: "snapshot_too_large" });
+      return;
+    }
+
+    const payload = { v3: true, ...(body.snapshot as Record<string, unknown>) };
+    const inserted = await db
+      .insert(canvasArtifacts)
+      .values({ sessionId: owned.id, mode: "free", payload })
+      .returning({ id: canvasArtifacts.id, savedAt: canvasArtifacts.savedAt });
+    const row = inserted[0]!;
+    ok(res, { id: row.id, session_id: owned.id, saved_at: row.savedAt.toISOString() });
+  }),
+);
+
 // ── 501 placeholders (ALI-62 / ALI-63 / ALI-64 ownership) ───────────
 const NOT_IMPL = { error: "not_implemented", owner: "ALI-62 / ALI-63 / ALI-64" };
 practiceRouter.patch("/sessions/:id", (_req, res) =>

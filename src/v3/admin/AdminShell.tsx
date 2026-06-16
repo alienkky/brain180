@@ -6,10 +6,12 @@ import type {
   AdminLessonDto,
   AdminTutorRatingsDto,
   AdminUserProgressDto,
+  AdminSessionDetailDto,
 } from "../../v2-shell/api";
 import { useTheme, ACCENT_OPTIONS, HL_OPTIONS } from "../../v2-shell/useTheme";
 import type { Skin } from "../../v2-shell/useTheme";
-import type { AdminScreen, V3User } from "../types";
+import type { AdminScreen, V3User, V3Node, V3Edge } from "../types";
+import { NodeCanvas } from "../components/NodeCanvas";
 
 interface Props {
   user: V3User;
@@ -92,6 +94,7 @@ function UserDetailDrawer({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [tempPw, setTempPw] = useState<string | null>(null);
+  const [viewSession, setViewSession] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -233,12 +236,19 @@ function UserDetailDrawer({
                 ) : (
                   <div className="space-y-1.5">
                     {prog.recent_sessions.map((s) => (
-                      <div key={s.session_id} className="rounded-lg border border-brain-border bg-brain-surface px-3 py-2">
-                        <div className="text-sm text-brain-text truncate">{s.lesson_title}</div>
+                      <button
+                        key={s.session_id}
+                        onClick={() => setViewSession(s.session_id)}
+                        className="w-full text-left rounded-lg border border-brain-border bg-brain-surface px-3 py-2 hover:border-brain-accent transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-sm text-brain-text truncate">{s.lesson_title}</div>
+                          <span className="shrink-0 text-xs text-brain-accent">열람 →</span>
+                        </div>
                         <div className="text-[11px] text-brain-text-muted mt-0.5">
                           {fmt(s.started_at)} · 노드작업 {s.artifact_count}개 · {s.ended_at ? "완료" : "진행중"}
                         </div>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -246,6 +256,214 @@ function UserDetailDrawer({
             </>
           )}
         </div>
+      </div>
+
+      {viewSession && (
+        <AdminSessionViewer
+          sessionId={viewSession}
+          onClose={() => setViewSession(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// v3 스냅샷 페이로드의 한 단계.
+interface V3StageSnap {
+  nodes?: V3Node[];
+  edges?: V3Edge[];
+  description?: string;
+  blocks?: { text: string }[];
+  iteration_count?: number;
+}
+
+const SESSION_MODE_LABELS: Record<string, string> = {
+  analyze: "분석",
+  reverse: "역해석",
+  practice: "연습",
+};
+
+function fmtSessionDate(iso: string | null): string {
+  return iso ? new Date(iso).toLocaleString("ko-KR") : "-";
+}
+
+// 세션 한 건 상세 — AI 대화 전체 + 캔버스 스냅샷 + 원문. 전체화면 모달.
+function AdminSessionViewer({
+  sessionId,
+  onClose,
+}: {
+  sessionId: string;
+  onClose: () => void;
+}) {
+  const [data, setData] = useState<AdminSessionDetailDto | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<"chat" | "canvas" | "text">("chat");
+
+  useEffect(() => {
+    setLoading(true);
+    api
+      .adminSessionDetail(sessionId)
+      .then(setData)
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
+  }, [sessionId]);
+
+  const payload = data?.artifact?.payload as Record<string, unknown> | undefined;
+  const isV3 = payload?.v3 === true;
+  const stages: { n: number; label: string; snap: V3StageSnap }[] = isV3
+    ? [
+        { n: 1, label: "1부 · 내용 이해", snap: (payload?.stage1 ?? {}) as V3StageSnap },
+        { n: 2, label: "2부 · 인지구조", snap: (payload?.stage2 ?? {}) as V3StageSnap },
+        { n: 3, label: "3부 · 렌즈 셋팅", snap: (payload?.stage3 ?? {}) as V3StageSnap },
+      ]
+    : [];
+
+  const visibleMessages = data?.messages.filter((m) => m.role !== "system") ?? [];
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div
+        className="flex h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-brain-bg shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-brain-border bg-brain-surface px-5 py-3 shrink-0">
+          {data ? (
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold text-brain-text truncate">{data.session.lesson_title}</h2>
+              <p className="text-xs text-brain-text-muted truncate">
+                {data.session.user_name} · {data.session.author || "저자 미상"} ·{" "}
+                {SESSION_MODE_LABELS[data.session.mode] ?? data.session.mode} · {fmtSessionDate(data.session.started_at)}
+              </p>
+            </div>
+          ) : (
+            <span className="text-sm text-brain-text">세션 열람</span>
+          )}
+          <button onClick={onClose} className="text-brain-text-muted hover:text-brain-text text-lg leading-none">✕</button>
+        </div>
+
+        {loading ? (
+          <div className="flex-1 flex items-center justify-center text-brain-text-muted">로딩 중...</div>
+        ) : !data ? (
+          <div className="flex-1 flex items-center justify-center text-brain-text-muted text-sm">
+            세션을 찾을 수 없습니다.
+          </div>
+        ) : (
+          <>
+            {/* Tabs */}
+            <div className="flex border-b border-brain-border bg-brain-surface shrink-0">
+              {([
+                ["chat", `AI 대화 (${visibleMessages.length})`],
+                ["canvas", "인지 캔버스"],
+                ["text", "원문"],
+              ] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  onClick={() => setTab(id)}
+                  className={`px-4 py-2.5 text-xs font-medium transition-colors border-b-2 ${
+                    tab === id
+                      ? "border-brain-accent text-brain-accent"
+                      : "border-transparent text-brain-text-muted hover:text-brain-text"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5">
+              {tab === "chat" && (
+                <div className="space-y-3">
+                  {visibleMessages.length === 0 ? (
+                    <div className="text-center text-brain-text-muted py-12 text-sm">
+                      AI 대화 기록이 없습니다.
+                    </div>
+                  ) : (
+                    visibleMessages.map((m) => (
+                      <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                        <div
+                          className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
+                            m.role === "user"
+                              ? "bg-brain-accent text-white"
+                              : "bg-brain-surface border border-brain-border text-brain-text"
+                          }`}
+                        >
+                          <div className="text-[10px] opacity-60 mb-1">
+                            {m.role === "user" ? "학습자" : "AI 코치"} · {fmtSessionDate(m.created_at)}
+                          </div>
+                          {m.content}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {tab === "canvas" &&
+                (isV3 ? (
+                  <div className="space-y-6">
+                    {stages.map((st) => {
+                      const nodes = st.snap.nodes ?? [];
+                      const edges = st.snap.edges ?? [];
+                      return (
+                        <div key={st.n}>
+                          <h3 className="text-sm font-semibold text-brain-text mb-2">{st.label}</h3>
+                          {st.snap.blocks && st.snap.blocks.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                              {st.snap.blocks.map((b, i) => (
+                                <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-brain-accent-soft text-brain-accent">
+                                  {b.text}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {nodes.length > 0 ? (
+                            <div className="h-72 border border-brain-border rounded-xl overflow-hidden">
+                              <NodeCanvas nodes={nodes} edges={edges} onChange={() => {}} readOnly />
+                            </div>
+                          ) : (
+                            <div className="text-xs text-brain-text-soft py-4 px-3 bg-brain-surface-soft rounded-lg">
+                              이 단계의 캔버스 노드가 없습니다.
+                            </div>
+                          )}
+                          {st.snap.description && (
+                            <div className="mt-2 p-3 bg-brain-surface border border-brain-border rounded-lg">
+                              <p className="text-xs text-brain-text-muted mb-1">학습자 설명</p>
+                              <p className="text-sm text-brain-text whitespace-pre-wrap leading-relaxed">
+                                {st.snap.description}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : data.artifact ? (
+                  <div className="text-sm text-brain-text-muted">
+                    <p className="mb-3">이 세션은 구버전 캔버스 형식입니다.</p>
+                    <pre className="text-xs bg-brain-surface-soft rounded-lg p-3 overflow-x-auto">
+                      {JSON.stringify(data.artifact.payload, null, 2)}
+                    </pre>
+                  </div>
+                ) : (
+                  <div className="text-center text-brain-text-muted py-12 text-sm">
+                    저장된 캔버스가 없습니다.
+                  </div>
+                ))}
+
+              {tab === "text" && (
+                <div>
+                  <p className="text-xs text-brain-text-muted mb-2">
+                    {data.session.author} · {data.session.source}
+                  </p>
+                  <div className="text-sm text-brain-text leading-[2] whitespace-pre-wrap">
+                    {data.session.text_body || "원문이 없습니다."}
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

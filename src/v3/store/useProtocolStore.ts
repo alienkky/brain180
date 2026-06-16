@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { api } from "../../v2-shell/api";
+import { toProtocolSnapshot } from "../types";
 import type {
   V3SessionState,
   StageState,
@@ -65,11 +67,14 @@ interface ProtocolStore {
   incrementIteration: (stage: ProtocolStage) => void;
   markStageDone: (stage: ProtocolStage) => void;
   markComplete: () => void;
+
+  // 관리자 열람용 스냅샷을 백엔드에 영속화 (best-effort, 실패해도 학습 흐름 유지)
+  persistSnapshot: () => void;
 }
 
 export const useProtocolStore = create<ProtocolStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
   session: null,
   saved: {},
 
@@ -245,6 +250,16 @@ export const useProtocolStore = create<ProtocolStore>()(
           }
         : s
     ),
+
+  persistSnapshot: () => {
+    const session = get().session;
+    if (!session) return;
+    api
+      .putV3Snapshot(session.sessionId, toProtocolSnapshot(session))
+      .catch(() => {
+        // 영속화 실패는 학습을 막지 않음 — 다음 단계 전환/완료 때 재시도됨
+      });
+  },
     }),
     {
       name: "brain180-v3-session",

@@ -24,7 +24,7 @@ export function Stage2Screen({
   const session = useProtocolStore((s) => s.session)!;
   const stage1 = session.stage1;
   const stage2 = session.stage2;
-  const { setStage2Canvas, setStage2Description, addMessage, incrementIteration, markStageDone } =
+  const { setStage2Canvas, setStage2Description, addMessage, incrementIteration, markStageDone, persistSnapshot } =
     useProtocolStore();
 
   const [showAI, setShowAI] = useState(false);
@@ -52,6 +52,7 @@ export function Stage2Screen({
 
   const handleFinish = () => {
     markStageDone(2);
+    persistSnapshot();
     onNext();
   };
 

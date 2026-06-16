@@ -18,7 +18,7 @@ export function Stage3Screen({
   const stage1 = session.stage1;
   const stage2 = session.stage2;
   const stage3 = session.stage3;
-  const { setStage3Writing, addMessage, incrementIteration, markComplete } = useProtocolStore();
+  const { setStage3Writing, addMessage, incrementIteration, markComplete, persistSnapshot } = useProtocolStore();
 
   const [showAI, setShowAI] = useState(false);
   const [aiSubmit, setAiSubmit] = useState<{ text: string; nonce: number } | undefined>();
@@ -48,6 +48,7 @@ export function Stage3Screen({
         .catch(() => {});
     }
     markComplete();
+    persistSnapshot();
     onComplete();
   };
 

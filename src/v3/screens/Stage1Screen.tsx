@@ -19,7 +19,7 @@ const TAB_LABELS: Record<Tab, string> = {
 export function Stage1Screen({ onNext }: { onNext: () => void }) {
   const session = useProtocolStore((s) => s.session)!;
   const stage = session.stage1;
-  const { setBlocks, setStage1Canvas, setStage1Description, addMessage, incrementIteration, markStageDone } =
+  const { setBlocks, setStage1Canvas, setStage1Description, addMessage, incrementIteration, markStageDone, persistSnapshot } =
     useProtocolStore();
 
   const [tab, setTab] = useState<Tab>("blocks");
@@ -58,6 +58,7 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
 
   const handleFinishStage = () => {
     markStageDone(1);
+    persistSnapshot();
     onNext();
   };
 

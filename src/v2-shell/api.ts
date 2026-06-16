@@ -209,6 +209,42 @@ export interface AdminResetPasswordDto {
   temp_password: string;
 }
 
+export interface AdminSessionMessageDto {
+  id: string;
+  session_id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  model: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  created_at: string;
+}
+
+export interface AdminSessionDetailDto {
+  session: {
+    id: string;
+    user_id: string;
+    user_name: string;
+    user_email: string;
+    lesson_id: string;
+    lesson_title: string;
+    module_title: string;
+    mode: SessionMode;
+    started_at: string;
+    ended_at: string | null;
+    author: string;
+    source: string;
+    text_body: string;
+  };
+  messages: AdminSessionMessageDto[];
+  artifact: {
+    id: string;
+    mode: "free" | "constrained" | "guided";
+    payload: Record<string, unknown>;
+    saved_at: string;
+  } | null;
+}
+
 export interface TutorMessageDto {
   id: string;
   session_id: string;
@@ -537,6 +573,14 @@ export const api = {
         client_revision: clientRevision,
       }),
     }),
+  putV3Snapshot: (sessionId: string, snapshot: Record<string, unknown>) =>
+    call<{ id: string; session_id: string; saved_at: string }>(
+      `/api/practice/sessions/${sessionId}/v3-snapshot`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ snapshot }),
+      },
+    ),
   adminPending: () => call<UserDto[]>("/api/admin/users/pending"),
   adminUsers: () => call<UserDto[]>("/api/admin/users"),
   adminApprove: (userId: string) =>
@@ -560,6 +604,8 @@ export const api = {
     call<UserDto>(`/api/admin/users/${userId}/suspend`, { method: "POST" }),
   adminDeleteUser: (userId: string) =>
     call<void>(`/api/admin/users/${userId}`, { method: "DELETE" }),
+  adminSessionDetail: (sessionId: string) =>
+    call<AdminSessionDetailDto>(`/api/admin/sessions/${sessionId}`),
   adminResetUserPassword: (userId: string) =>
     call<AdminResetPasswordDto>(`/api/admin/users/${userId}/reset-password`, {
       method: "POST",

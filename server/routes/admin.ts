@@ -1356,6 +1356,126 @@ adminRouter.get(
   }),
 );
 
+// GET /api/admin/sessions/:id — full session detail for any member.
+// Admin-only (requireAdmin on router). Returns session meta + lesson text +
+// the complete AI tutor conversation + the latest canvas artifact payload.
+// Unlike the owner-scoped /api/practice routes, this bypasses the user check
+// so an admin can review another member's learning.
+adminRouter.get(
+  "/sessions/:id",
+  asyncHandler(async (req, res) => {
+    const sessionId = req.params.id;
+    if (typeof sessionId !== "string" || !UUID_RE.test(sessionId)) {
+      fail(res, 422, "validation_error", { message: "invalid_session_id" });
+      return;
+    }
+
+    const sessionRows = await db
+      .select({
+        id: learningSessions.id,
+        userId: learningSessions.userId,
+        userName: users.name,
+        userEmail: users.email,
+        lessonId: learningSessions.lessonId,
+        lessonTitle: lessons.title,
+        moduleTitle: modules.title,
+        mode: learningSessions.mode,
+        startedAt: learningSessions.startedAt,
+        endedAt: learningSessions.endedAt,
+      })
+      .from(learningSessions)
+      .innerJoin(lessons, eq(lessons.id, learningSessions.lessonId))
+      .innerJoin(modules, eq(modules.id, lessons.moduleId))
+      .innerJoin(users, eq(users.id, learningSessions.userId))
+      .where(and(eq(learningSessions.id, sessionId), isNull(learningSessions.deletedAt)))
+      .limit(1);
+    const s = sessionRows[0];
+    if (!s) {
+      fail(res, 404, "not_found");
+      return;
+    }
+
+    // Lesson text body (first excerpt) for context.
+    const excerptRows = await db
+      .select({
+        content: textExcerpts.content,
+        author: textExcerpts.author,
+        source: textExcerpts.source,
+      })
+      .from(textExcerpts)
+      .where(eq(textExcerpts.lessonId, s.lessonId))
+      .orderBy(asc(textExcerpts.order))
+      .limit(1);
+    const excerpt = excerptRows[0];
+
+    // Full tutor conversation, oldest first.
+    const messageRows = await db
+      .select({
+        id: tutorMessages.id,
+        sessionId: tutorMessages.sessionId,
+        role: tutorMessages.role,
+        content: tutorMessages.content,
+        model: tutorMessages.model,
+        tokensIn: tutorMessages.tokensIn,
+        tokensOut: tutorMessages.tokensOut,
+        createdAt: tutorMessages.createdAt,
+      })
+      .from(tutorMessages)
+      .where(eq(tutorMessages.sessionId, sessionId))
+      .orderBy(asc(tutorMessages.createdAt));
+
+    // Latest canvas artifact (may be null — v3 saves a protocol snapshot here).
+    const artifactRows = await db
+      .select({
+        id: canvasArtifacts.id,
+        mode: canvasArtifacts.mode,
+        payload: canvasArtifacts.payload,
+        savedAt: canvasArtifacts.savedAt,
+      })
+      .from(canvasArtifacts)
+      .where(and(eq(canvasArtifacts.sessionId, sessionId), isNull(canvasArtifacts.deletedAt)))
+      .orderBy(desc(canvasArtifacts.savedAt))
+      .limit(1);
+    const artifact = artifactRows[0];
+
+    ok(res, {
+      session: {
+        id: s.id,
+        user_id: s.userId,
+        user_name: s.userName,
+        user_email: s.userEmail,
+        lesson_id: s.lessonId,
+        lesson_title: s.lessonTitle,
+        module_title: s.moduleTitle,
+        mode: s.mode,
+        started_at: s.startedAt.toISOString(),
+        ended_at: s.endedAt ? s.endedAt.toISOString() : null,
+        author: excerpt?.author ?? "",
+        source: excerpt?.source ?? "",
+        text_body: excerpt?.content ?? "",
+      },
+      messages: messageRows.map((m) => ({
+        id: m.id,
+        session_id: m.sessionId,
+        role: m.role,
+        content: m.content,
+        model: m.model,
+        input_tokens: m.tokensIn,
+        output_tokens: m.tokensOut,
+        created_at: m.createdAt.toISOString(),
+      })),
+      artifact: artifact
+        ? {
+            id: artifact.id,
+            mode: artifact.mode,
+            payload: artifact.payload,
+            saved_at: artifact.savedAt.toISOString(),
+          }
+        : null,
+    });
+  }),
+);
+
 // PATCH /api/admin/users/:id — update approval status and admin role.
 adminRouter.patch(
   "/users/:id",

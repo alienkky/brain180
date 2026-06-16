@@ -1,0 +1,79 @@
+<svg width="1180" height="1180" viewBox="0 0 1180 1180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>Brain180 genius learning panels</title>
+  <defs>
+    <filter id="softShadow" x="-8%" y="-8%" width="116%" height="116%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#2A241D" flood-opacity="0.10"/>
+    </filter>
+    <style>
+      .ink{stroke:#16130F;stroke-width:11;stroke-linecap:round;stroke-linejoin:round}
+      .thin{stroke:#16130F;stroke-width:7;stroke-linecap:round;stroke-linejoin:round}
+      .panel{fill:#FF5A14}
+      .paper{fill:#FFFDF8}
+      .black{fill:#16130F}
+    </style>
+  </defs>
+
+  <g filter="url(#softShadow)">
+    <path class="panel" d="M83 159c0-27 20-50 47-54l380-45c36-4 68 24 68 60v331c0 28-21 52-49 54l-385 27c-33 2-61-24-61-57V159Z"/>
+    <path class="panel" d="M733 139c3-26 23-46 49-49l310-35c35-4 66 23 66 59v337c0 29-23 53-52 54l-394 14c-38 1-67-34-58-70l29-116-47-23c-31-15-33-58-4-77l88-57 13-37Z"/>
+    <path class="panel" d="M83 735c0-30 25-55 55-55h401c30 0 55 25 55 55v319c0 30-25 55-55 55H138c-30 0-55-25-55-55V735Z"/>
+    <path class="panel" d="M704 733c0-31 26-57 57-55l337 22c28 2 50 26 50 55v312c0 32-27 57-59 55l-373-24c-29-2-52-26-52-55V791l-46-14c-23-7-24-39-2-49l73-31c8-4 17 2 15 11v25Z"/>
+  </g>
+
+  <g>
+    <path class="black" d="M220 90c25-45 72-27 79 1 31-13 62 10 57 43 27 7 33 47 10 66 14 34-17 68-51 56-31 31-87 21-100-20-38-2-55-50-27-76-18-36-3-70 32-70Z"/>
+    <circle class="paper" cx="271" cy="211" r="65"/>
+    <path class="thin" d="M254 203v-18M305 194v-18M277 236c25 17 48 7 61-15M298 200c19 17 12 37-7 39"/>
+    <path class="paper ink" d="M126 540l18-178c5-48 46-84 94-84h83c45 0 84 32 93 76l37 182"/>
+    <path class="paper ink" d="M221 359c69-7 122 9 177 46v176c-52-39-109-55-177-46V359Z"/>
+    <path class="paper ink" d="M221 359c-56-25-99-32-144-24v174c48-9 92-1 144 26V359Z"/>
+    <path class="thin" d="M319 413h96M317 458h86M317 502h78"/>
+    <path class="thin" d="M278 478c-18-14-20-44-1-59 18-15 47-7 56 15 6 15 1 31-10 42v22h-35v-20Z"/>
+    <path class="thin" d="M292 529h25M291 499h29M305 418v-28M285 424l-22-24M328 427l25-23"/>
+    <path class="paper ink" d="M124 469c26 51 76 83 133 88M431 343c42-43 70-77 88-118"/>
+    <path class="paper ink" d="M513 230l43 32-36 37"/>
+    <path class="thin" d="M444 121l18-52M493 143l44-42M524 192l52-15"/>
+  </g>
+
+  <g>
+    <path class="paper ink" d="M739 269l153-68 1 124-154-7c-32-1-47-38-25-62 6-6 14-11 25-13Z"/>
+    <path class="black" d="M696 248c41-87 110-82 150-22l-103 46 105 50c-57 62-143 35-152-74Z"/>
+    <ellipse class="paper" cx="744" cy="275" rx="31" ry="37"/>
+    <path class="black" d="M719 275c17-28 36-29 55 0-18 28-37 28-55 0Z"/>
+    <path class="paper ink" d="M902 154c47-37 112-24 141 22 38-4 75 27 77 66 31 20 34 69 3 93 4 46-32 84-76 82-30 49-102 47-131-1-57 5-99-55-75-107-42-44-18-119 43-122 3-12 9-23 18-33Z"/>
+    <path class="thin" d="M941 277v-28M1018 274v-25M962 334c18 16 50 16 70-3M984 285c17 20 7 42-14 48"/>
+    <path class="black" d="M873 430c45-70 112-92 198-51 61 29 95 87 100 170H786c5-49 34-89 87-119Z"/>
+    <path class="paper ink" d="M860 317l-4 86 56-8 4-82"/>
+    <path class="paper ink" d="M884 303c16 10 20 27 11 50M918 296c18 14 21 35 8 61M947 310c16 22 12 47-9 69"/>
+    <path class="thin" d="M710 115l-33-61M774 101l-6-64M656 160l-51-31"/>
+  </g>
+
+  <g>
+    <path class="black" d="M174 747c28-49 79-31 85-1 34-14 67 13 59 47 29 11 27 54 0 69-9 48-70 59-101 24-39 9-71-26-60-63-30-22-18-71 17-76Z"/>
+    <circle class="paper" cx="235" cy="866" r="70"/>
+    <path class="thin" d="M210 853v-21M270 850v-20M231 896c26 16 54 7 69-15M256 854c20 18 12 40-10 43"/>
+    <path class="paper ink" d="M88 1093l38-155c11-43 50-74 95-74h64c48 0 88 34 97 81l27 142"/>
+    <path class="paper ink" d="M140 995c63 11 114 34 168 77 58-35 116-45 178-37v101c-61-8-120 4-178 39-55-43-107-67-168-77V995Z"/>
+    <path class="thin" d="M354 1088l90-19M371 1126l85-20"/>
+    <path class="paper ink" d="M174 1029l70 74M443 792c32-45 104-42 132 5 28 48 2 110-51 123l-27 59-34-61c-52-9-81-79-50-126Z"/>
+    <path class="thin" d="M492 818l12 42 43-7-34 27 20 39-37-22-32 31 8-44-39-20 44-5 15-41Z"/>
+    <path class="paper ink" d="M458 846c59-13 112 24 125 83 13 60-24 119-84 132-59 13-113-25-126-84-12-60 25-118 85-131Z"/>
+    <path class="thin" d="M450 923v-20M521 916v-21M457 978c25 17 58 12 80-10M486 923c20 19 11 42-12 46"/>
+    <path class="paper ink" d="M397 1099l10-92M547 1083l14-105M564 989c25-8 46-24 62-46"/>
+  </g>
+
+  <g>
+    <path class="black" d="M680 599c29-48 77-25 83 8 25 0 39 25 28 47 24 19 8 58-23 56-16 41-77 42-94 2-37 4-59-43-31-69-14-21 5-45 37-44Z"/>
+    <circle class="paper" cx="735" cy="742" r="68"/>
+    <path class="thin" d="M711 728v-20M767 727v-19M728 777c24 17 52 10 68-11M750 731c19 18 10 40-11 42"/>
+    <path class="black" d="M907 771c-4-51 30-93 81-100 44-6 86 19 101 60 47 11 77 55 70 103 39 32 35 97-9 124 11 46-25 91-73 88-29 49-101 48-129 0-53 2-92-48-77-99-44-40-25-113 32-128-2-16-1-32 4-48Z"/>
+    <circle class="paper" cx="1012" cy="839" r="72"/>
+    <path class="thin" d="M984 823v-22M1044 827v-22M1002 879c26 18 57 10 75-12M1021 829c18 20 8 43-13 47"/>
+    <path class="black" d="M868 919c53-65 121-82 208-47 66 27 105 88 113 174H798c4-51 27-93 70-127Z"/>
+    <path class="paper ink" d="M879 883l78 97M990 912l-36 101M1031 903l-9 82"/>
+    <path class="black" d="M736 1002l146-18c23-3 42 15 42 38v27H717c-25 0-29-37-4-43l23-4Z"/>
+    <path class="paper ink" d="M704 1051h226M729 1006h140M728 960l139-18c23-3 42 15 42 38v22H704c-24 0-29-35-6-42h30Z"/>
+    <circle class="paper ink" cx="1091" cy="1045" r="50"/>
+    <path class="thin" d="M1089 994c-5-30 4-54 29-71M875 661l31-52M923 682l54-36M898 719l69 4"/>
+  </g>
+</svg>
