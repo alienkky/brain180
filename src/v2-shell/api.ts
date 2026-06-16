@@ -142,6 +142,9 @@ export interface CanvasJson {
   paths?: CanvasPath[];
   /** v3 1부 블록 추출 보존용 (서버는 payload 에 그대로 저장) */
   blocks?: Record<string, unknown>[];
+  /** v3 원본 노드/엣지 — group·parent·dir 보존용 (toCanvasJson 손실 복구) */
+  v3nodes?: Record<string, unknown>[];
+  v3edges?: Record<string, unknown>[];
 }
 
 export interface ArtifactDto {

@@ -82,6 +82,8 @@ export function LibraryScreen({ onSessionStart }: Props) {
             {
               ...toCanvasJson(prev.stage1.nodes, prev.stage1.edges),
               blocks: prev.stage1.blocks as unknown as Record<string, unknown>[],
+              v3nodes: prev.stage1.nodes as unknown as Record<string, unknown>[],
+              v3edges: prev.stage1.edges as unknown as Record<string, unknown>[],
             },
             1,
           )

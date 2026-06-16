@@ -33,7 +33,16 @@ export function Stage3Screen({
     // 1부 다이어그램을 아티팩트로 저장 — 대시보드 '최근 학습 기록'에서 다시 불러옴
     if (stage1.nodes.length > 0) {
       api
-        .putArtifact(session.sessionId, toCanvasJson(stage1.nodes, stage1.edges), 1)
+        .putArtifact(
+          session.sessionId,
+          {
+            ...toCanvasJson(stage1.nodes, stage1.edges),
+            blocks: stage1.blocks as unknown as Record<string, unknown>[],
+            v3nodes: stage1.nodes as unknown as Record<string, unknown>[],
+            v3edges: stage1.edges as unknown as Record<string, unknown>[],
+          },
+          1,
+        )
         .catch(() => {});
     }
     markComplete();

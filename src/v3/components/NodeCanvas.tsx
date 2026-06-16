@@ -567,8 +567,8 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
             emit(collectNodes(), nextEdges);
             return;
           }
-          // 미팅: 초기엔 화살표 없이 단순선. 방향은 화살표 탭으로 선택적 추가.
-          const newEdge: V3Edge = { id: newEdgeId(), from: src, to: tappedId, label: "", dir: "none" };
+          // 새 연결선은 방향 화살표(forward) 기본. 화살표 탭으로 →/↔/←/없음 순환.
+          const newEdge: V3Edge = { id: newEdgeId(), from: src, to: tappedId, label: "", dir: "forward" };
           emit(collectNodes(), [...collectEdges(), newEdge]);
         } else {
           if (selectedRef.current) {

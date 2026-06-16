@@ -39,6 +39,9 @@ export function SessionScreen({ onComplete, onExit }: { onComplete: () => void; 
       canvas: {
         ...toCanvasJson(session.stage1.nodes, session.stage1.edges),
         blocks: session.stage1.blocks as unknown as Record<string, unknown>[],
+        // group·parent·dir 보존을 위해 v3 원본도 함께 저장
+        v3nodes: session.stage1.nodes as unknown as Record<string, unknown>[],
+        v3edges: session.stage1.edges as unknown as Record<string, unknown>[],
       },
     };
     const t = window.setTimeout(savePending, 1200);

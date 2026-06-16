@@ -129,6 +129,10 @@ export const CanvasJson = z.object({
   paths: z.array(CanvasPath).max(1000).optional(),
   // v3 1부 블록 추출 보존용 — 검증은 느슨하게, payload 에 그대로 저장/복원
   blocks: z.array(z.record(z.unknown())).max(500).optional(),
+  // v3 원본 노드/엣지 — kind(group)·parent(그룹 소속)·dir(화살표 방향)까지 보존.
+  // toCanvasJson 은 이 정보를 잃으므로 복원용 원본을 함께 저장한다.
+  v3nodes: z.array(z.record(z.unknown())).max(500).optional(),
+  v3edges: z.array(z.record(z.unknown())).max(1000).optional(),
 });
 
 export const PutArtifactBody = z.object({

@@ -81,15 +81,23 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
         // 다른 시도/기기 기록 — DB 의 1부 캔버스+블록 복원
         startSession(meta, { restoreSaved: false });
         if (artifact) {
-          const ns: V3Node[] = artifact.canvas_json.nodes.map((n) => ({
-            id: n.id, label: n.label, x: n.x, y: n.y, kind: "concept",
-          }));
-          const es: V3Edge[] = artifact.canvas_json.edges.map((e) => ({
-            id: e.id, from: e.from, to: e.to, label: e.label,
-          }));
-          setStage1Canvas(ns, es);
-          // 저장된 블록 추출 복원
-          const savedBlocks = artifact.canvas_json.blocks;
+          const cj = artifact.canvas_json;
+          // v3 원본이 있으면 그대로 복원 (group·parent·dir 보존), 없으면 레거시 변환
+          if (Array.isArray(cj.v3nodes) && cj.v3nodes.length > 0) {
+            setStage1Canvas(
+              cj.v3nodes as unknown as V3Node[],
+              (Array.isArray(cj.v3edges) ? cj.v3edges : []) as unknown as V3Edge[],
+            );
+          } else {
+            const ns: V3Node[] = cj.nodes.map((n) => ({
+              id: n.id, label: n.label, x: n.x, y: n.y, kind: "concept",
+            }));
+            const es: V3Edge[] = cj.edges.map((e) => ({
+              id: e.id, from: e.from, to: e.to, label: e.label,
+            }));
+            setStage1Canvas(ns, es);
+          }
+          const savedBlocks = cj.blocks;
           if (Array.isArray(savedBlocks) && savedBlocks.length > 0) {
             setBlocks(savedBlocks as unknown as BlockWord[]);
           }
