@@ -31,6 +31,8 @@ export function SessionScreen({ onComplete, onExit }: { onComplete: () => void; 
   const nodesKey = JSON.stringify(session.stage1.nodes.map((n) => [n.id, n.label, Math.round(n.x), Math.round(n.y)]));
   const edgesKey = JSON.stringify(session.stage1.edges.map((e) => [e.id, e.from, e.to, e.dir]));
   const blocksKey = JSON.stringify(session.stage1.blocks.map((b) => b.id));
+  // 진행도(현재 부 + 각 부 완료 여부) — 부 전환·완료 시에도 저장 트리거
+  const progressKey = `${session.currentStage}-${session.stage1.done}-${session.stage2.done}-${session.stage3.done}`;
   useEffect(() => {
     if (session.completedAt) return;
     if (session.stage1.nodes.length === 0 && session.stage1.blocks.length === 0) return;
@@ -42,12 +44,19 @@ export function SessionScreen({ onComplete, onExit }: { onComplete: () => void; 
         // group·parent·dir 보존을 위해 v3 원본도 함께 저장
         v3nodes: session.stage1.nodes as unknown as Record<string, unknown>[],
         v3edges: session.stage1.edges as unknown as Record<string, unknown>[],
+        // 진행도 — 대시보드 '저장된 학습' 카드의 부 단계 표시용
+        progress: {
+          stage: session.currentStage,
+          s1: session.stage1.done,
+          s2: session.stage2.done,
+          s3: session.stage3.done,
+        },
       },
     };
     const t = window.setTimeout(savePending, 1200);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodesKey, edgesKey, blocksKey, session.sessionId, session.completedAt]);
+  }, [nodesKey, edgesKey, blocksKey, progressKey, session.sessionId, session.completedAt]);
 
   // 언마운트(나가기 등) 시 대기 중이던 저장을 즉시 flush — 디바운스 대기 중
   // 화면을 떠나도 마지막 변경이 DB에 반영되도록 보장

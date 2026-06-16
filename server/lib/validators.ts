@@ -133,6 +133,8 @@ export const CanvasJson = z.object({
   // toCanvasJson 은 이 정보를 잃으므로 복원용 원본을 함께 저장한다.
   v3nodes: z.array(z.record(z.unknown())).max(500).optional(),
   v3edges: z.array(z.record(z.unknown())).max(1000).optional(),
+  // 진행도(현재 부 + 각 부 완료) — 대시보드 카드 단계 표시용
+  progress: z.record(z.unknown()).optional(),
 });
 
 export const PutArtifactBody = z.object({

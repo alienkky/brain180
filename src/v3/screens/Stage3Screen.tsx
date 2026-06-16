@@ -40,6 +40,7 @@ export function Stage3Screen({
             blocks: stage1.blocks as unknown as Record<string, unknown>[],
             v3nodes: stage1.nodes as unknown as Record<string, unknown>[],
             v3edges: stage1.edges as unknown as Record<string, unknown>[],
+            progress: { stage: 3, s1: true, s2: true, s3: true },
           },
           1,
         )

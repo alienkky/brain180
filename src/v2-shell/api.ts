@@ -145,6 +145,8 @@ export interface CanvasJson {
   /** v3 원본 노드/엣지 — group·parent·dir 보존용 (toCanvasJson 손실 복구) */
   v3nodes?: Record<string, unknown>[];
   v3edges?: Record<string, unknown>[];
+  /** 진행도 — 현재 부 + 각 부 완료 (대시보드 단계 표시) */
+  progress?: { stage: number; s1: boolean; s2: boolean; s3: boolean };
 }
 
 export interface ArtifactDto {
@@ -162,6 +164,8 @@ export interface ArtifactGalleryDto {
   mode: "free" | "constrained" | "guided";
   node_count: number;
   edge_count: number;
+  /** 진행도 — 현재 부 + 각 부 완료 (서버 payload.progress) */
+  progress: { stage: number; s1: boolean; s2: boolean; s3: boolean } | null;
   lesson: LessonDto;
 }
 

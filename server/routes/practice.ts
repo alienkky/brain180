@@ -112,6 +112,7 @@ interface ArtifactGalleryDTO {
   mode: "free" | "constrained" | "guided";
   node_count: number;
   edge_count: number;
+  progress: { stage: number; s1: boolean; s2: boolean; s3: boolean } | null;
   lesson: {
     id: string;
     module_id: string;
@@ -207,8 +208,13 @@ practiceRouter.get(
     );
 
     const dto: ArtifactGalleryDTO[] = rows.rows.map((row) => {
-      const payload = row.payload as { nodes?: unknown[]; edges?: unknown[] };
+      const payload = row.payload as {
+        nodes?: unknown[];
+        edges?: unknown[];
+        progress?: { stage?: number; s1?: boolean; s2?: boolean; s3?: boolean };
+      };
       const savedAt = row.saved_at instanceof Date ? row.saved_at : new Date(row.saved_at);
+      const p = payload?.progress;
       return {
         artifact_id: row.artifact_id,
         session_id: row.session_id,
@@ -216,6 +222,9 @@ practiceRouter.get(
         mode: row.mode,
         node_count: Array.isArray(payload?.nodes) ? payload.nodes.length : 0,
         edge_count: Array.isArray(payload?.edges) ? payload.edges.length : 0,
+        progress: p
+          ? { stage: Number(p.stage) || 1, s1: !!p.s1, s2: !!p.s2, s3: !!p.s3 }
+          : null,
         lesson: {
           id: row.lesson_id,
           module_id: row.module_id,

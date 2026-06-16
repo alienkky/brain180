@@ -27,13 +27,30 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
   };
   useEffect(reload, []);
 
-  // 시도별 진도 — 그 카드의 session_id 가 현재 메모리/임시저장과 일치할 때만
+  // 시도별 진도 — 메모리/임시저장(같은 session_id) 우선, 없으면 DB 저장 progress.
+  // 반환: 현재 부 + 각 부 완료 여부(① ② ③ 표시용). active=진행 중(메모리/saved).
   const progressFor = (a: ArtifactGalleryDto) => {
-    if (session && session.sessionId === a.session_id && !session.completedAt) {
-      return { stage: session.currentStage };
+    const live =
+      session && session.sessionId === a.session_id && !session.completedAt
+        ? session
+        : savedMap[a.lesson.id]?.sessionId === a.session_id
+        ? savedMap[a.lesson.id]
+        : null;
+    if (live) {
+      return {
+        active: true,
+        stage: live.currentStage,
+        done: [live.stage1.done, live.stage2.done, live.stage3.done] as boolean[],
+      };
     }
-    const s = savedMap[a.lesson.id];
-    return s && s.sessionId === a.session_id ? { stage: s.currentStage } : null;
+    if (a.progress) {
+      return {
+        active: false,
+        stage: a.progress.stage,
+        done: [a.progress.s1, a.progress.s2, a.progress.s3] as boolean[],
+      };
+    }
+    return null;
   };
 
   // 저장된 학습 기록 불러오기 → 이어하기.
@@ -209,27 +226,54 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
         {/* Recent artifacts */}
         {!loading && artifacts.length > 0 && (
           <div>
-            <h3 className="text-sm font-semibold text-brain-text mb-3">최근 학습 기록</h3>
-            <div className="space-y-2">
-              {artifacts.slice(0, 8).map((a) => {
+            <h3 className="text-sm font-semibold text-brain-text mb-3">
+              최근 학습 기록 <span className="text-xs text-brain-text-muted font-normal">({artifacts.length})</span>
+            </h3>
+            <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+              {artifacts.map((a) => {
                 const prog = progressFor(a);
+                const allDone = prog && prog.done[0] && prog.done[1] && prog.done[2];
                 return (
                   <div
                     key={a.artifact_id}
                     className="flex items-center justify-between gap-3 bg-brain-surface border border-brain-border rounded-lg px-4 py-3 hover:border-brain-accent/50 transition-colors"
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm text-brain-text truncate">{a.lesson.title}</span>
-                        {prog ? (
-                          <span className="shrink-0 text-[11px] px-1.5 py-0.5 rounded-full bg-brain-accent-soft text-brain-accent font-medium">
-                            {prog.stage}부 진행 중
-                          </span>
-                        ) : (
-                          <span className="shrink-0 text-[11px] px-1.5 py-0.5 rounded-full bg-brain-surface-soft text-brain-text-muted">
-                            저장됨
+                        {/* 부 단계 진행도 ① ② ③ */}
+                        {prog && (
+                          <span className="shrink-0 flex items-center gap-1">
+                            {([1, 2, 3] as const).map((n) => {
+                              const isDone = prog.done[n - 1];
+                              const isCurrent = prog.active && !isDone && prog.stage === n;
+                              return (
+                                <span
+                                  key={n}
+                                  title={`${n}부${isDone ? " 완료" : isCurrent ? " 진행 중" : ""}`}
+                                  className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${
+                                    isDone
+                                      ? "bg-brain-accent text-white"
+                                      : isCurrent
+                                      ? "border-[1.5px] border-brain-accent text-brain-accent"
+                                      : "bg-brain-border text-brain-text-muted"
+                                  }`}
+                                >
+                                  {isDone ? "✓" : n}
+                                </span>
+                              );
+                            })}
                           </span>
                         )}
+                        <span className={`shrink-0 text-[11px] px-1.5 py-0.5 rounded-full font-medium ${
+                          allDone
+                            ? "bg-green-100 text-green-700"
+                            : prog?.active
+                            ? "bg-brain-accent-soft text-brain-accent"
+                            : "bg-brain-surface-soft text-brain-text-muted"
+                        }`}>
+                          {allDone ? "완료" : prog ? `${prog.stage}부${prog.active ? " 진행 중" : ""}` : "저장됨"}
+                        </span>
                       </div>
                       <div className="text-xs text-brain-text-muted mt-0.5">
                         노드 {a.node_count}개 · 엣지 {a.edge_count}개 ·{" "}
@@ -242,7 +286,7 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
                         disabled={loadingArtifact !== null}
                         className="px-3 py-1.5 rounded-lg bg-brain-accent text-white text-xs font-medium disabled:opacity-50 hover:opacity-90"
                       >
-                        {loadingArtifact === a.artifact_id ? "여는 중..." : prog ? "이어하기 →" : "불러오기 →"}
+                        {loadingArtifact === a.artifact_id ? "여는 중..." : prog?.active ? "이어하기 →" : "불러오기 →"}
                       </button>
                       <button
                         onClick={(e) => deleteArtifact(a, e)}

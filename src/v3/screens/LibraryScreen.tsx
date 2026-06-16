@@ -84,6 +84,12 @@ export function LibraryScreen({ onSessionStart }: Props) {
               blocks: prev.stage1.blocks as unknown as Record<string, unknown>[],
               v3nodes: prev.stage1.nodes as unknown as Record<string, unknown>[],
               v3edges: prev.stage1.edges as unknown as Record<string, unknown>[],
+              progress: {
+                stage: prev.currentStage,
+                s1: prev.stage1.done,
+                s2: prev.stage2.done,
+                s3: prev.stage3.done,
+              },
             },
             1,
           )
