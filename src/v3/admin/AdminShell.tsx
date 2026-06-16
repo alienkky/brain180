@@ -1267,13 +1267,17 @@ export function AdminShell({ user, onLogout, onSwitchToLearning }: Props) {
     <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-brain-bg">
       {/* Sidebar — 데스크톱: 좌측 세로 / 모바일·태블릿 세로: 상단 가로 바 */}
       <div className="md:w-52 border-b md:border-b-0 md:border-r border-brain-border bg-brain-surface flex flex-col shrink-0 overflow-hidden">
-        <div className="hidden md:flex md:flex-col px-4 py-4 border-b border-brain-border">
+        <button
+          onClick={() => setScreen("dashboard")}
+          className="hidden md:flex md:flex-col px-4 py-4 border-b border-brain-border text-left hover:bg-brain-surface-soft transition-colors"
+          title="대시보드로"
+        >
           <div className="text-sm font-bold text-brain-text">Brain180</div>
           <div className="text-xs text-brain-text-muted mt-0.5">관리자 모드</div>
-        </div>
+        </button>
         {/* 모바일 상단 줄: 로고 + 학습자/로그아웃 */}
         <div className="md:hidden flex items-center gap-2 px-3 py-2 border-b border-brain-border">
-          <span className="text-sm font-bold text-brain-text shrink-0">Brain180</span>
+          <button onClick={() => setScreen("dashboard")} className="text-sm font-bold text-brain-text shrink-0" title="대시보드로">Brain180</button>
           <span className="text-[11px] text-brain-text-muted shrink-0">관리자</span>
           <div className="ml-auto flex items-center gap-2 shrink-0">
             {onSwitchToLearning && (
