@@ -79,11 +79,11 @@ function stripJosa(word: string): string {
   const last = word[word.length - 1];
   const prev = word[word.length - 2];
   const fin = hasFinalConsonant(prev);
-  // 받침 유무에 따라 짝이 갈리는 조사 — 신뢰도 높음
+  // 받침 유무로 짝이 갈리는 조사만 신뢰 제거 (소년은→소년, 여우가→여우).
+  // 받침무관 단일 조사(의/도/만/에/로)는 접속사·부사·명사와 충돌 위험이 커
+  // (하지만→하지, 포도→포, 거의→거) 자동 제거하지 않음 — 필요시 노드에서 수정.
   if (fin && ["은", "이", "을", "과"].includes(last)) return word.slice(0, -1);
   if (!fin && ["는", "가", "를", "와"].includes(last)) return word.slice(0, -1);
-  // 받침 무관 조사 — 어간이 2글자 이상 남을 때만 (과도 제거 방지)
-  if (word.length >= 3 && ["의", "도", "만", "에", "로"].includes(last)) return word.slice(0, -1);
   return word;
 }
 
