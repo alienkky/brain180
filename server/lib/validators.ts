@@ -135,6 +135,8 @@ export const CanvasJson = z.object({
   v3edges: z.array(z.record(z.unknown())).max(1000).optional(),
   // 진행도(현재 부 + 각 부 완료) — 대시보드 카드 단계 표시용
   progress: z.record(z.unknown()).optional(),
+  // AI 코치 단계별 대화 — 불러오기 복원용 (느슨한 검증, payload 보존)
+  messages: z.record(z.unknown()).optional(),
 });
 
 export const PutArtifactBody = z.object({

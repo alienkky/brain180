@@ -60,6 +60,8 @@ interface ProtocolStore {
 
   // AI messages (all stages)
   addMessage: (stage: ProtocolStage, msg: ChatMessage) => void;
+  /** DB 복원용 — 단계별 AI 대화 일괄 주입 */
+  hydrateMessages: (s1: ChatMessage[], s2: ChatMessage[], s3: ChatMessage[]) => void;
   incrementIteration: (stage: ProtocolStage) => void;
   markStageDone: (stage: ProtocolStage) => void;
   markComplete: () => void;
@@ -189,6 +191,20 @@ export const useProtocolStore = create<ProtocolStore>()(
         },
       };
     }),
+
+  hydrateMessages: (s1, s2, s3) =>
+    set((s) =>
+      s.session
+        ? {
+            session: {
+              ...s.session,
+              stage1: { ...s.session.stage1, messages: s1, iterationCount: Math.max(s.session.stage1.iterationCount, s1.filter((m) => m.role === "user").length) },
+              stage2: { ...s.session.stage2, messages: s2, iterationCount: Math.max(s.session.stage2.iterationCount, s2.filter((m) => m.role === "user").length) },
+              stage3: { ...s.session.stage3, messages: s3, iterationCount: Math.max(s.session.stage3.iterationCount, s3.filter((m) => m.role === "user").length) },
+            },
+          }
+        : s
+    ),
 
   incrementIteration: (stage) =>
     set((s) => {

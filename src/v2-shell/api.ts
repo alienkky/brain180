@@ -147,6 +147,8 @@ export interface CanvasJson {
   v3edges?: Record<string, unknown>[];
   /** 진행도 — 현재 부 + 각 부 완료 (대시보드 단계 표시) */
   progress?: { stage: number; s1: boolean; s2: boolean; s3: boolean };
+  /** AI 코치 단계별 대화 — 불러오기 복원 */
+  messages?: { s1?: unknown[]; s2?: unknown[]; s3?: unknown[] };
 }
 
 export interface ArtifactDto {

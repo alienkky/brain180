@@ -33,6 +33,8 @@ export function SessionScreen({ onComplete, onExit }: { onComplete: () => void; 
   const blocksKey = JSON.stringify(session.stage1.blocks.map((b) => b.id));
   // 진행도(현재 부 + 각 부 완료 여부) — 부 전환·완료 시에도 저장 트리거
   const progressKey = `${session.currentStage}-${session.stage1.done}-${session.stage2.done}-${session.stage3.done}`;
+  // AI 대화 — 메시지 추가 시 저장 트리거
+  const msgKey = `${session.stage1.messages.length}-${session.stage2.messages.length}-${session.stage3.messages.length}`;
   useEffect(() => {
     if (session.completedAt) return;
     if (session.stage1.nodes.length === 0 && session.stage1.blocks.length === 0) return;
@@ -51,12 +53,18 @@ export function SessionScreen({ onComplete, onExit }: { onComplete: () => void; 
           s2: session.stage2.done,
           s3: session.stage3.done,
         },
+        // AI 코치 대화 — 불러오기 시 복원
+        messages: {
+          s1: session.stage1.messages,
+          s2: session.stage2.messages,
+          s3: session.stage3.messages,
+        } as unknown as Record<string, unknown>,
       },
     };
     const t = window.setTimeout(savePending, 1200);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodesKey, edgesKey, blocksKey, progressKey, session.sessionId, session.completedAt]);
+  }, [nodesKey, edgesKey, blocksKey, progressKey, msgKey, session.sessionId, session.completedAt]);
 
   // 언마운트(나가기 등) 시 대기 중이던 저장을 즉시 flush — 디바운스 대기 중
   // 화면을 떠나도 마지막 변경이 DB에 반영되도록 보장

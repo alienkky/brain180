@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../v2-shell/api";
 import type { ArtifactGalleryDto, ProgressEntryDto, TextExcerptDto } from "../../v2-shell/api";
 import { useProtocolStore } from "../store/useProtocolStore";
-import type { V3User, V3Node, V3Edge, BlockWord } from "../types";
+import type { V3User, V3Node, V3Edge, BlockWord, ChatMessage } from "../types";
 
 interface Props {
   user: V3User;
@@ -13,7 +13,7 @@ interface Props {
 export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
   const session = useProtocolStore((s) => s.session);
   const savedMap = useProtocolStore((s) => s.saved);
-  const { clearSession, startSession, setStage1Canvas, setBlocks, resumeLesson, discardSaved } = useProtocolStore();
+  const { clearSession, startSession, setStage1Canvas, setBlocks, resumeLesson, discardSaved, hydrateMessages } = useProtocolStore();
   const [loadingArtifact, setLoadingArtifact] = useState<string | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -150,6 +150,15 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
           const savedBlocks = cj.blocks;
           if (Array.isArray(savedBlocks) && savedBlocks.length > 0) {
             setBlocks(savedBlocks as unknown as BlockWord[]);
+          }
+          // AI 코치 대화 복원
+          const m = cj.messages;
+          if (m) {
+            hydrateMessages(
+              (Array.isArray(m.s1) ? m.s1 : []) as ChatMessage[],
+              (Array.isArray(m.s2) ? m.s2 : []) as ChatMessage[],
+              (Array.isArray(m.s3) ? m.s3 : []) as ChatMessage[],
+            );
           }
         }
       }
