@@ -15,6 +15,8 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
   const savedMap = useProtocolStore((s) => s.saved);
   const { clearSession, startSession, setStage1Canvas, setBlocks, resumeLesson, discardSaved } = useProtocolStore();
   const [loadingArtifact, setLoadingArtifact] = useState<string | null>(null);
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const [progress, setProgress] = useState<ProgressEntryDto[]>([]);
   const [artifacts, setArtifacts] = useState<ArtifactGalleryDto[]>([]);
@@ -22,10 +24,40 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
 
   const reload = () => {
     Promise.all([api.progress(), api.artifacts()])
-      .then(([p, a]) => { setProgress(p); setArtifacts(a); })
+      .then(([p, a]) => { setProgress(p); setArtifacts(a); setChecked(new Set()); })
       .finally(() => setLoading(false));
   };
   useEffect(reload, []);
+
+  const toggleCheck = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const deleteChecked = async () => {
+    if (checked.size === 0) return;
+    if (!window.confirm(`선택한 학습 기록 ${checked.size}개를 삭제할까요?`)) return;
+    setBulkBusy(true);
+    try {
+      // 선택된 기록 중 현재 진행 세션이 있으면 메모리 정리
+      const sel = artifacts.filter((a) => checked.has(a.artifact_id));
+      if (session && sel.some((a) => a.session_id === session.sessionId)) {
+        discardSaved(session.lessonId);
+        clearSession();
+      }
+      await api.deleteArtifacts([...checked]);
+      reload();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "삭제 실패");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   // 시도별 진도 — 메모리/임시저장(같은 session_id) 우선, 없으면 DB 저장 progress.
   // 반환: 현재 부 + 각 부 완료 여부(① ② ③ 표시용). active=진행 중(메모리/saved).
@@ -226,9 +258,34 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
         {/* Recent artifacts */}
         {!loading && artifacts.length > 0 && (
           <div>
-            <h3 className="text-sm font-semibold text-brain-text mb-3">
-              최근 학습 기록 <span className="text-xs text-brain-text-muted font-normal">({artifacts.length})</span>
-            </h3>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-brain-text">
+                최근 학습 기록 <span className="text-xs text-brain-text-muted font-normal">({artifacts.length})</span>
+              </h3>
+              <div className="flex items-center gap-2">
+                {checked.size > 0 && (
+                  <button
+                    onClick={deleteChecked}
+                    disabled={bulkBusy}
+                    className="rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
+                  >
+                    🗑 선택 삭제 ({checked.size})
+                  </button>
+                )}
+                <button
+                  onClick={() =>
+                    setChecked(
+                      checked.size === artifacts.length
+                        ? new Set()
+                        : new Set(artifacts.map((a) => a.artifact_id)),
+                    )
+                  }
+                  className="text-xs text-brain-text-muted hover:text-brain-text"
+                >
+                  {checked.size === artifacts.length ? "선택 해제" : "전체 선택"}
+                </button>
+              </div>
+            </div>
             <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
               {artifacts.map((a) => {
                 const prog = progressFor(a);
@@ -236,8 +293,17 @@ export function DashboardScreen({ user, onGoLibrary, onResume }: Props) {
                 return (
                   <div
                     key={a.artifact_id}
-                    className="flex items-center justify-between gap-3 bg-brain-surface border border-brain-border rounded-lg px-4 py-3 hover:border-brain-accent/50 transition-colors"
+                    className={`flex items-center justify-between gap-3 bg-brain-surface border rounded-lg px-4 py-3 transition-colors ${
+                      checked.has(a.artifact_id) ? "border-brain-accent" : "border-brain-border hover:border-brain-accent/50"
+                    }`}
                   >
+                    <input
+                      type="checkbox"
+                      checked={checked.has(a.artifact_id)}
+                      onClick={(e) => toggleCheck(a.artifact_id, e)}
+                      onChange={() => {}}
+                      className="shrink-0"
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm text-brain-text truncate">{a.lesson.title}</span>
