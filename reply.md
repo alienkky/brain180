@@ -1,60 +1,50 @@
-## 🛸 스킬 발전 사항 일일 보고 — 2026-06-18 KST
+## 🛸 스킬 발전 사항 일일 보고 — 2026-06-19 KST
 
 ### 📡 최신 동향
 
-**Claude Code v2.1.170** (최신 버전, 2026년 6월 기준)
+**Claude Code v2.1.183** (오늘 기준 최신 버전, 2026-06-19 릴리즈)
 
-#### 스킬 시스템 주요 업데이트
-- **Custom Commands → Skills 통합 완료**: `.claude/commands/deploy.md`와 `.claude/skills/deploy/SKILL.md`가 동일하게 동작. 기존 commands 파일 호환 유지, 신규는 skills 권장
-- **Agent Skills 오픈 스탠다드** 채택: Claude Code가 [agentskills.io](https://agentskills.io) 표준을 따르며, 다른 AI 도구에서도 동작 가능한 포터블 스킬 구조
-- **`skill-creator` 플러그인** 출시: 자동화된 스킬 평가 루프 — A/B 테스트, pass rate 측정, description 튜닝 자동화
-  ```
-  /plugin install skill-creator@claude-plugins-official
-  ```
-- **신규 Bundled Skills** (v2.1.145+ 필요):
-  | 스킬 | 설명 |
-  |-----|-----|
-  | `/run` | 앱 실행 및 변경사항 확인 (테스트 아닌 실제 앱 구동) |
-  | `/verify` | 코드 변경이 실제로 동작하는지 앱으로 검증 |
-  | `/run-skill-generator` | 프로젝트별 실행 레시피 자동 생성 및 저장 |
-  | `/batch` | 대규모 코드베이스 변경을 병렬 워크트리로 실행 |
-  | `/debug` | 체계적 디버깅 워크플로 |
-  | `/loop` | 반복 실행 (이미 설치됨) |
-  | `/claude-api` | Claude API 레퍼런스 참조 |
+#### Week 25 주요 업데이트 (Jun 15-19, 2026 · v2.1.178~v2.1.183)
 
-#### 새로운 프론트매터 필드
-```yaml
----
-name: my-skill
-description: 설명
-when_to_use: 추가 트리거 컨텍스트       # 신규: 1,536자 예산에 합산
-paths: ["src/**/*.ts", "*.py"]           # 신규: 특정 파일 작업시만 활성화
-hooks: { PreToolUse: [...] }             # 신규: 스킬 생명주기 훅
-model: claude-opus-4-8                   # 신규: 스킬별 모델 오버라이드
-effort: high                             # 신규: 추론 노력 레벨 설정
-disallowed-tools: AskUserQuestion        # 신규: 백그라운드 스킬에서 특정 도구 차단
-agent: Explore                           # 신규: context: fork 시 에이전트 타입 지정
-shell: powershell                        # 신규: Windows PowerShell 지원
----
-```
+##### 🔧 스킬 & 퍼미션 시스템 변경 (v2.1.178, Jun 15)
+- **`Tool(param:value)` 퍼미션 규칙 문법 추가**: 도구 입력 파라미터로 규칙 매칭 가능
+  - 예: `Agent(model:opus)` → Opus 서브에이전트 차단
+  - 예: `Bash(command:rm*)` → 위험 명령어 선택적 차단
+- **중첩 `.claude/skills/` 디렉토리 지원**: 하위 디렉토리에서 작업 시 해당 스킬 자동 로드
+  - 이름 충돌 시 `<dir>:<name>` 형식으로 구분 (예: `apps/web:deploy`)
+  - 기존 버그 수정: 중첩 스킬이 퍼미션 프롬프트로 차단되던 문제 해결
 
-#### 새로운 문자열 치환 변수
-| 변수 | 설명 |
-|-----|-----|
-| `${CLAUDE_SKILL_DIR}` | 스킬 디렉토리 절대경로 (번들 스크립트 참조용) |
-| `${CLAUDE_EFFORT}` | 현재 추론 노력 레벨 |
-| `${CLAUDE_SESSION_ID}` | 현재 세션 ID |
-| `$0`, `$1` ... | `$ARGUMENTS[N]` 단축 표기 |
-| `$name` | frontmatter arguments 필드로 선언한 명명 인자 |
+##### 🤖 에이전트 팀 시스템 변경 (v2.1.178, Jun 15)
+- **`TeamCreate` / `TeamDelete` 도구 제거**: 더 이상 팀을 명시적으로 생성할 필요 없음
+- **암묵적 팀 모델**: 모든 세션이 자동으로 하나의 팀을 가짐
+- **간소화된 teammate 생성**: Agent 도구의 `name` 파라미터로 직접 spawn (setup 단계 불필요)
+- 에이전트 분류기로 서브에이전트 spawn 전 사전 평가 (auto mode)
 
-#### 기타 주요 변경
-- **Live Change Detection**: `~/.claude/skills/` 또는 `.claude/skills/` 파일 수정 시 세션 재시작 없이 즉시 반영
-- **Monorepo 지원**: 중첩 `.claude/skills/` 디렉토리 자동 발견 (e.g., `apps/web:deploy`)
-- **`skillOverrides` 설정**: settings.json에서 스킬 가시성 제어 (on/name-only/user-invocable-only/off)
-- **`skillListingBudgetFraction`**: 스킬 description 컨텍스트 예산 비율 설정
-- **MCP Tunnels** (Research Preview): 프라이빗 네트워크의 MCP 서버 연결 가능
-- **Post-session hooks**: 크론 기반 스케줄링으로 에이전트 자동 실행
-- **Subagent panel 개선**: idle 서브에이전트 30초 후 자동 숨김, 최대 5행 + 스크롤
+##### ⚙️ 설정 시스템 개선 (v2.1.181, Jun 17)
+- **`/config key=value` 문법 추가**: 프롬프트에서 즉시 설정 변경
+  - 예: `/config thinking=false`, `/config model=sonnet-4-6`
+  - interactive, `-p`, Remote Control 모드 전부 지원
+- **`/config --help`** (v2.1.183): 사용 가능한 단축 키 전체 목록 표시
+- **`/config` 토글 동작 변경**: Enter/Space로 변경, Esc로 저장 후 닫기
+- **`attribution.sessionUrl`**: 커밋/PR에서 claude.ai 세션 링크 제거 설정
+
+##### 🛡️ 안전성 강화 (v2.1.183, Jun 19)
+- **파괴적 git 명령어 자동 차단** (사용자가 명시적으로 요청하지 않는 한):
+  - `git reset --hard`, `git checkout -- .`, `git clean -fd`, `git stash drop`
+  - `git commit --amend` (이번 세션에서 에이전트가 생성한 커밋이 아닌 경우)
+  - `terraform destroy` / `pulumi destroy` / `cdk destroy`
+- **WebSearch 서브에이전트 버그 수정**: 서브에이전트에서 WebSearch 빈 결과 반환 문제 해결
+- **스킬 중복 표시 버그 수정**: 사용자 레벨 스킬이 slash-command 자동완성에 중복 표시되던 문제 해결
+- **`--safe-mode`** (v2.1.169, Week 24): CLAUDE.md, 스킬, 플러그인, 훅, MCP, 커스텀 명령어 전부 비활성화하고 시작
+
+#### Week 24 주요 업데이트 (Jun 8-12, 2026 · v2.1.166~v2.1.176)
+
+- **`/cd` 명령어**: 프롬프트 캐시 재구성 없이 세션을 다른 디렉토리로 이동
+- **서브에이전트의 서브에이전트 spawn**: 최대 5단계 깊이까지 중첩 가능 (`/agents`로 트리 시각화)
+- **`fallbackModel`**: 기본 모델 과부하 시 순차적으로 시도할 최대 3개 대체 모델 설정
+- **`disableBundledSkills`** 설정 + `CLAUDE_CODE_DISABLE_BUNDLED_SKILLS` 환경변수: 번들 스킬 전체 숨김
+- **Deny 규칙 glob 지원**: `"*"` 로 모든 도구 차단 가능, 알 수 없는 도구명 경고
+- **서브에이전트 패널 개선**: idle 30초 후 자동 숨김, 최대 5행 + 스크롤 힌트
 
 ---
 
@@ -70,11 +60,13 @@ shell: powershell                        # 신규: Windows PowerShell 지원
 |--------|------|
 | (없음) | ❌ 미설치 |
 
-#### 세션에서 사용 가능한 Bundled Skills
+#### 세션 Bundled Skills (현재 세션 기준)
 `session-start-hook`, `deep-research`, `update-config`, `keybindings-help`, `verify`, `code-review`, `simplify`, `fewer-permission-prompts`, `loop`, `claude-api`, `run`, `init`, `review`, `security-review`
 
-#### [가설] brain180 프로젝트 스킬 부재
-현재 brain180에 `.claude/skills/` 디렉토리가 없음. 프로젝트 특화 스킬 없이 글로벌 기본값에만 의존 중.
+#### 현재 설정 파일 현황 (brain180)
+- `.claude/settings.local.json`: 기존 프로젝트 권한 설정만 존재 (skills 관련 설정 없음)
+- `.claude/launch.json`: Vite dev 서버 실행 설정만 존재
+- `disableBundledSkills`: 미설정 (번들 스킬 활성화 상태)
 
 ---
 
@@ -82,54 +74,56 @@ shell: powershell                        # 신규: Windows PowerShell 지원
 
 | 스킬명 | 유형 | 우선순위 | 이유 |
 |--------|------|---------|------|
-| `batch` | Bundled (신규) | 🔴 HIGH | 27개 에이전트 병렬 대규모 코드 변경 시 필수 |
-| `debug` | Bundled (신규) | 🔴 HIGH | 체계적 디버깅 워크플로 내재화 |
-| `run-skill-generator` | Bundled (신규) | 🟡 MEDIUM | brain180 dev 서버 실행 레시피 자동 생성 |
-| `why-how-what-analysis` | 커스텀 신규 | 🔴 HIGH | Alien Agentic WHY-HOW-WHAT 컨설팅 프레임워크 자동화 |
-| `multica-report` | 커스텀 신규 | 🔴 HIGH | 일일 보고서 multica 이슈 자동 제출 |
-| `cognitive-map-gen` | 커스텀 신규 | 🟡 MEDIUM | brain180 뇌인지 구조 시각화 데이터 생성 보조 |
-| `agent-squad-coordinator` | 커스텀 신규 | 🟡 MEDIUM | 27명 에이전트 시스템 작업 분배 및 상태 추적 |
-| `skill-creator` | Plugin (신규) | 🟡 MEDIUM | 기존/신규 스킬 품질 측정 및 반복 개선 자동화 |
-| `pr-review-autopilot` | 커스텀 신규 | 🟢 LOW | PR 리뷰 자동화 및 코멘트 응답 |
+| `Tool(param:value)` 퍼미션 규칙 적용 | 설정 업데이트 | 🔴 HIGH | 27개 에이전트 시스템에서 Opus 모델 과도 사용 방지, 위험 Bash 명령어 선택적 차단 가능 |
+| `.claude/skills/why-how-what/` | 커스텀 신규 | 🔴 HIGH | WHY-HOW-WHAT 컨설팅 워크플로 스킬화 — `effort: high`, `model: claude-opus-4-8` 적용 |
+| `.claude/skills/multica-report/` | 커스텀 신규 | 🔴 HIGH | 일일 보고서 multica 자동 제출 파이프라인 구축 |
+| 중첩 `.claude/skills/` 디렉토리 활용 | 구조 개선 | 🟡 MEDIUM | brain180의 `src/core/`, `src/components/`별로 도메인 특화 스킬 분리 가능 |
+| `.claude/skills/cognitive-map-gen/` | 커스텀 신규 | 🟡 MEDIUM | brain180 뇌인지 구조 → CognitiveMap JSON 자동 생성 보조 |
+| `/config` 단축키 활용 | 워크플로 개선 | 🟡 MEDIUM | 에이전트별 effort 레벨 빠른 전환 (`/config effort=xhigh`) |
+| `fallbackModel` 설정 | 설정 업데이트 | 🟢 LOW | 27개 에이전트 시스템에서 기본 모델 과부하 시 자동 대체 모델 설정 |
+| `agent-squad-coordinator` | 커스텀 신규 | 🟡 MEDIUM | 암묵적 팀 모델 활용한 에이전트 분업 조율 (TeamCreate 제거로 구조 단순화) |
 
-#### 즉시 활용 가능한 신규 프론트매터 패턴
+#### 즉시 적용 가능한 설정 (`.claude/settings.local.json` 업데이트)
 
-**WHY-HOW-WHAT 분석 스킬 (신규 필드 활용)**:
-```yaml
----
-name: why-how-what
-description: Alien Agentic WHY-HOW-WHAT 컨설팅 프레임워크로 문제 분석. 목표 설정, 전략 수립, 실행 계획 도출 시 사용.
-effort: high
-model: claude-opus-4-8
-context: fork
-agent: general-purpose
----
+**중요 퍼미션 규칙 — `Tool(param:value)` 신문법 활용**:
+```json
+{
+  "permissions": {
+    "deny": [
+      "Bash(git reset --hard*)",
+      "Bash(git clean -fd*)",
+      "Bash(git checkout -- .)",
+      "Agent(model:opus)"
+    ]
+  }
+}
 ```
 
-**Multica 자동 보고 스킬**:
-```yaml
----
-name: multica-daily-report
-description: 일일 작업 결과를 multica 이슈에 자동 보고
-disable-model-invocation: true
-allowed-tools: Bash(multica *)
----
+**brain180 중첩 스킬 디렉토리 구조 제안**:
+```
+brain180/
+└── .claude/
+    └── skills/
+        ├── cognitive-map-gen/   ← 뇌인지 구조 데이터 생성
+        │   └── SKILL.md
+        └── multica-report/      ← 일일 보고서 자동 제출
+            └── SKILL.md
 ```
 
 ---
 
 ### 📋 오늘의 액션 아이템
 
-1. **[즉시]** `batch`와 `debug` bundled skills가 현재 세션에 없다면 Claude Code 업데이트 확인 (`/version`)
-2. **[단기]** `.claude/skills/why-how-what/SKILL.md` 생성 — WHY-HOW-WHAT 컨설팅 워크플로 스킬화
-3. **[단기]** `.claude/skills/multica-report/SKILL.md` 생성 — multica 자동 보고 파이프라인 구축
-4. **[단기]** `/run-skill-generator` 실행하여 brain180 Vite dev 서버 실행 레시피 저장
-5. **[중기]** `skill-creator` 플러그인 설치 및 기존 스킬 품질 측정 시작
-6. **[중기]** 27개 에이전트 분업을 위한 `agent-squad-coordinator` 스킬 설계
-7. **[확인 필요]** multica.ai 네트워크 이그레스 허용 설정 — 현재 원격 실행 환경에서 multica.ai 차단됨. 네트워크 정책에 multica.ai 추가 필요
+1. **[즉시]** `.claude/settings.local.json`에 `Tool(param:value)` 퍼미션 규칙 추가 — 27개 에이전트 시스템 안전성 강화
+2. **[즉시]** `--safe-mode` 플래그 문서화 — 설정 문제 발생 시 즉시 활용 가능
+3. **[단기]** brain180에 `.claude/skills/` 디렉토리 생성 및 `cognitive-map-gen` 스킬 추가
+4. **[단기]** `.claude/skills/multica-report/SKILL.md` 생성 — multica 자동 보고 파이프라인
+5. **[단기]** `TeamCreate`/`TeamDelete` 제거 확인 — 기존 에이전트 코드에서 해당 도구 사용 여부 검토
+6. **[중기]** `fallbackModel` 설정 추가 — Opus 4.8 → Sonnet 4.6 → Haiku 4.5 순서로 대체
+7. **[중기]** `/config key=value` 단축키 활용 패턴을 팀 워크플로에 표준화
 
 ---
 
-*조사 소스: [Claude Code Skills 공식 문서](https://code.claude.com/docs/en/skills), [Agent SDK Skills](https://code.claude.com/docs/en/agent-sdk/skills), [Releasebot Anthropic](https://releasebot.io/updates/anthropic/claude-code), 웹 검색 결과*
+*조사 소스: [Claude Code What's New](https://code.claude.com/docs/en/whats-new), [Week 24 Digest](https://code.claude.com/docs/en/whats-new/2026-w24), [Claude Code Changelog](https://code.claude.com/docs/en/changelog)*
 
-*⚠️ 참고: 이 보고서는 네트워크 이그레스 정책으로 multica.ai 직접 접속이 차단되어 자동 제출 실패. 수동 제출 필요.*
+*⚠️ 참고: 네트워크 이그레스 정책으로 multica.ai 직접 접속 차단 — multica CLI 설치 및 자동 제출 실패. 수동 제출 필요.*
