@@ -1,40 +1,31 @@
-## 🛸 스킬 발전 사항 일일 보고 — 2026-06-20 KST
+## 🛸 스킬 발전 사항 일일 보고 — 2026-06-21 KST
 
-### 📡 최신 동향
+### 📡 최신 동향 (Claude Code Skills — 2026년 6월 21일)
 
-**Claude Code v2.1.185** (오늘 기준 최신 버전, 2026-06-20 릴리즈)
+**최신 버전: v2.1.185** (2026-06-20 릴리즈 — 오늘 기준)
 
-#### 오늘의 신규 릴리즈 (Jun 20, 2026 · v2.1.185)
+#### 이번 주 요약 (Jun 15-20, 2026 · v2.1.176~v2.1.185)
 
-##### ⏱️ 스트림 stall 메시지 개선
-- 힌트 텍스트 변경: `"No response from API · Retrying in …"` → `"Waiting for API response · will retry in …"`
-- 트리거 타이밍 변경: 무응답 10초 → **20초** 후 힌트 표시 (오탐 감소 목적)
+| 버전 | 날짜 | 스킬/훅 관련 핵심 변경 |
+|------|------|----------------------|
+| v2.1.185 | Jun 20 | Stream stall 힌트 타이밍 10초→20초, 오탐 감소 |
+| v2.1.183 | Jun 19 | Auto mode: `git reset --hard`, `terraform destroy` 등 파괴 명령 자동 차단 강화; `/config --help` 신규 |
+| v2.1.181 | Jun 17 | `/config key=value` 인라인 문법 추가; MCP OAuth 개선; `sandbox.allowAppleEvents` |
+| v2.1.178 | Jun 15 | **스킬 중첩 디렉토리 지원** `.claude/skills/sub/` 자동 로드; `Tool(param:value)` 퍼미션 문법 |
+| v2.1.176 | Jun 12 | 세션 제목 언어 자동 감지; `footerLinksRegexes` 배지 설정; 훅 패턴(`Edit(src/**)`) 수정 |
 
-#### 어제 이후 추가 확인된 스킬 관련 업데이트
+#### 5월 핵심 업데이트 (스킬 시스템 대폭 강화)
 
-##### 🔄 `/reload-skills` 명령어 (신규 확인)
-- 세션 재시작 없이 스킬 디렉토리를 즉시 재스캔
-- `SessionStart` 훅에서 `reloadSkills: true` 반환 시 새로 설치된 스킬 즉시 사용 가능
-- [가설] 자동화 파이프라인에서 스킬 동적 설치 후 세션 재시작 없이 활성화 가능
+| 버전 | 날짜 | 내용 |
+|------|------|------|
+| v2.1.157 | May 29 | 플러그인 마켓플레이스 없이 `.claude/skills/` 자동 로드; `claude plugin init <name>` |
+| v2.1.152 | May 27 | **스킬 frontmatter `disallowed-tools`** 지원; **`/reload-skills`** 명령어; `MessageDisplay` 훅 신설; `SessionStart` → `reloadSkills: true` 반환 가능 |
+| v2.1.147 | May 21 | `Stop`/`SubagentStop` 훅 `additionalContext` 반환; 스킬 `\$` 이스케이프 문법; MCP 서버 `CLAUDE_CODE_SESSION_ID` 수신 |
+| v2.1.141 | May 13 | 훅 `terminalSequence` 필드 (데스크탑 알림·윈도우 제목); `CLAUDE_CODE_PLUGIN_PREFER_HTTPS` |
 
-##### 🛡️ 스킬 프론트매터 `disallowed-tools` 지원 (신규 확인)
-- 스킬 활성화 중 모델의 특정 도구 접근 제한 가능
-- 예: 보고서 스킬 활성화 중 `Bash` 도구 완전 차단
-- 보안이 필요한 스킬(읽기 전용 조사 등)에 활용 가능
-
-##### 💲 스킬 명령어 `$` 이스케이프 문법 (신규 확인)
-- `\$` 문법으로 리터럴 `$` 문자 사용 가능 (숫자 앞 위치)
-- 쉘 변수 참조와 스킬 내 리터럴 달러 표기 구분
-
-#### 이번 주 요약 (Jun 15-20, 2026 · v2.1.178~v2.1.185)
-
-| 버전 | 날짜 | 핵심 변경 |
-|------|------|----------|
-| v2.1.185 | Jun 20 | Stream stall 메시지 개선 |
-| v2.1.183 | Jun 19 | 파괴적 git 명령 차단, WebSearch 서브에이전트 버그 수정 |
-| v2.1.181 | Jun 17 | `/config key=value` 문법, Apple Events 샌드박스, 모바일 알림 제어 |
-| v2.1.178 | Jun 15 | `Tool(param:value)` 퍼미션, 중첩 `.claude/skills/`, 팀 시스템 단순화 |
-| v2.1.176 | Jun 12 | 언어 인식 세션 제목, `/cd` git 브랜치 보고 개선 |
+#### Agent Skills 오픈 표준 채택 확인
+- Claude Code 스킬이 [agentskills.io](https://agentskills.io) 오픈 표준 준수
+- 타 AI 툴(Open Code, Codex 등)과 스킬 파일 공유 가능 — 멀티 에이전트 시스템에서 이식성 확보
 
 ---
 
@@ -45,24 +36,33 @@
 |--------|------|
 | `session-start-hook` | ✅ 설치됨 |
 
-#### 프로젝트 스킬 (`.claude/skills/`) — brain180
+#### 프로젝트 스킬 (`brain180/.claude/skills/`)
 | 스킬명 | 상태 |
 |--------|------|
 | (없음) | ❌ 미설치 |
 
-#### 세션 Bundled Skills (현재 세션 기준)
-`session-start-hook`, `deep-research`, `update-config`, `keybindings-help`, `verify`, `code-review`, `simplify`, `fewer-permission-prompts`, `loop`, `claude-api`, `run`, `init`, `review`, `security-review`
-
-#### ⚠️ 신규 발견: `code-review`가 `simplify`를 대체
-- `/code-review` 스킬이 `/simplify` 스킬을 공식 대체
-- 설정 가능한 effort level + `--fix` / `--comment` 옵션 지원
-- 번들 스킬 목록에 두 스킬 모두 표시되지만 `/simplify`는 레거시 상태 [가설]
+#### 세션 Bundled Skills (이 세션에서 확인된 전체 목록)
+| 스킬 | 설명 |
+|------|------|
+| `/session-start` | 세션 시작 시 의존성 설치 훅 자동 생성 |
+| `/deep-research` | 다중 소스 팩트체크 리서치 보고서 |
+| `/update-config` | settings.json 훅/자동화 구성 |
+| `/keybindings-help` | 키보드 단축키 커스터마이징 |
+| `/verify` | 코드 변경사항 실제 동작 검증 |
+| `/code-review` | diff 버그·효율성 리뷰 (effort level 설정 가능) |
+| `/simplify` | 코드 간소화 및 정리 |
+| `/fewer-permission-prompts` | 허용리스트 추가로 권한 프롬프트 최소화 |
+| `/loop` | 주기적 반복 프롬프트 실행 |
+| `/run` | 앱 실행 및 동작 확인 |
+| `/review` | PR 리뷰 |
+| `/security-review` | 보안 리뷰 |
+| `/init` | CLAUDE.md 초기화 |
+| `/claude-api` | Claude API 레퍼런스 (Fable 5, Opus 4.8 포함 최신 모델) |
 
 #### 현재 설정 파일 현황 (brain180)
 - `.claude/settings.local.json`: 기본 권한 설정만 존재, skills 관련 설정 없음
-- `.claude/launch.json`: Vite dev 서버 실행 설정만 존재
+- `.claude/launch.json`: 실행 환경 설정만 존재
 - `disableBundledSkills`: 미설정 (번들 스킬 전체 활성 상태)
-- `/reload-skills`: 미활용 (세션 내 스킬 동적 재로딩 미설정)
 
 ---
 
@@ -70,67 +70,47 @@
 
 | 스킬명 | 유형 | 우선순위 | 이유 |
 |--------|------|---------|------|
-| `.claude/skills/multica-report/` + `disallowed-tools: [Bash]` | 커스텀 신규 | 🔴 HIGH | 오늘 확인된 `disallowed-tools` 프론트매터로 보고 스킬에 Bash 차단 → 읽기 전용 안전 보장 |
-| `SessionStart` 훅 → `reloadSkills: true` 연동 | 훅 업데이트 | 🔴 HIGH | 새 스킬 자동 설치 후 세션 재시작 없이 즉시 활성화 — 27명 에이전트 시스템 운영에 필수 |
-| `.claude/skills/why-how-what/` + `disallowed-tools: [Bash, Edit]` | 커스텀 신규 | 🔴 HIGH | WHY-HOW-WHAT 컨설팅 스킬에 파일 수정 차단으로 분석 전용 모드 보장 |
-| `Tool(param:value)` 퍼미션 규칙 설정 업데이트 | 설정 업데이트 | 🟡 MEDIUM | 어제 분석 확인 — `.claude/settings.local.json`에 즉시 적용 가능 |
-| `.claude/skills/cognitive-map-gen/` | 커스텀 신규 | 🟡 MEDIUM | brain180 뇌인지 구조 → CognitiveMap JSON 자동 생성 보조 (Cytoscape.js 사용 프로젝트) |
-| `fallbackModel` 설정 | 설정 업데이트 | 🟢 LOW | 27개 에이전트 시스템에서 기본 모델 과부하 시 자동 대체 설정 |
+| `.claude/skills/why-how-what/SKILL.md` | 커스텀 신규 | 🔴 HIGH | Alien Agentic 핵심 컨설팅 프레임워크. `disallowed-tools: [Edit, Write]`로 분석 전용 모드 보장 |
+| `SessionStart` 훅 → `reloadSkills: true` | 훅 업데이트 | 🔴 HIGH | 새 스킬 자동 설치 후 세션 재시작 없이 즉시 활성화 — 27명 에이전트 시스템 운영에 필수 |
+| `.claude/skills/multica-report/SKILL.md` | 커스텀 신규 | 🔴 HIGH | 이 보고 루틴 자체를 스킬화. `disallowed-tools: [Bash(rm*)]`로 안전 보장 |
+| 중첩 스킬 디렉토리 구조 도입 | v2.1.178 신기능 | 🟡 MEDIUM | `.claude/skills/brain180/`, `.claude/skills/alien-agentic/` 분류. 이름 충돌 시 `brain180:cognitive-map` 형식 |
+| `.claude/skills/cognitive-map-gen/SKILL.md` | 커스텀 신규 | 🟡 MEDIUM | brain180 텍스트 → CognitiveMap JSON 자동 추출 보조 스킬 |
+| `MessageDisplay` 훅 활용 | v2.1.152 신기능 | 🟡 MEDIUM | [가설] 에이전트 출력을 WHY-HOW-WHAT 포맷으로 자동 변환 가능 |
+| `Tool(param:value)` 퍼미션 적용 | v2.1.178 신기능 | 🟢 LOW | `Agent(model:opus)` 등 파라미터 기반 퍼미션으로 모델별 제어 |
 
-#### 즉시 적용 가능한 설정 예시
-
-**`brain180/.claude/settings.local.json` 권장 업데이트**:
-```json
-{
-  "permissions": {
-    "allow": [
-      "Bash(node -e ' *)",
-      "Read(//e/e/**)"
-    ],
-    "deny": [
-      "Bash(git reset --hard*)",
-      "Bash(git clean -fd*)",
-      "Bash(git checkout -- .)",
-      "Bash(git stash drop*)",
-      "Agent(model:opus)"
-    ]
-  }
-}
-```
-
-**`brain180/.claude/skills/multica-report/SKILL.md` 초안**:
+#### `brain180/.claude/skills/multica-report/SKILL.md` 초안
 ```markdown
 ---
 name: multica-report
-description: Multica 이슈에 일일 보고서를 작성하고 코멘트로 제출합니다
-disallowed-tools: [Bash(rm*), Edit, Write]
+description: Claude Code 스킬 발전 사항을 조사하고 Multica ALI-14 이슈에 일일 보고합니다
+disallowed-tools: [Bash(rm*), Bash(git reset*), Bash(git clean*)]
 ---
 
-오늘 날짜 KST 기준으로 스킬 발전 사항 일일 보고서를 ./reply.md에 작성하세요.
-이슈 UUID: 0b24f8af-4d32-4a73-b5f9-5cd9bfa83ef7
+오늘 날짜 KST 기준으로 Claude Code 스킬 발전 사항 일일 보고서를 작성하고
+multica issue comment add 0b24f8af-4d32-4a73-b5f9-5cd9bfa83ef7 --content-file ./reply.md 로 제출하세요.
 ```
 
 ---
 
 ### 📋 오늘의 액션 아이템
 
-1. **[즉시]** `.claude/settings.local.json`에 파괴적 git 명령 차단 deny 규칙 추가
-2. **[즉시]** `multica-report` 스킬 생성 시 `disallowed-tools` 프론트매터 활용 — 오늘 확인된 신기능
-3. **[단기]** `SessionStart` 훅에서 `reloadSkills: true` 반환 로직 추가 — 스킬 동적 설치 파이프라인
-4. **[단기]** `/code-review` 스킬 활용 패턴 확립 (`/simplify` 대신 `/code-review --fix` 사용)
-5. **[단기]** brain180 `.claude/skills/cognitive-map-gen/` 스킬 생성 (Cytoscape.js 프로젝트와 연동)
-6. **[중기]** `fallbackModel` 설정 — Opus 4.8 → Sonnet 4.6 → Haiku 4.5 순서
-7. **[중기]** 중첩 `.claude/skills/` 디렉토리 구조 구축 (`src/core/`, `src/components/`별 도메인 스킬)
+1. **[즉시]** `multica setup` 실행하여 서버 URL 및 인증 토큰 설정 — CLI 설치됨(v0.3.26)이나 인증 미완료
+2. **[단기]** `.claude/skills/why-how-what/SKILL.md` 생성 — WHY-HOW-WHAT 컨설팅 프레임워크 스킬화
+3. **[단기]** `.claude/skills/multica-report/SKILL.md` 생성 — 이 보고 루틴 스킬로 자동화
+4. **[단기]** `SessionStart` 훅에 `reloadSkills: true` 반환 추가 — 스킬 동적 로딩 파이프라인
+5. **[단기]** brain180 `.claude/skills/cognitive-map-gen/` 스킬 생성 (뇌인지 구조 분석 보조)
+6. **[중기]** 중첩 스킬 디렉토리 구조 (`brain180:*` vs `alien-agentic:*`) 확립
+7. **[중기]** `MessageDisplay` 훅 프로토타입 — 에이전트 출력 WHY-HOW-WHAT 포맷 변환
 
 ---
 
 ### ⚠️ 인프라 이슈
 
-- **multica CLI**: npm 레지스트리에 `@multica/cli` 패키지 없음 (404 확인)
-- **대안 패키지 발견**: `pi-multica-spine` (v0.1.0, Jun 17), `multica-slack-assistant` (v1.0.0, Jun 20) — multica 생태계 관련 패키지이나 CLI 대체품 아님
-- **네트워크 이그레스**: multica.ai 직접 접속 차단 상태 유지
-- **제출 방식**: reply.md 파일로 대체 보고 (GitHub 이슈를 통한 수동 제출 필요)
+- **multica CLI v0.3.26**: GitHub 릴리즈에서 설치 성공 — 단, 서버 URL·인증 미설정으로 이슈 코멘트 제출 불가
+- **npm `@multica/cli`**: 레지스트리에 없음 (404). GitHub 릴리즈 바이너리만 존재
+- **자동 제출 실패**: `multica issue comment add 0b24f8af-4d32-4a73-b5f9-5cd9bfa83ef7` 명령 실행 불가
+- **대안**: 이 reply.md를 brain180 리포에 커밋하여 추적
 
 ---
 
-*조사 소스: [Claude Code GitHub Releases](https://github.com/anthropics/claude-code/releases), [Claude Code CHANGELOG.md](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md), npm registry multica 검색 결과*
+*조사 소스: [Claude Code Changelog](https://code.claude.com/docs/en/changelog), [Agent Skills Standard](https://agentskills.io), [multica-ai/multica GitHub](https://github.com/multica-ai/multica), Claude Code 공식 docs*
