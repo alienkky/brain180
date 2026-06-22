@@ -918,7 +918,7 @@ export function NodeCanvas({ nodes, edges, onChange, wordBank, readOnly }: Props
   );
 
   return (
-    <div className="flex flex-col h-full gap-2">
+    <div className="flex h-full min-h-[280px] flex-col gap-2 sm:min-h-0">
       {wordBank && wordBank.length > 0 && !readOnly && (
         <div className="flex flex-wrap gap-1.5 p-2 bg-brain-surface-soft rounded-lg border border-brain-border">
           <span className="text-xs text-brain-text-muted self-center mr-1">단어뱅크:</span>
