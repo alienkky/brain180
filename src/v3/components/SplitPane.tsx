@@ -13,6 +13,9 @@ interface Props {
   initial?: number;
   min?: number;
   max?: number;
+  mobileInitial?: number;
+  mobileMin?: number;
+  mobileMax?: number;
   /** localStorage 저장 키 — 없으면 저장 안 함 */
   storageKey?: string;
   /** vertical = 상하 분할 (left=위, right=아래) */
@@ -27,18 +30,25 @@ export function SplitPane({
   initial = 45,
   min = 25,
   max = 70,
+  mobileInitial,
+  mobileMin,
+  mobileMax,
   storageKey,
   direction = "horizontal",
 }: Props) {
   // 모바일에서는 좌우 분할을 항상 상하 적층으로 전환 (좁은 폭 대응)
   const isMobile = useIsMobile();
   const isVertical = isMobile ? true : direction === "vertical";
+  const effectiveInitial = isMobile ? mobileInitial ?? initial : initial;
+  const effectiveMin = isMobile ? mobileMin ?? min : min;
+  const effectiveMax = isMobile ? mobileMax ?? max : max;
+  const effectiveStorageKey = isMobile && storageKey ? `${storageKey}:mobile` : storageKey;
   const [pct, setPct] = useState<number>(() => {
-    if (storageKey) {
-      const saved = Number(localStorage.getItem(storageKey));
-      if (saved >= min && saved <= max) return saved;
+    if (effectiveStorageKey) {
+      const saved = Number(localStorage.getItem(effectiveStorageKey));
+      if (saved >= effectiveMin && saved <= effectiveMax) return saved;
     }
-    return initial;
+    return effectiveInitial;
   });
   const [collapsed, setCollapsed] = useState<Collapsed>("none");
   const layoutRef = useRef<HTMLDivElement>(null);
@@ -68,14 +78,14 @@ export function SplitPane({
       if (size <= 0) return;
       const offset = isVertical ? e.clientY - rect.top : e.clientX - rect.left;
       const next = (offset / size) * 100;
-      setPct(Math.min(max, Math.max(min, next)));
+      setPct(Math.min(effectiveMax, Math.max(effectiveMin, next)));
     };
     const onPointerUp = () => {
       if (!resizingRef.current) return;
       resizingRef.current = false;
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
-      if (storageKey) localStorage.setItem(storageKey, String(Math.round(pctRef.current)));
+      if (effectiveStorageKey) localStorage.setItem(effectiveStorageKey, String(Math.round(pctRef.current)));
     };
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
@@ -85,7 +95,7 @@ export function SplitPane({
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     };
-  }, [min, max, storageKey, isVertical]);
+  }, [effectiveMin, effectiveMax, effectiveStorageKey, isVertical]);
 
   // 접힘 상태에 따른 grid 비율
   const firstSize = collapsed === "first" ? "0%" : collapsed === "second" ? "minmax(0, 1fr)" : `${pct}%`;
