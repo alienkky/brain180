@@ -44,6 +44,11 @@ const Schema = z.object({
   OPENAI_VISION_MODEL: z.string().default("gpt-4.1-mini"),
   GEMINI_API_KEY: z.string().optional(),
 
+  // Robot bridge (ALI-21). Shared secret the 4090 robot-gateway presents as a
+  // bearer token to POST /api/robot/chat. Unset → the robot route returns 503
+  // (feature disabled), so existing deploys are unaffected until a token is set.
+  ROBOT_DEVICE_TOKEN: z.string().optional(),
+
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default("Brain180 <no-reply@brain180.app>"),
 

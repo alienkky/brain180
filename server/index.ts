@@ -67,6 +67,11 @@ app.disable("x-powered-by");
 // CORS runs before json parsing so OPTIONS preflights short-circuit fast
 // and never touch the body parser.
 app.use(corsMiddleware);
+// Robot bridge (ALI-21) carries base64 camera frames, which exceed the global
+// 1mb cap. Parse /api/robot with a larger limit FIRST; the global parser below
+// then short-circuits (express.json skips when req._body is already set), so the
+// 1mb default — and its tighter DoS surface — stays in force for every other route.
+app.use("/api/robot", express.json({ limit: "8mb" }));
 // Stash raw body on the request so /webhooks/toss can HMAC-verify before trusting
 // the parsed JSON. Cheap copy; only fires for routes that send a body.
 app.use(
