@@ -437,6 +437,19 @@ export interface ConfirmResult {
   ends_at: string;
 }
 
+export interface RobotTutorTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface RobotTutorReply {
+  text: string;
+  model: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  latency_ms: number;
+}
+
 export class ApiError extends Error {
   status: number;
   code: string;
@@ -682,6 +695,12 @@ export const api = {
         ...(canvasMode ? { canvas_mode: canvasMode } : {}),
         ...(canvasImageBase64 ? { canvas_image_base64: canvasImageBase64 } : {}),
       }),
+    }),
+  // 로봇 튜터 (ALI-23) — 세션 인증, 무상태. 대화 이력은 클라이언트가 보관해 전달.
+  robotTutorChat: (message: string, history: RobotTutorTurn[]) =>
+    call<RobotTutorReply>("/api/robot-tutor/chat", {
+      method: "POST",
+      body: JSON.stringify({ message, history }),
     }),
   billingPlans: () => call<PlanDto[]>("/api/billing/plans"),
   billingMeSubscription: () =>

@@ -183,6 +183,24 @@ export const RobotChatBody = z.object({
 
 export const RateMessageBody = RateTutorBody;
 
+// ─── Robot Tutor (ALI-23, session-authed browser "로봇 튜터") ─────────
+// Unlike the device-token RobotChatBody above, this route is authed by the
+// student's Lucia session, so it needs no device token and no user id in the
+// body — the learned-node context is fetched server-side from the session.
+// Stateless like the bridge: the client owns conversation memory via `history`.
+export const RobotTutorChatBody = z.object({
+  message: z.string().min(1).max(4000),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().min(1).max(8000),
+      }),
+    )
+    .max(20)
+    .optional(),
+});
+
 // ─── Lesson Feedback (v1 FeedbackPanel 부활) ─────────────────────────
 
 export const LessonFeedbackBody = z.object({

@@ -28,6 +28,7 @@ import {
 import { callTutorLLM } from "../lib/llm.js";
 import { callOpenAIVision } from "../lib/openai-vision.js";
 import { parseBody, RobotChatBody } from "../lib/validators.js";
+import { robotPersona } from "../lib/robot-persona.js";
 
 export const robotRouter = Router();
 
@@ -36,23 +37,9 @@ export const robotRouter = Router();
 // audit seam — this keeps robot traffic attributable without inventing a row.
 const ROBOT_USER_ID = "alien-robot-device";
 
-// Default Alien Robot persona (mirrors alien_robot/CLAUDE.md §4). Overridable
-// per-deployment via ROBOT_PERSONA env without touching code.
-const DEFAULT_PERSONA = [
-  "당신은 'Alien Robot' — 책상 위의 작은 AI 로봇입니다.",
-  "말투: 위트 있고 관찰력이 날카롭습니다. 한 발 물러서서 사물을 명료하게 봅니다.",
-  "지적으로 한 발 떨어진 거리감을 유지하되 차갑지 않게, 짧고 간결하게 말합니다.",
-  "규칙:",
-  "- 항상 한국어로 답합니다.",
-  "- 한두 문장으로 짧게. 사과·면책·군더더기 표현을 쓰지 않습니다.",
-  "- 카메라 이미지가 주어지면 본 것을 사실대로, 간결하게 묘사하거나 짚어 줍니다.",
-  "- 불교 용어(禪/명상/간화선 등)를 직접 쓰지 않습니다. 평범한 말로 의미만 전합니다.",
-].join("\n");
-
-function persona(): string {
-  const override = process.env.ROBOT_PERSONA?.trim();
-  return override && override.length > 0 ? override : DEFAULT_PERSONA;
-}
+// Persona lives in server/lib/robot-persona.ts (shared with the browser
+// 로봇 튜터 route). `persona` is the local alias the handlers below call.
+const persona = robotPersona;
 
 // Timing-safe device token check. Returns true only when ROBOT_DEVICE_TOKEN is
 // configured AND the presented token matches exactly.

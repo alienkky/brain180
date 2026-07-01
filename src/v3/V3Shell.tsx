@@ -10,6 +10,7 @@ import { LibraryScreen } from "./screens/LibraryScreen";
 import { SessionScreen } from "./screens/SessionScreen";
 import { CompletionScreen } from "./screens/CompletionScreen";
 import { AdminShell } from "./admin/AdminShell";
+import { RobotTutor } from "./components/RobotTutor";
 
 type AuthState = "loading" | "unauthenticated" | "authenticated";
 
@@ -19,6 +20,7 @@ export function V3Shell() {
   const [user, setUser] = useState<V3User | null>(null);
   const [screen, setScreen] = useState<V3Screen>("dashboard");
   const [adminMode, setAdminMode] = useState(true); // admin users: true=관리자패널 / false=학습자모드
+  const [robotOpen, setRobotOpen] = useState(false);
 
   const session = useProtocolStore((s) => s.session);
 
@@ -178,6 +180,22 @@ export function V3Shell() {
           </div>
         )}
       </div>
+
+      {/* 로봇 튜터 — 대시보드/라이브러리에서 진입 (세션 화면의 AI 코치와 분리) */}
+      {(screen === "dashboard" || screen === "library") && (
+        robotOpen ? (
+          <RobotTutor onClose={() => setRobotOpen(false)} />
+        ) : (
+          <button
+            onClick={() => setRobotOpen(true)}
+            className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-brain-accent px-4 py-3 text-sm font-medium text-white shadow-lg transition-opacity hover:opacity-90"
+            title="로봇 튜터에게 물어보기"
+          >
+            <span className="text-lg leading-none">🤖</span>
+            <span className="hidden sm:inline">로봇 튜터</span>
+          </button>
+        )
+      )}
     </div>
   );
 }
