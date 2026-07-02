@@ -116,10 +116,45 @@ async function buildLearnedContext(userId: string): Promise<string> {
   ].join("\n");
 }
 
-// Fold the learner's written explanation + this turn's message into one text
-// block, so the model always sees the structure explanation next to the image.
-function composeLearnerTurn(message: string, explanation?: string): string {
+// Fetch and format THIS lesson's admin-authored 1/2/3부 조언 원칙 from
+// lessons.source_meta. These are per-text (각 글마다 다름), so the robot must
+// pull the specific lesson's principles rather than advise generically.
+async function buildLessonPrinciples(lessonId: string): Promise<string> {
+  const rows = await db
+    .select({ sourceMeta: lessons.sourceMeta })
+    .from(lessons)
+    .where(eq(lessons.id, lessonId))
+    .limit(1);
+  const meta =
+    rows[0]?.sourceMeta && typeof rows[0].sourceMeta === "object"
+      ? (rows[0].sourceMeta as Record<string, unknown>)
+      : {};
+  const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const part1 = str(meta.cognitive_structure_analysis);
+  const part2 = str(meta.learner_questions);
+  const part3 = str(meta.tutor_reference_notes);
+  const sections: string[] = [];
+  if (part1) sections.push(`[1부 · 글의 인지구조 원칙]\n${part1}`);
+  if (part2) sections.push(`[2부 · 저자의 대상과 렌즈 원칙]\n${part2}`);
+  if (part3) sections.push(`[3부 · 종합·내재화 원칙]\n${part3}`);
+  if (sections.length === 0) return "";
+  return [
+    "## 이 글(레슨)의 관리자 조언 원칙 (각 글마다 다름 — 이 원칙을 우선 근거로 삼아 조언)",
+    ...sections,
+  ].join("\n\n");
+}
+
+// Fold the learner's structure + written explanation + this turn's message into
+// one text block, so the model always sees the structure and its explanation.
+function composeLearnerTurn(
+  message: string,
+  explanation?: string,
+  structureText?: string,
+): string {
   const parts: string[] = [];
+  if (structureText && structureText.trim().length > 0) {
+    parts.push(`[학생이 그린 구조 (노드·연결)]\n${structureText.trim()}`);
+  }
   if (explanation && explanation.trim().length > 0) {
     parts.push(`[학생이 쓴 구조 설명]\n${explanation.trim()}`);
   }
@@ -141,10 +176,14 @@ robotTutorRouter.post(
     const userName = req.user!.name;
 
     const learnedContext = await buildLearnedContext(userId);
+    const lessonPrinciples = body.lesson_id
+      ? await buildLessonPrinciples(body.lesson_id)
+      : "";
     const systemMessage = [
       robotPersona(),
       "",
       AUTHOR_LENS_FRAME,
+      ...(lessonPrinciples ? ["", lessonPrinciples] : []),
       "",
       `학생 이름: ${userName}`,
       "",
@@ -155,7 +194,11 @@ robotTutorRouter.post(
     const messages: Array<{ role: "user" | "assistant"; content: AnthropicMessageContent }> =
       (body.history ?? []).map((m) => ({ role: m.role, content: m.content }));
 
-    const learnerTurn = composeLearnerTurn(body.message, body.explanation);
+    const learnerTurn = composeLearnerTurn(
+      body.message,
+      body.explanation,
+      body.structure_text,
+    );
 
     // Route to a vision provider only when a structure image is attached AND a
     // vision-capable key exists. Mirrors robot.ts. Kimi cannot see images.

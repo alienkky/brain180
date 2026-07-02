@@ -7,7 +7,7 @@ import { TextBlockSelector } from "../components/TextBlockSelector";
 import { SplitPane } from "../components/SplitPane";
 import { MicButton } from "../components/MicButton";
 import type { BlockWord } from "../types";
-import { toCanvasJson, STAGE_DESCRIPTIONS } from "../types";
+import { toCanvasJson, STAGE_DESCRIPTIONS, structureToText } from "../types";
 
 type Tab = "blocks" | "canvas" | "describe";
 
@@ -134,7 +134,16 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
               🤖 로봇 튜터
             </button>
           </div>
-          {robotOpen && <RobotTutor onClose={() => setRobotOpen(false)} />}
+          {robotOpen && (
+            <RobotTutor
+              onClose={() => setRobotOpen(false)}
+              context={{
+                lessonId: session.lessonId,
+                getStructureText: () => structureToText(stage.nodes, stage.edges),
+                getExplanation: () => stage.description,
+              }}
+            />
+          )}
 
           <div className={`flex flex-1 overflow-hidden ${showAI ? "flex-col md:flex-row" : ""}`}>
             {/* Tab content */}

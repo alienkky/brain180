@@ -6,7 +6,7 @@ import { RobotTutor } from "../components/RobotTutor";
 import { SplitPane } from "../components/SplitPane";
 import { MicButton } from "../components/MicButton";
 import type { V3Node } from "../types";
-import { toCanvasJson, STAGE_DESCRIPTIONS } from "../types";
+import { toCanvasJson, STAGE_DESCRIPTIONS, structureToText } from "../types";
 
 function makeDefaultStage2Nodes(): V3Node[] {
   return [
@@ -123,7 +123,16 @@ export function Stage2Screen({
               🤖 로봇 튜터
             </button>
           </div>
-          {robotOpen && <RobotTutor onClose={() => setRobotOpen(false)} />}
+          {robotOpen && (
+            <RobotTutor
+              onClose={() => setRobotOpen(false)}
+              context={{
+                lessonId: session.lessonId,
+                getStructureText: () => structureToText(stage2.nodes, stage2.edges),
+                getExplanation: () => stage2.description,
+              }}
+            />
+          )}
 
           <div className={`flex flex-1 overflow-hidden ${showAI ? "flex-col md:flex-row" : ""}`}>
             {/* Canvas + description */}

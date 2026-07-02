@@ -36,11 +36,21 @@ function renderMarkdown(text: string): ReactNode[] {
   );
 }
 
-interface Props {
-  onClose: () => void;
+// Optional in-session context. When present, the robot reads the learner's
+// current structure + explanation and this lesson's admin-authored 1/2/3부
+// principles. Getters are read at send time so values are always fresh.
+export interface RobotTutorContext {
+  lessonId?: string;
+  getStructureText?: () => string;
+  getExplanation?: () => string;
 }
 
-export function RobotTutor({ onClose }: Props) {
+interface Props {
+  onClose: () => void;
+  context?: RobotTutorContext;
+}
+
+export function RobotTutor({ onClose, context }: Props) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -52,15 +62,27 @@ export function RobotTutor({ onClose }: Props) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const send = async () => {
-    const text = input.trim();
+  const structureText = context?.getStructureText?.() ?? "";
+  const hasStructure = structureText.trim().length > 0;
+
+  const send = async (override?: string, includeStructure = false) => {
+    const text = (override ?? input).trim();
     if (!text || loadingRef.current) return;
-    setInput("");
+    if (override === undefined) setInput("");
     const history: RobotTutorTurn[] = messages.map((m) => ({ role: m.role, content: m.content }));
     setMessages((prev) => [...prev, { role: "user", content: text }]);
     setLoading(true);
     try {
-      const res = await api.robotTutorChat(text, history);
+      // Attach the learner's structure + explanation only on the "구조 분석"
+      // action, so normal chat turns stay lightweight.
+      const opts = context
+        ? {
+            lessonId: context.lessonId,
+            structureText: includeStructure ? context.getStructureText?.() : undefined,
+            explanation: includeStructure ? context.getExplanation?.() : undefined,
+          }
+        : undefined;
+      const res = await api.robotTutorChat(text, history, opts);
       setMessages((prev) => [...prev, { role: "assistant", content: res.text }]);
     } catch (e) {
       setMessages((prev) => [
@@ -74,6 +96,9 @@ export function RobotTutor({ onClose }: Props) {
       setLoading(false);
     }
   };
+
+  const analyzeStructure = () =>
+    send("내가 그린 구조와 설명을 안진훈 박사님처럼 3단계 저자의 렌즈로 분석하고 조언해줘.", true);
 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex h-[min(560px,80vh)] w-[min(380px,calc(100vw-2rem))] flex-col rounded-2xl border border-brain-border bg-brain-surface shadow-2xl">
@@ -145,6 +170,20 @@ export function RobotTutor({ onClose }: Props) {
         <div ref={bottomRef} />
       </div>
 
+      {/* 구조 분석 요청 — 내가 그린 구조 + 설명을 로봇에게 보내 조언받기 */}
+      {hasStructure && (
+        <div className="border-t border-brain-border px-3 pt-2">
+          <button
+            onClick={analyzeStructure}
+            disabled={loading}
+            className="w-full rounded-lg border border-brain-accent bg-brain-accent-soft px-3 py-2 text-sm font-medium text-brain-accent transition-opacity hover:opacity-90 disabled:opacity-40"
+            title="내가 그린 구조와 설명을 로봇 튜터가 분석해 조언합니다"
+          >
+            🧩 내 구조 · 설명 분석 요청
+          </button>
+        </div>
+      )}
+
       {/* Input */}
       <div className="flex gap-2 border-t border-brain-border p-3">
         <textarea
@@ -160,7 +199,7 @@ export function RobotTutor({ onClose }: Props) {
         <div className="flex flex-col gap-1.5 self-end">
           <MicButton onText={(t) => setInput((v) => (v ? `${v} ${t}` : t))} />
           <button
-            onClick={send}
+            onClick={() => send()}
             disabled={loading || !input.trim()}
             className="rounded-lg bg-brain-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
           >

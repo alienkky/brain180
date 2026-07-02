@@ -5,7 +5,7 @@ import { AICoach } from "../components/AICoach";
 import { RobotTutor } from "../components/RobotTutor";
 import { SplitPane } from "../components/SplitPane";
 import { MicButton } from "../components/MicButton";
-import { STAGE_DESCRIPTIONS, toCanvasJson } from "../types";
+import { STAGE_DESCRIPTIONS, toCanvasJson, structureToText } from "../types";
 import { api } from "../../v2-shell/api";
 
 export function Stage3Screen({
@@ -161,7 +161,16 @@ export function Stage3Screen({
               🤖 로봇 튜터
             </button>
           </div>
-          {robotOpen && <RobotTutor onClose={() => setRobotOpen(false)} />}
+          {robotOpen && (
+            <RobotTutor
+              onClose={() => setRobotOpen(false)}
+              context={{
+                lessonId: session.lessonId,
+                getStructureText: () => structureToText(stage3.nodes, stage3.edges),
+                getExplanation: () => stage3.description,
+              }}
+            />
+          )}
 
           <div className={`flex flex-1 overflow-hidden ${showAI ? "flex-col md:flex-row" : ""}`}>
             {/* Writing area */}

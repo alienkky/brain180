@@ -697,10 +697,26 @@ export const api = {
       }),
     }),
   // 로봇 튜터 (ALI-23) — 세션 인증, 무상태. 대화 이력은 클라이언트가 보관해 전달.
-  robotTutorChat: (message: string, history: RobotTutorTurn[]) =>
+  robotTutorChat: (
+    message: string,
+    history: RobotTutorTurn[],
+    opts?: {
+      imageBase64?: string;
+      explanation?: string;
+      structureText?: string;
+      lessonId?: string;
+    },
+  ) =>
     call<RobotTutorReply>("/api/robot-tutor/chat", {
       method: "POST",
-      body: JSON.stringify({ message, history }),
+      body: JSON.stringify({
+        message,
+        history,
+        image_base64: opts?.imageBase64,
+        explanation: opts?.explanation,
+        structure_text: opts?.structureText,
+        lesson_id: opts?.lessonId,
+      }),
     }),
   billingPlans: () => call<PlanDto[]>("/api/billing/plans"),
   billingMeSubscription: () =>

@@ -198,6 +198,14 @@ export const RobotTutorChatBody = z.object({
   // The learner's own written explanation of their structure (설명내용).
   // Analyzed together with the drawn structure through the 3-stage author-lens.
   explanation: z.string().max(8000).optional(),
+  // In-app structure serialized as text (nodes + edges). The Brain180 canvas has
+  // the structured graph on hand, so it sends this instead of an image — more
+  // reliable than OCR and works with the default text provider (no vision key).
+  structure_text: z.string().max(12_000).optional(),
+  // Which lesson the learner is on, so the route can inject THAT lesson's
+  // admin-authored 1/2/3부 조언 원칙 (differs per text). Optional: the floating
+  // launcher outside a session has no lesson.
+  lesson_id: z.string().uuid().optional(),
   history: z
     .array(
       z.object({
