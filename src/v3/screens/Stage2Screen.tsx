@@ -112,6 +112,7 @@ export function Stage2Screen({
                   ? "border-brain-accent text-brain-accent bg-brain-accent-soft"
                   : "border-transparent text-brain-text-muted hover:text-brain-text"
               }`}
+              title="AI 코치와 자유롭게 대화 (열기/닫기)"
             >
               💬 AI 코치
             </button>
@@ -166,8 +167,9 @@ export function Stage2Screen({
                     onClick={requestFeedback}
                     disabled={!stage2.description.trim()}
                     className="px-4 py-1.5 rounded-lg bg-brain-surface border border-brain-accent text-brain-accent text-sm disabled:opacity-40 hover:bg-brain-accent-soft"
+                    title="작성한 설명을 AI 코치에게 보내 피드백을 받습니다"
                   >
-                    💬 AI 피드백
+                    📝 설명 피드백 받기
                   </button>
                   <button
                     onClick={handleFinish}
