@@ -27,8 +27,9 @@ import {
 } from "../lib/anthropic.js";
 import { callTutorLLM } from "../lib/llm.js";
 import { callOpenAIVision } from "../lib/openai-vision.js";
-import { parseBody, RobotChatBody } from "../lib/validators.js";
+import { parseBody, RobotChatBody, RobotFrameBody } from "../lib/validators.js";
 import { robotPersona } from "../lib/robot-persona.js";
+import { markRobotSeen, putRobotFrame } from "../lib/robot-presence.js";
 
 export const robotRouter = Router();
 
@@ -76,6 +77,10 @@ function requireDeviceToken(req: Request, res: Response, next: NextFunction): vo
     fail(res, 401, "robot_auth_required");
     return;
   }
+  // Any authenticated bridge hit (chat / health probe / frame push) proves the
+  // device is alive right now → feed the presence tracker so the browser can
+  // show connection status.
+  markRobotSeen("bridge");
   next();
 }
 
@@ -176,3 +181,18 @@ robotRouter.get("/health", (_req, res) => {
     : "none";
   ok(res, { status: "ok", text_provider: textProvider, vision_provider: visionProvider });
 });
+
+// ── POST /api/robot/frame ───────────────────────────────────────────
+// The gateway pushes the robot's latest camera/screen frame here (base64 JPEG).
+// brain180 keeps only the most recent one in memory; the browser 로봇 튜터 pulls
+// it via GET /api/robot-tutor/robot-frame. Also doubles as a heartbeat.
+// Body: { image_base64, media_type? }
+robotRouter.post(
+  "/frame",
+  asyncHandler(async (req, res) => {
+    const body = parseBody(RobotFrameBody, req, res);
+    if (!body) return;
+    putRobotFrame(body.image_base64, body.media_type ?? "image/jpeg");
+    ok(res, { stored: true });
+  }),
+);

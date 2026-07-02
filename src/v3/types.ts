@@ -88,6 +88,34 @@ export interface V3User {
   status: string;
 }
 
+// Serializes the learner's structure (nodes + directed edges) to compact text
+// for the 로봇 튜터, which reads the structure and explanation together and
+// advises through the author-lens. Text beats an image here: the in-app graph
+// is already structured, so no OCR and no vision key needed.
+export function structureToText(nodes: V3Node[], edges: V3Edge[]): string {
+  const visible = nodes.filter((n) => n.kind !== "group" && (n.label ?? "").trim() !== "");
+  if (visible.length === 0) return "";
+  const labelOf = new Map(visible.map((n) => [n.id, n.label]));
+  const arrow = (d?: EdgeDir) =>
+    d === "both" ? "↔" : d === "back" ? "←" : d === "none" ? "—" : "→";
+  const nodeLines = visible.map(
+    (n) => `- ${n.label}${n.kind && n.kind !== "concept" ? ` (${n.kind})` : ""}`,
+  );
+  const edgeLines = edges
+    .filter((e) => labelOf.has(e.from) && labelOf.has(e.to))
+    .map(
+      (e) =>
+        `- ${labelOf.get(e.from)} ${arrow(e.dir)} ${labelOf.get(e.to)}${e.label ? ` : ${e.label}` : ""}`,
+    );
+  return [
+    `노드 ${visible.length}개:`,
+    ...nodeLines,
+    "",
+    `연결 ${edgeLines.length}개:`,
+    ...(edgeLines.length ? edgeLines : ["- (아직 연결 없음)"]),
+  ].join("\n");
+}
+
 // Converts V3Node/Edge → CanvasJson for API.
 // 그룹(컴파운드 부모) 노드는 라벨이 비어 서버 검증(label.min(1))을 위반하므로
 // 제외 — group 정보는 v3nodes 에 별도 보존, AI 코치엔 의미 노드만 전달.

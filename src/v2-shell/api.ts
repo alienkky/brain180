@@ -450,6 +450,20 @@ export interface RobotTutorReply {
   latency_ms: number;
 }
 
+export interface RobotStatus {
+  online: boolean;
+  last_seen_ms_ago: number | null;
+  source: string | null;
+  has_frame: boolean;
+  frame_ms_ago: number | null;
+}
+
+export interface RobotFrame {
+  image_base64: string;
+  media_type: string;
+  frame_ms_ago: number;
+}
+
 export class ApiError extends Error {
   status: number;
   code: string;
@@ -697,11 +711,31 @@ export const api = {
       }),
     }),
   // 로봇 튜터 (ALI-23) — 세션 인증, 무상태. 대화 이력은 클라이언트가 보관해 전달.
-  robotTutorChat: (message: string, history: RobotTutorTurn[]) =>
+  robotTutorChat: (
+    message: string,
+    history: RobotTutorTurn[],
+    opts?: {
+      imageBase64?: string;
+      explanation?: string;
+      structureText?: string;
+      lessonId?: string;
+    },
+  ) =>
     call<RobotTutorReply>("/api/robot-tutor/chat", {
       method: "POST",
-      body: JSON.stringify({ message, history }),
+      body: JSON.stringify({
+        message,
+        history,
+        image_base64: opts?.imageBase64,
+        explanation: opts?.explanation,
+        structure_text: opts?.structureText,
+        lesson_id: opts?.lessonId,
+      }),
     }),
+  // 로봇 단말 연결 상태 — 최근 브리지 활동 기반 (온라인/마지막 접속).
+  robotStatus: () => call<RobotStatus>("/api/robot-tutor/robot-status"),
+  // 로봇이 게이트웨이로 올려둔 최신 카메라/화면 프레임 (없으면 404).
+  robotFrame: () => call<RobotFrame>("/api/robot-tutor/robot-frame"),
   billingPlans: () => call<PlanDto[]>("/api/billing/plans"),
   billingMeSubscription: () =>
     call<SubscriptionDto | null>("/api/billing/me/subscription"),

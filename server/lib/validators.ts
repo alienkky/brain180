@@ -181,6 +181,13 @@ export const RobotChatBody = z.object({
   persona_extra: z.string().max(2000).optional(),
 });
 
+// Gateway → brain180 push of the robot's latest camera/screen frame.
+export const RobotFrameBody = z.object({
+  // base64 image (no data: prefix). ~5MB cap mirrors the chat vision frame.
+  image_base64: z.string().min(1).max(5_000_000),
+  media_type: z.enum(["image/jpeg", "image/png", "image/webp"]).optional(),
+});
+
 export const RateMessageBody = RateTutorBody;
 
 // ─── Robot Tutor (ALI-23, session-authed browser "로봇 튜터") ─────────
@@ -190,6 +197,22 @@ export const RateMessageBody = RateTutorBody;
 // Stateless like the bridge: the client owns conversation memory via `history`.
 export const RobotTutorChatBody = z.object({
   message: z.string().min(1).max(4000),
+  // Structure the learner drew, captured as a base64 JPEG (no data: prefix):
+  // the Brain180 canvas (screen capture) or an offline blackboard photo. When
+  // present the route uses a vision provider so the robot actually "sees" the
+  // structure diagram. ~5MB cap mirrors the robot bridge (RobotChatBody).
+  image_base64: z.string().max(5_000_000).optional(),
+  // The learner's own written explanation of their structure (설명내용).
+  // Analyzed together with the drawn structure through the 3-stage author-lens.
+  explanation: z.string().max(8000).optional(),
+  // In-app structure serialized as text (nodes + edges). The Brain180 canvas has
+  // the structured graph on hand, so it sends this instead of an image — more
+  // reliable than OCR and works with the default text provider (no vision key).
+  structure_text: z.string().max(12_000).optional(),
+  // Which lesson the learner is on, so the route can inject THAT lesson's
+  // admin-authored 1/2/3부 조언 원칙 (differs per text). Optional: the floating
+  // launcher outside a session has no lesson.
+  lesson_id: z.string().uuid().optional(),
   history: z
     .array(
       z.object({
