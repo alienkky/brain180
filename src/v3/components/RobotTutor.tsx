@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import type { ReactNode } from "react";
 import { api } from "../../v2-shell/api";
-import type { RobotTutorTurn } from "../../v2-shell/api";
+import type { RobotTutorTurn, RobotStatus } from "../../v2-shell/api";
 import { MicButton } from "./MicButton";
 
 // 로봇 튜터 (ALI-23) — AI 코치와 같은 대화 UX 로 진입하는 또 하나의 튜터 페르소나.
@@ -65,7 +65,32 @@ export function RobotTutor({ onClose, context }: Props) {
   const structureText = context?.getStructureText?.() ?? "";
   const hasStructure = structureText.trim().length > 0;
 
-  const send = async (override?: string, includeStructure = false) => {
+  // 로봇 단말 연결 상태 — 8초마다 폴링.
+  const [robot, setRobot] = useState<RobotStatus | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const poll = () => {
+      api
+        .robotStatus()
+        .then((s) => {
+          if (alive) setRobot(s);
+        })
+        .catch(() => {
+          if (alive) setRobot(null);
+        });
+    };
+    poll();
+    const t = setInterval(poll, 8000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, []);
+
+  const send = async (
+    override?: string,
+    opts?: { includeStructure?: boolean; imageBase64?: string },
+  ) => {
     const text = (override ?? input).trim();
     if (!text || loadingRef.current) return;
     if (override === undefined) setInput("");
@@ -75,14 +100,13 @@ export function RobotTutor({ onClose, context }: Props) {
     try {
       // Attach the learner's structure + explanation only on the "구조 분석"
       // action, so normal chat turns stay lightweight.
-      const opts = context
-        ? {
-            lessonId: context.lessonId,
-            structureText: includeStructure ? context.getStructureText?.() : undefined,
-            explanation: includeStructure ? context.getExplanation?.() : undefined,
-          }
-        : undefined;
-      const res = await api.robotTutorChat(text, history, opts);
+      const chatOpts = {
+        lessonId: context?.lessonId,
+        structureText: opts?.includeStructure ? context?.getStructureText?.() : undefined,
+        explanation: opts?.includeStructure ? context?.getExplanation?.() : undefined,
+        imageBase64: opts?.imageBase64,
+      };
+      const res = await api.robotTutorChat(text, history, chatOpts);
       setMessages((prev) => [...prev, { role: "assistant", content: res.text }]);
     } catch (e) {
       setMessages((prev) => [
@@ -98,7 +122,29 @@ export function RobotTutor({ onClose, context }: Props) {
   };
 
   const analyzeStructure = () =>
-    send("내가 그린 구조와 설명을 안진훈 박사님처럼 3단계 저자의 렌즈로 분석하고 조언해줘.", true);
+    send("내가 그린 구조와 설명을 안진훈 박사님처럼 3단계 저자의 렌즈로 분석하고 조언해줘.", {
+      includeStructure: true,
+    });
+
+  // 로봇이 지금 보고 있는 화면(카메라 프레임)을 가져와 바로 분석 요청.
+  const pullRobotScreen = async () => {
+    if (loadingRef.current) return;
+    setLoading(true);
+    try {
+      const frame = await api.robotFrame();
+      setLoading(false);
+      await send("로봇이 지금 보고 있는 화면을 안진훈 박사님처럼 읽고 조언해줘.", {
+        imageBase64: frame.image_base64,
+      });
+    } catch (e) {
+      setLoading(false);
+      const msg =
+        e instanceof Error && /404|no_frame/.test(e.message)
+          ? "🤖 로봇이 아직 화면을 보내지 않았습니다. 로봇이 연결되어 화면을 전송 중인지 확인하세요."
+          : `⚠️ 로봇 화면을 가져오지 못했습니다. (${e instanceof Error ? e.message : "오류"})`;
+      setMessages((prev) => [...prev, { role: "assistant", content: msg }]);
+    }
+  };
 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex h-[min(560px,80vh)] w-[min(380px,calc(100vw-2rem))] flex-col rounded-2xl border border-brain-border bg-brain-surface shadow-2xl">
@@ -108,7 +154,16 @@ export function RobotTutor({ onClose, context }: Props) {
           <span className="text-lg">🤖</span>
           <div>
             <div className="text-sm font-semibold text-brain-text">로봇 튜터</div>
-            <div className="text-[11px] text-brain-text-muted">학습한 내용을 바탕으로 조언해요</div>
+            <div className="flex items-center gap-1 text-[11px]">
+              <span
+                className={`inline-block h-1.5 w-1.5 rounded-full ${
+                  robot?.online ? "bg-green-500" : "bg-brain-text-soft"
+                }`}
+              />
+              <span className="text-brain-text-muted">
+                {robot?.online ? "로봇 연결됨" : "로봇 연결 안 됨"}
+              </span>
+            </div>
           </div>
         </div>
         <button
@@ -170,16 +225,30 @@ export function RobotTutor({ onClose, context }: Props) {
         <div ref={bottomRef} />
       </div>
 
-      {/* 구조 분석 요청 — 내가 그린 구조 + 설명을 로봇에게 보내 조언받기 */}
-      {hasStructure && (
-        <div className="border-t border-brain-border px-3 pt-2">
+      {/* 액션 — 내 구조 분석 / 로봇 화면 캡처 */}
+      {(hasStructure || robot) && (
+        <div className="flex flex-col gap-1.5 border-t border-brain-border px-3 pt-2">
+          {hasStructure && (
+            <button
+              onClick={analyzeStructure}
+              disabled={loading}
+              className="w-full rounded-lg border border-brain-accent bg-brain-accent-soft px-3 py-2 text-sm font-medium text-brain-accent transition-opacity hover:opacity-90 disabled:opacity-40"
+              title="내가 그린 구조와 설명을 로봇 튜터가 분석해 조언합니다"
+            >
+              🧩 내 구조 · 설명 분석 요청
+            </button>
+          )}
           <button
-            onClick={analyzeStructure}
-            disabled={loading}
-            className="w-full rounded-lg border border-brain-accent bg-brain-accent-soft px-3 py-2 text-sm font-medium text-brain-accent transition-opacity hover:opacity-90 disabled:opacity-40"
-            title="내가 그린 구조와 설명을 로봇 튜터가 분석해 조언합니다"
+            onClick={pullRobotScreen}
+            disabled={loading || !robot?.online}
+            className="w-full rounded-lg border border-brain-border bg-brain-surface px-3 py-2 text-sm font-medium text-brain-text transition-opacity hover:opacity-90 disabled:opacity-40"
+            title={
+              robot?.online
+                ? "로봇이 지금 보고 있는 화면을 가져와 분석합니다"
+                : "로봇이 연결되어 있지 않아 화면을 가져올 수 없습니다"
+            }
           >
-            🧩 내 구조 · 설명 분석 요청
+            📷 로봇 화면 캡처 · 분석
           </button>
         </div>
       )}

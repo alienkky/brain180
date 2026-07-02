@@ -450,6 +450,20 @@ export interface RobotTutorReply {
   latency_ms: number;
 }
 
+export interface RobotStatus {
+  online: boolean;
+  last_seen_ms_ago: number | null;
+  source: string | null;
+  has_frame: boolean;
+  frame_ms_ago: number | null;
+}
+
+export interface RobotFrame {
+  image_base64: string;
+  media_type: string;
+  frame_ms_ago: number;
+}
+
 export class ApiError extends Error {
   status: number;
   code: string;
@@ -718,6 +732,10 @@ export const api = {
         lesson_id: opts?.lessonId,
       }),
     }),
+  // 로봇 단말 연결 상태 — 최근 브리지 활동 기반 (온라인/마지막 접속).
+  robotStatus: () => call<RobotStatus>("/api/robot-tutor/robot-status"),
+  // 로봇이 게이트웨이로 올려둔 최신 카메라/화면 프레임 (없으면 404).
+  robotFrame: () => call<RobotFrame>("/api/robot-tutor/robot-frame"),
   billingPlans: () => call<PlanDto[]>("/api/billing/plans"),
   billingMeSubscription: () =>
     call<SubscriptionDto | null>("/api/billing/me/subscription"),

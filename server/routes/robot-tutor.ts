@@ -38,6 +38,7 @@ import { callOpenAIVision } from "../lib/openai-vision.js";
 import { hasFeature } from "../lib/env.js";
 import { parseBody, RobotTutorChatBody } from "../lib/validators.js";
 import { robotPersona } from "../lib/robot-persona.js";
+import { getRobotPresence, getRobotFrame } from "../lib/robot-presence.js";
 import {
   requireApprovedUser,
   requireAuth,
@@ -257,3 +258,27 @@ robotTutorRouter.post(
     }
   }),
 );
+
+// ── GET /api/robot-tutor/robot-status ───────────────────────────────
+// Is the physical robot connected right now? Derived from recent device-token
+// bridge activity (chat / health probe / frame push). online=false until the
+// gateway sends traffic. Used by the browser to show a 🟢/⚫ indicator.
+robotTutorRouter.get("/robot-status", (_req, res) => {
+  ok(res, getRobotPresence());
+});
+
+// ── GET /api/robot-tutor/robot-frame ────────────────────────────────
+// Pull the robot's latest camera/screen frame (pushed by the gateway to
+// POST /api/robot/frame). 404 when the robot has not sent a frame yet.
+robotTutorRouter.get("/robot-frame", (_req, res) => {
+  const frame = getRobotFrame();
+  if (!frame) {
+    fail(res, 404, "no_frame", { message: "로봇이 아직 화면을 보내지 않았습니다" });
+    return;
+  }
+  ok(res, {
+    image_base64: frame.dataBase64,
+    media_type: frame.mediaType,
+    frame_ms_ago: Date.now() - frame.at,
+  });
+});

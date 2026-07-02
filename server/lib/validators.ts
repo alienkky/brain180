@@ -181,6 +181,13 @@ export const RobotChatBody = z.object({
   persona_extra: z.string().max(2000).optional(),
 });
 
+// Gateway → brain180 push of the robot's latest camera/screen frame.
+export const RobotFrameBody = z.object({
+  // base64 image (no data: prefix). ~5MB cap mirrors the chat vision frame.
+  image_base64: z.string().min(1).max(5_000_000),
+  media_type: z.enum(["image/jpeg", "image/png", "image/webp"]).optional(),
+});
+
 export const RateMessageBody = RateTutorBody;
 
 // ─── Robot Tutor (ALI-23, session-authed browser "로봇 튜터") ─────────
