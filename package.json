@@ -23,6 +23,7 @@
     "db:studio": "drizzle-kit studio",
     "smoke:tutor": "tsx --env-file=.env server/db/smoke-tutor.ts",
     "smoke:http": "tsx --env-file=.env server/db/smoke-http.ts",
+    "smoke:robot": "tsx --env-file=.env server/db/smoke-robot.ts",
     "test:unit": "vitest run tests/unit",
     "test:e2e": "vitest run tests/e2e",
     "test": "vitest run"

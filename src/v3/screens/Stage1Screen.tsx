@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useProtocolStore } from "../store/useProtocolStore";
 import { NodeCanvas } from "../components/NodeCanvas";
 import { AICoach } from "../components/AICoach";
+import { RobotTutor } from "../components/RobotTutor";
 import { TextBlockSelector } from "../components/TextBlockSelector";
 import { SplitPane } from "../components/SplitPane";
 import { MicButton } from "../components/MicButton";
@@ -24,6 +25,7 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
 
   const [tab, setTab] = useState<Tab>("blocks");
   const [showAI, setShowAI] = useState(false);
+  const [robotOpen, setRobotOpen] = useState(false);
   const [aiSubmit, setAiSubmit] = useState<{ text: string; nonce: number } | undefined>();
   // 칩 클릭 시 본문에서 강조할 블록 id
   const [highlightedBlockId, setHighlightedBlockId] = useState<string | null>(null);
@@ -124,7 +126,15 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
             >
               💬 AI 코치
             </button>
+            <button
+              onClick={() => setRobotOpen(true)}
+              className="px-4 py-2.5 text-xs font-medium border-b-2 border-transparent text-brain-text-muted transition-colors hover:text-brain-text"
+              title="로봇 튜터에게 물어보기"
+            >
+              🤖 로봇 튜터
+            </button>
           </div>
+          {robotOpen && <RobotTutor onClose={() => setRobotOpen(false)} />}
 
           <div className={`flex flex-1 overflow-hidden ${showAI ? "flex-col md:flex-row" : ""}`}>
             {/* Tab content */}

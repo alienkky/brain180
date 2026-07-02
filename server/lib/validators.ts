@@ -161,7 +161,45 @@ export const RateTutorBody = z.object({
   feedback: z.string().trim().max(500).optional(),
 });
 
+// ─── Robot bridge (ALI-21, alien_robot ↔ Brain180) ───────────────────
+// Stateless device chat: the 4090 robot-gateway owns conversation memory and
+// passes prior turns as `history`. `image_base64` carries a camera JPEG frame.
+export const RobotChatBody = z.object({
+  message: z.string().min(1).max(4000),
+  // base64 JPEG camera frame (no data: prefix). ~5MB cap mirrors tutor vision.
+  image_base64: z.string().max(5_000_000).optional(),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().min(1).max(8000),
+      }),
+    )
+    .max(20)
+    .optional(),
+  // Optional per-turn persona addendum appended after the base robot persona.
+  persona_extra: z.string().max(2000).optional(),
+});
+
 export const RateMessageBody = RateTutorBody;
+
+// ─── Robot Tutor (ALI-23, session-authed browser "로봇 튜터") ─────────
+// Unlike the device-token RobotChatBody above, this route is authed by the
+// student's Lucia session, so it needs no device token and no user id in the
+// body — the learned-node context is fetched server-side from the session.
+// Stateless like the bridge: the client owns conversation memory via `history`.
+export const RobotTutorChatBody = z.object({
+  message: z.string().min(1).max(4000),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().min(1).max(8000),
+      }),
+    )
+    .max(20)
+    .optional(),
+});
 
 // ─── Lesson Feedback (v1 FeedbackPanel 부활) ─────────────────────────
 
