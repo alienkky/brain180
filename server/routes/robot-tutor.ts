@@ -1,19 +1,26 @@
 // Owner: alien_robot/infra-engineer (남기준), ALI-23.
 //
 // Browser "로봇 튜터" — a second tutor persona for logged-in Brain180 students.
-// It reuses the Alien Robot persona (server/lib/robot-persona.ts) but, unlike the
-// device-token bridge in robot.ts, this route:
+// Stands in for 안진훈 박사: the robot reads the STRUCTURE the learner drew
+// (칠판/캔버스 구조도) together with the learner's written explanation (설명내용)
+// and advises through the 3-stage author-lens frame (3단계 저자의 렌즈):
+//   1부 — 글의 내용/인지구조 이해
+//   2부 — 저자의 대상과 렌즈 파악 (저자가 무엇을 어떤 관점으로 보았나)
+//   3부 — 렌즈 내재화 (학생이 그 렌즈로 스스로 사고를 재구성)
+// The writer's *intent* seen through the author's lens comes first — the earlier
+// 인지/가치/시간 3축 score was only the initial AI proposal, not the advice frame.
+//
+// Unlike the device-token bridge in robot.ts, this route:
 //   - is authed by the student's Lucia session (cookie), so it knows WHO is asking.
-//   - injects the student's "학습된 노드" (v1 = the lessons they have practiced,
-//     grouped by module) into the system prompt so the robot can confirm what the
-//     student has learned and advise on what to do next.
+//   - "sees" the drawn structure: when image_base64 is present it routes to a
+//     vision provider (the existing Anthropic/OpenAI providers — 이전 프로바이더 —
+//     not the future 4090 vLLM). Kimi (default text provider) cannot see images.
+//   - injects the student's studied lessons so advice is grounded in what they did.
 //   - is stateless: the client owns conversation memory and passes `history`.
 //     No DB rows are written (the LLM wrapper still logs 1 api_usage_log row).
 //
-// v1 note on "학습된 노드": Brain180 has no single "completed curriculum node"
-// table. The practical proxy is learning_sessions → lessons → modules (the topics
-// the student has actually worked on). This is the concept-of-proof source; a
-// richer signal (canvas node mastery, per-stage completion) is a follow-up.
+// Same structure image → same author-lens advice whether the frame was captured
+// from the Brain180 canvas or photographed off an MSC offline blackboard.
 
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
@@ -21,8 +28,14 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { learningSessions, lessons, modules } from "../db/schema.js";
 import { ok, fail } from "../lib/envelope.js";
-import { UpstreamError, type AnthropicMessageContent } from "../lib/anthropic.js";
+import {
+  UpstreamError,
+  callAnthropic,
+  type AnthropicMessageContent,
+} from "../lib/anthropic.js";
 import { callTutorLLM } from "../lib/llm.js";
+import { callOpenAIVision } from "../lib/openai-vision.js";
+import { hasFeature } from "../lib/env.js";
 import { parseBody, RobotTutorChatBody } from "../lib/validators.js";
 import { robotPersona } from "../lib/robot-persona.js";
 import {
@@ -38,6 +51,23 @@ robotTutorRouter.use(requireAuth, requirePasswordFresh, requireApprovedUser);
 // Cap the number of studied lessons folded into the prompt so a heavy user does
 // not blow the context. Most recent first.
 const MAX_LEARNED_LESSONS = 40;
+
+// The 안진훈-박사식 advice frame. Instructs the model to read the learner's
+// structure diagram + explanation through the 3-stage author-lens, prioritising
+// the writer's intent over surface content, and to guide rather than hand answers.
+const AUTHOR_LENS_FRAME = [
+  "## 조언 방식 — 안진훈 박사식 '3단계 저자의 렌즈'",
+  "너는 안진훈 박사를 대신해 학생에게 조언하는 튜터다. 학생이 그린 구조도(노드·연결)와",
+  "학생이 쓴 설명을 함께 읽고, 아래 순서로 '저자의 렌즈'를 적용해 조언한다.",
+  "- 1부(내용·인지구조): 학생 구조도가 글의 핵심 개념과 그 사이 관계를 제대로 잡았는지 본다.",
+  "- 2부(저자의 대상과 렌즈): 저자가 '무엇을' '어떤 관점(렌즈)'으로 보았는지, 학생 구조가",
+  "  그 저자의 의도를 향하고 있는지 짚는다. 내용 요약이 아니라 '저자가 어떻게 생각했는가'를 본다.",
+  "- 3부(렌즈 내재화): 학생이 그 렌즈로 스스로 사고를 재구성하도록 다음 한 걸음을 제안한다.",
+  "규칙:",
+  "- 정답을 그대로 주지 말고, 학생이 스스로 도달하도록 질문과 힌트로 유도한다.",
+  "- 구조도에서 실제로 보이는 것(노드/연결/빠진 고리)을 근거로 구체적으로 말한다.",
+  "- 글쓴이의 의도를 보는 것이 먼저다. 표면 내용 지적에 머물지 않는다.",
+].join("\n");
 
 function asyncHandler(
   fn: (req: Request, res: Response) => Promise<unknown>,
@@ -86,8 +116,19 @@ async function buildLearnedContext(userId: string): Promise<string> {
   ].join("\n");
 }
 
+// Fold the learner's written explanation + this turn's message into one text
+// block, so the model always sees the structure explanation next to the image.
+function composeLearnerTurn(message: string, explanation?: string): string {
+  const parts: string[] = [];
+  if (explanation && explanation.trim().length > 0) {
+    parts.push(`[학생이 쓴 구조 설명]\n${explanation.trim()}`);
+  }
+  parts.push(`[학생의 말]\n${message}`);
+  return parts.join("\n\n");
+}
+
 // ── POST /api/robot-tutor/chat ──────────────────────────────────────
-// Body: { message, history? }
+// Body: { message, image_base64?, explanation?, history? }
 // Returns: { text, model, input_tokens, output_tokens, latency_ms }
 robotTutorRouter.post(
   "/chat",
@@ -103,6 +144,8 @@ robotTutorRouter.post(
     const systemMessage = [
       robotPersona(),
       "",
+      AUTHOR_LENS_FRAME,
+      "",
       `학생 이름: ${userName}`,
       "",
       learnedContext,
@@ -111,10 +154,50 @@ robotTutorRouter.post(
     // Prior turns supplied by the client (it owns memory; this route is stateless).
     const messages: Array<{ role: "user" | "assistant"; content: AnthropicMessageContent }> =
       (body.history ?? []).map((m) => ({ role: m.role, content: m.content }));
-    messages.push({ role: "user", content: body.message });
+
+    const learnerTurn = composeLearnerTurn(body.message, body.explanation);
+
+    // Route to a vision provider only when a structure image is attached AND a
+    // vision-capable key exists. Mirrors robot.ts. Kimi cannot see images.
+    const imageB64 = body.image_base64;
+    const visionProvider = imageB64
+      ? hasFeature("anthropic")
+        ? "anthropic"
+        : hasFeature("openai")
+        ? "openai"
+        : null
+      : null;
+
+    if (imageB64 && visionProvider) {
+      messages.push({
+        role: "user",
+        content: [
+          {
+            type: "image",
+            source: { type: "base64", media_type: "image/jpeg", data: imageB64 },
+          },
+          { type: "text", text: learnerTurn },
+        ],
+      });
+    } else if (imageB64) {
+      // No vision key — keep the turn alive but tell the model it is blind.
+      messages.push({
+        role: "user",
+        content: `[학생이 그린 구조 이미지가 첨부됐지만 현재 비전 모델이 설정되지 않아 볼 수 없습니다. 설명 텍스트만으로 조언하세요.]\n\n${learnerTurn}`,
+      });
+    } else {
+      messages.push({ role: "user", content: learnerTurn });
+    }
 
     try {
-      const result = await callTutorLLM({ userId, system: systemMessage, messages });
+      let result;
+      if (visionProvider === "anthropic") {
+        result = await callAnthropic({ userId, system: systemMessage, messages });
+      } else if (visionProvider === "openai") {
+        result = await callOpenAIVision({ userId, system: systemMessage, messages });
+      } else {
+        result = await callTutorLLM({ userId, system: systemMessage, messages });
+      }
       ok(res, {
         text: result.text,
         model: result.model,

@@ -190,6 +190,14 @@ export const RateMessageBody = RateTutorBody;
 // Stateless like the bridge: the client owns conversation memory via `history`.
 export const RobotTutorChatBody = z.object({
   message: z.string().min(1).max(4000),
+  // Structure the learner drew, captured as a base64 JPEG (no data: prefix):
+  // the Brain180 canvas (screen capture) or an offline blackboard photo. When
+  // present the route uses a vision provider so the robot actually "sees" the
+  // structure diagram. ~5MB cap mirrors the robot bridge (RobotChatBody).
+  image_base64: z.string().max(5_000_000).optional(),
+  // The learner's own written explanation of their structure (설명내용).
+  // Analyzed together with the drawn structure through the 3-stage author-lens.
+  explanation: z.string().max(8000).optional(),
   history: z
     .array(
       z.object({
