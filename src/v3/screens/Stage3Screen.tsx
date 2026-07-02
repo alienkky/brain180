@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useProtocolStore } from "../store/useProtocolStore";
 import { NodeCanvas } from "../components/NodeCanvas";
 import { AICoach } from "../components/AICoach";
+import { RobotTutor } from "../components/RobotTutor";
 import { SplitPane } from "../components/SplitPane";
 import { MicButton } from "../components/MicButton";
 import { STAGE_DESCRIPTIONS, toCanvasJson } from "../types";
@@ -21,6 +22,7 @@ export function Stage3Screen({
   const { setStage3Writing, addMessage, incrementIteration, markComplete, persistSnapshot } = useProtocolStore();
 
   const [showAI, setShowAI] = useState(false);
+  const [robotOpen, setRobotOpen] = useState(false);
   const [aiSubmit, setAiSubmit] = useState<{ text: string; nonce: number } | undefined>();
   const [refTab, setRefTab] = useState<1 | 2>(1);
 
@@ -151,7 +153,15 @@ export function Stage3Screen({
             >
               💬 AI 코치
             </button>
+            <button
+              onClick={() => setRobotOpen(true)}
+              className="px-4 py-2.5 text-xs font-medium border-b-2 border-transparent text-brain-text-muted transition-colors hover:text-brain-text"
+              title="로봇 튜터에게 물어보기"
+            >
+              🤖 로봇 튜터
+            </button>
           </div>
+          {robotOpen && <RobotTutor onClose={() => setRobotOpen(false)} />}
 
           <div className={`flex flex-1 overflow-hidden ${showAI ? "flex-col md:flex-row" : ""}`}>
             {/* Writing area */}
