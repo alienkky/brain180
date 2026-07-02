@@ -63,6 +63,9 @@ export function Stage3Screen({
       <SplitPane
         storageKey="brain180-v3-split-stage3"
         initial={35}
+        mobileInitial={34}
+        mobileMin={22}
+        mobileMax={48}
         left={
           <>
           <div className="flex border-b border-brain-border">

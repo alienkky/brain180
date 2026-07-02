@@ -74,6 +74,9 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
       <SplitPane
         storageKey="brain180-v3-split-stage1"
         initial={45}
+        mobileInitial={30}
+        mobileMin={18}
+        mobileMax={42}
         left={
           <>
             <div className="px-4 py-2 border-b border-brain-border flex items-center justify-between">
@@ -225,6 +228,9 @@ export function Stage1Screen({ onNext }: { onNext: () => void }) {
                   initial={45}
                   min={20}
                   max={75}
+                  mobileInitial={60}
+                  mobileMin={42}
+                  mobileMax={72}
                   left={
                     <div className="h-full min-h-0 p-3 flex flex-col">
                       <div className="shrink-0 pb-1 text-[11px] text-brain-text-soft">

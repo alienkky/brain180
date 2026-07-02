@@ -67,6 +67,9 @@ export function Stage2Screen({
       <SplitPane
         storageKey="brain180-v3-split-stage2"
         initial={35}
+        mobileInitial={30}
+        mobileMin={18}
+        mobileMax={42}
         left={
           <>
             <div className="px-4 py-2 border-b border-brain-border">
