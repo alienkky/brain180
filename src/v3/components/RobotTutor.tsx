@@ -103,7 +103,7 @@ export function RobotTutor({ onClose }: Props) {
           </div>
         )}
         {messages.map((m, i) => (
-          <div key={i} className={`flex gap-2 ${m.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
+          <div key={i} className={`flex min-w-0 gap-2 ${m.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
             <div
               className={`mt-1 h-fit shrink-0 rounded-full px-1.5 py-0.5 text-xs font-medium ${
                 m.role === "assistant"
@@ -114,10 +114,10 @@ export function RobotTutor({ onClose }: Props) {
               {m.role === "assistant" ? "🤖" : "나"}
             </div>
             <div
-              className={`max-w-[85%] rounded-xl px-3 py-2 text-sm leading-relaxed ${
+              className={`min-w-0 max-w-[85%] whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-xl px-3 py-2 text-sm leading-relaxed ${
                 m.role === "assistant"
                   ? "border border-brain-border bg-brain-surface text-brain-text"
-                  : "border border-brain-border bg-brain-accent-soft text-brain-text whitespace-pre-wrap"
+                  : "border border-brain-border bg-brain-accent-soft text-brain-text"
               }`}
             >
               {m.role === "assistant" ? renderMarkdown(m.content) : m.content}
