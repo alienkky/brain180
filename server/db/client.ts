@@ -14,6 +14,17 @@ export function getPool(): pg.Pool {
     max: NODE_ENV === "production" ? 10 : 5,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 5_000,
+    // Neon's pooler (PgBouncer) recycles idle connections and Neon compute
+    // autosuspends; TCP keepalive keeps borrowed sockets from silently dying.
+    keepAlive: true,
+  });
+  // CRITICAL: without this listener, an error on an *idle* pooled client
+  // (Neon dropping a recycled/autosuspended connection) is emitted with no
+  // handler and Node treats it as an uncaught exception — crashing the whole
+  // process (dumps the raw pg Client + "Node.js vXX", then Railway restarts).
+  // Log and let the pool evict the dead client; live queries just reconnect.
+  pool.on("error", (err) => {
+    console.error("[db] idle pool client error (non-fatal, connection evicted):", err.message);
   });
   return pool;
 }
