@@ -1,94 +1,66 @@
-## 🛸 스킬 발전 사항 일일 보고 — 2026년 6월 30일 KST
-
-> **보고 주체**: Alien Agentic subagent-builder  
-> **대상 이슈**: ALI-14 (Multica 이슈 ID: `0b24f8af-4d32-4a73-b5f9-5cd9bfa83ef7`)  
-> **비고**: multica CLI **v0.3.33 설치 완료** (GitHub 릴리즈에서 직접 다운로드) — 그러나 `mul_...` PAT 미설정으로 **5회 연속** 이슈 직접 코멘트 불가. GitHub 파일 대체 보고.
-
----
+## 🛸 스킬 발전 사항 일일 보고 — 2026-07-06 KST
 
 ### 📡 최신 동향
 
-#### Claude Code 릴리즈 현황 (2026-06-27 ~ 2026-06-30)
+**Claude Code 스킬 시스템 주요 업데이트 (2026년 상반기)**
 
-| 버전 | 일자 | 상태 |
-|------|------|------|
-| **v2.1.197** | 2026-06-30 (오늘) | 🔴 오늘 배포 — Claude Sonnet 5 기본 모델로 전환 |
-| **v2.1.196** | 2026-06-29 (어제) | 조직 기본 모델, 성능 개선 |
-| v2.1.195 | 2026-06-26 | 지난 보고 기준선 |
+1. **커맨드와 스킬 통합 완료** — `.claude/commands/*.md`와 `.claude/skills/*/SKILL.md`가 동일한 `/slash-command` 인터페이스로 통합됨. 기존 commands 파일은 그대로 동작하지만, 추가 기능(supporting files, frontmatter 제어)을 위해 skills 디렉토리 사용 권장 (v2.1.x)
 
----
+2. **스킬 체이닝 지원** — `/skill-a /skill-b do XYZ` 형태로 최대 6개 스킬을 한 번에 로드 가능 (v2.1.199)
 
-#### v2.1.197 (2026-06-30 — 오늘)
+3. **신규 번들 스킬 추가**:
+   - `/dataviz` — 차트/그래프/대시보드 디자인 가이드 스킬 (v2.1.198)
+   - `/run` — 앱 실행 및 변경사항 검증 스킬 (v2.1.145)
+   - `/verify` — 코드 변경이 실제로 동작하는지 앱을 구동해 검증 (v2.1.145)
+   - `/run-skill-generator` — 프로젝트별 실행 레시피를 `.claude/skills/run-<name>/`에 저장 (v2.1.145)
+   - `/simplify` — 버그 탐색 없이 코드 정리/단순화만 수행 (v2.1.154, `/code-review`에서 분리)
 
-| 항목 | 내용 |
-|------|------|
-| 🤖 **Claude Sonnet 5 기본 모델 전환** | Claude Code의 기본 모델이 Sonnet 5로 변경. 네이티브 **1M 토큰 컨텍스트 윈도우** 지원 |
-| 💰 **프로모션 가격** | $2 / $10 per Mtok (input/output) — 2026년 8월 31일까지 프로모션 적용 |
-| ⬆️ **업데이트 필수** | v2.1.197 이상으로 업데이트해야 Sonnet 5 접근 가능 |
+4. **`/reload-skills` 커맨드 추가** — 세션 재시작 없이 스킬 디렉토리 재스캔 (v2.1.152)
 
-> **[가설]** 1M 토큰 컨텍스트 윈도우가 기본 활성화되면 brain180의 전체 텍스트 코퍼스를 단일 세션에서 처리 가능 — CognitiveMap 생성 워크플로 대폭 단순화 예상.
+5. **스킬 frontmatter 신규 필드**:
+   - `model`: 스킬 실행 시 모델 오버라이드
+   - `effort`: 스킬 실행 시 추론 강도 설정 (`low`~`max`)
+   - `hooks`: 스킬 라이프사이클에 훅 연결
+   - `paths`: 특정 파일 경로에서만 스킬 자동 활성화
+   - `disallowed-tools`: 스킬 실행 중 사용 불가 도구 지정
+   - `disable-model-invocation`: 자동 호출 및 scheduled task 실행 방지 (v2.1.196)
 
----
+6. **스킬 표준화** — Claude Code 스킬이 [Agent Skills](https://agentskills.io) 오픈 스탠다드 채택. 다른 AI 도구와 스킬 공유 가능
 
-#### v2.1.196 (2026-06-29)
+7. **스킬 마켓플레이스 확산** — 커뮤니티 스킬 30,000+개 이상 (claudeskills.info 등)
 
-| 항목 | 내용 |
-|------|------|
-| 🏢 **조직 기본 모델** | 어드민이 조직 콘솔에서 기본 모델 설정 가능. `/model`에 "Org default" / "Role default" 표시 |
-| 📝 **세션 기본 이름** | 세션 시작 시 읽기 좋은 기본 이름 자동 생성 |
-| 📎 **파일 첨부 클릭 가능** | 채팅 내 첨부 파일을 Cmd/Ctrl-클릭 시 탐색기에서 바로 열기 |
-| 🔐 **MCP 보안 강화** | MCP 서버 보안 개선 |
-| ⚡ **`/code-review` 효율화** | 토큰 사용량 **25% 감소** |
-| 🔄 **스트리밍 워치독 기본 활성화** | 5분간 응답 없으면 자동 중단·재시도 (모든 프로바이더 공통) |
-| 🐛 **다수 버그 수정** | 백그라운드 작업 대화 보존, 레이트 리밋 경고 깜빡임, PowerShell git 명령어, `claude agents` 사이드패널, MCP OAuth 스코프, 음성 딕테이션 |
+8. **Claude Sonnet 5 기본 모델 전환** — 1M 토큰 컨텍스트, 스킬 시스템과 통합 (v2.1.197)
+
+9. **ultracode 레벨 추가** — `/effort ultracode` = xhigh 추론 + 자동 워크플로우 오케스트레이션
 
 ---
 
-#### 스킬 생태계 동향
+### 🔍 현재 설치된 스킬 현황
 
-| 지표 | 현황 |
-|------|------|
-| SKILL.md 호환 툴 | Claude Code, OpenAI Codex CLI, Cursor, Gemini CLI, GitHub Copilot — **오픈 스탠더드 5개 플랫폼 지원** |
-| 최고 인기 신규 스킬 | **Karpathy Behavioral Skill** — 2026년 최속 성장, GitHub 144K stars |
-| 공식 스킬 제작 도구 | **Skill Creator** 플러그인 (대화형 Q&A → SKILL.md 자동 생성, eval 자동화) |
-| multica CLI 최신 버전 | **v0.3.33** (2026-06-30 릴리즈, 이번 세션 설치 완료) |
+**brain180 프로젝트 (`.claude/skills/`)**: 없음
 
----
+**개인 글로벌 스킬 (`~/.claude/skills/`)**:
+- `session-start-hook` — SessionStart 훅 설정 스킬 (1개)
 
-### 🔍 현재 설치된 스킬 현황 (brain180 / alienkky)
+**`.claude/settings.local.json` 등록 스킬**: 없음 (permissions만 설정됨)
 
-**프로젝트 레벨 (brain180/.claude/):**
-- 스킬 **없음** — `.claude/skills/` 디렉토리 미존재 (**5회 연속 미해결**)
-- `settings.local.json`: 일부 Bash 허용 퍼미션만 존재
-- `launch.json`: Vite 개발 서버 설정만
-
-**사용자 전역 레벨 (~/.claude/skills/):**
-
-| 스킬명 | 설명 |
+**번들 스킬 (Claude Code 기본 제공)**:
+| 스킬명 | 용도 |
 |--------|------|
-| `session-start-hook` | 웹 세션의 SessionStart 훅 생성/개발용 스킬 |
-
-**번들 스킬 (Claude Code 내장, v2.1.197 기준):**
-
-| 스킬 | 유형 | 용도 |
-|------|------|------|
-| `/session-start-hook` | 스킬 | SessionStart 훅 설정 |
-| `/deep-research` | 워크플로 | 멀티소스 팩트체크 리서치 |
-| `/update-config` | 스킬 | settings.json 구성 업데이트 |
-| `/keybindings-help` | 스킬 | 키바인딩 커스터마이즈 |
-| `/verify` | 스킬 | 코드 변경사항 앱 실행 검증 |
-| `/code-review` | 스킬 | 코드 리뷰 (diff 분석, v2.1.196에서 25% 토큰 절감) |
-| `/simplify` | 스킬 | 코드 단순화 리팩토링 |
-| `/fewer-permission-prompts` | 스킬 | 권한 프롬프트 자동 허용 설정 |
-| `/loop` | 스킬 | 반복 실행 스케줄링 |
-| `/claude-api` | 스킬 | Claude/Anthropic API 레퍼런스 |
-| `/run` | 스킬 | 앱 실행 및 확인 |
-| `/run-skill-generator` | 스킬 | run/verify용 프로젝트 레시피 생성 |
-| `/init` | 스킬 | CLAUDE.md 초기화 |
-| `/review` | 스킬 | GitHub PR 리뷰 |
-| `/security-review` | 스킬 | 보안 리뷰 |
-| `/batch` | 스킬 | 대규모 병렬 코드베이스 변경 |
-| `/debug` | 스킬 | 디버그 로깅 및 세션 분석 |
+| `/batch` | 코드베이스 대규모 병렬 변경 |
+| `/claude-api` | Claude API 참조 및 코드 마이그레이션 |
+| `/code-review` | 코드 리뷰 (버그 + 정리) |
+| `/dataviz` | 차트/시각화 디자인 가이드 ⭐NEW |
+| `/debug` | 디버그 로깅 분석 |
+| `/design-sync` | React 디자인 시스템 업로드 |
+| `/fewer-permission-prompts` | 퍼미션 프롬프트 최소화 |
+| `/loop` | 반복/스케줄 실행 |
+| `/run` | 앱 구동 및 변경 검증 ⭐NEW |
+| `/run-skill-generator` | 프로젝트별 실행 레시피 생성 ⭐NEW |
+| `/simplify` | 코드 정리 전용 리뷰 ⭐NEW |
+| `/verify` | 코드 변경 동작 검증 ⭐NEW |
+| `/security-review` | 보안 취약점 분석 |
+| `/deep-research` | 멀티소스 조사 보고서 |
 
 ---
 
@@ -96,65 +68,55 @@
 
 | 스킬명 | 유형 | 우선순위 | 이유 |
 |--------|------|---------|------|
-| **multica PAT 등록** | 인프라 | 🔴 긴급 (5회 연속) | `mul_...` PAT를 Claude Code 원격 세션 환경변수로 등록 → `multica login --token $MULTICA_PAT` → 이슈 직접 코멘트 가능. multica v0.3.33 설치는 완료됨 |
-| **Sonnet 5 기본모델 테스트** | 환경 | 🔴 높음 (오늘) | v2.1.197로 업데이트 후 1M 컨텍스트 윈도우 확인 — brain180 텍스트 전체 처리 가능 여부 검증 |
-| `component-checker` | 신규 프로젝트 스킬 | 🔴 높음 (5회 연속) | CLAUDE.md 커밋 전 grep 체크리스트 4개 자동 실행. `disable-model-invocation: true` 설정 |
-| `brain180-visualize` | 신규 프로젝트 스킬 | 🔴 높음 | brain180 핵심 기능: 텍스트 → CognitiveMap 분석 워크플로. 1M 컨텍스트로 전체 코퍼스 처리 가능해짐 |
-| `skill-creator` 플러그인 | 번들 확장 | 🟡 중간 | 대화형 Q&A → SKILL.md 자동 생성 + eval 자동화 — brain180 스킬 품질 보장 |
-| `why-how-what` | 신규 글로벌 스킬 | 🟡 중간 | Alien Agentic 핵심 3단계 분석 템플릿. `effort: high` + `context: fork` |
-| `agent-dispatch` | 신규 글로벌 스킬 | 🟡 중간 | 27명 에이전트 라우팅 로직 스킬화. `user-invocable: false` |
-| `multica-report` | 신규 프로젝트 스킬 | 🟢 낮음 | 이 보고서 생성 프로세스 스킬화 (`${CLAUDE_SKILL_DIR}` 활용 템플릿 참조) |
-| Karpathy Behavioral Skill | 커뮤니티 스킬 | 🟢 낮음 | 2026년 최속 성장 스킬 — Alien Agentic 에이전트 행동 품질에 적용 가능 여부 검토 |
+| `brain180-analyze` | 프로젝트 커스텀 | 🔴 높음 | 텍스트 → 뇌인지 구조 추출 워크플로 반복 실행용 |
+| `cognitive-map-gen` | 프로젝트 커스텀 | 🔴 높음 | CognitiveMap JSON 생성 표준 절차화 |
+| `genius-research` | 프로젝트 커스텀 | 🟡 중간 | `/deep-research` 기반 특정 천재 인지 패턴 조사 |
+| `data-validate` | 프로젝트 커스텀 | 🟡 중간 | 콘텐츠 하드코딩 금지 규칙 준수 검증 (CLAUDE.md 체크리스트 자동화) |
+| `/run-skill-generator` | 번들 (미사용) | 🟡 중간 | Vite dev 서버 기반 brain180 실행 레시피 생성 |
+| `subagent-builder-daily` | 에이전트 자동화 | 🟡 중간 | 매일 아침 스킬 조사 루틴 공식 스킬화 (`/loop` 연동) |
+| `layer-separation-check` | 프로젝트 커스텀 | 🟢 낮음 | TextLayer ↔ VisualLayer 크로스 의존 자동 감지 |
+| `agent-cost-report` | 에이전트 운영 | 🟢 낮음 | `--attribution` 플래그 활용 27인 에이전트 비용 분석 |
+
+**특히 brain180에 핵심인 스킬 제안**:
+
+```markdown
+# .claude/skills/brain180-analyze/SKILL.md
+---
+description: Brain180 분석 모드 실행 — 고전 텍스트에서 뇌인지 구조 추출 후 CognitiveMap JSON 생성. 텍스트 분석, 새 천재 추가, 인지 패턴 시각화 작업 시 자동 활성화.
+allowed-tools: Read Write Glob Grep
+---
+```
+
+**Alien Agentic 27인 에이전트 시스템 자동화 추천**:
+
+```markdown
+# .claude/skills/subagent-daily-report/SKILL.md
+---
+description: 매일 아침 subagent-builder 역할 수행 — 스킬 마켓플레이스 동향 조사, 현황 파악, Multica 이슈 보고 자동화
+disable-model-invocation: true
+context: fork
+disallowed-tools: AskUserQuestion
+---
+```
 
 ---
 
 ### 📋 오늘의 액션 아이템
 
-1. **[긴급 — 5회 연속]** Multica 웹 → Settings → Personal Access Tokens에서 `mul_...` PAT 발급  
-   → Claude Code 원격 세션에 `MULTICA_PAT` 환경변수 등록  
-   → `multica login --token $MULTICA_PAT` 실행  
-   > multica v0.3.33이 `/usr/local/bin/multica`에 설치 완료. 토큰 1개만 있으면 즉시 해결.
+1. **[즉시]** brain180 프로젝트에 `.claude/skills/` 디렉토리 생성 및 프로젝트 전용 스킬 최소 2개 작성
+   - `brain180-analyze` — 텍스트 분석 → CognitiveMap 생성 워크플로
+   - `data-validate` — CLAUDE.md 체크리스트 자동 실행
 
-2. **[HIGH]** Claude Code v2.1.197 업데이트 후 Sonnet 5 기본모델 테스트:
-   - `claude --version` 확인
-   - 1M 토큰 컨텍스트 윈도우로 brain180 전체 텍스트 처리 테스트
-   - 프로모션 가격 ($2/$10 per Mtok) 적용 여부 확인
+2. **[즉시]** `/run-skill-generator` 실행하여 Vite 개발 서버 실행 레시피 `.claude/skills/run-brain180/` 에 저장
 
-3. **[HIGH — 5회 연속]** brain180 프로젝트 스킬 디렉토리 생성:
-   ```bash
-   mkdir -p /home/user/brain180/.claude/skills/component-checker
-   ```
-   SKILL.md 내용: CLAUDE.md의 커밋 전 grep 체크리스트 4개 자동 실행
+3. **[이번 주]** 개인 글로벌 스킬(`~/.claude/skills/`)에 `subagent-daily-report` 스킬 작성 및 `/loop` 연동으로 이 루틴 공식화
 
-4. **[HIGH]** `brain180-visualize` 스킬 초안 작성:
-   - Sonnet 5의 1M 컨텍스트를 활용하여 전체 고전 텍스트 동시 처리
-   - `paths: src/data/**,src/core/**` frontmatter로 범위 제한
+4. **[참고]** `disallowed-tools: AskUserQuestion` frontmatter 활용 → 백그라운드 루틴 스킬에서 대화 중단 방지
 
-5. **[MEDIUM]** 조직 기본 모델 설정 (v2.1.196):
-   - Alien Agentic 조직 콘솔에서 27명 에이전트별 역할 기반 기본 모델 설정 가능
-
-6. **[MEDIUM]** `/code-review` 25% 토큰 절감 활용:
-   - brain180 PR 리뷰 비용 절감 확인
-   - `--effort high` 옵션으로 심층 리뷰 시 비용 재검토
+5. **[참고]** 스킬 체이닝 기능 활용 — `/brain180-analyze /code-review` 형태로 분석 + 리뷰 동시 실행 가능
 
 ---
 
-### ⚠️ 지속 리스크
+> **비고**: multica CLI가 이 환경(리모트 컨테이너)에서 설치 불가 (GitHub releases 및 multica.ai 네트워크 차단됨). 이 보고서는 brain180 리포에 저장되었으며, 사용자가 로컬에서 `multica issue comment add 0b24f8af-4d32-4a73-b5f9-5cd9bfa83ef7 --content-file ./reply.md` 명령으로 제출 필요.
 
-| 항목 | 현황 | 조치 |
-|------|------|------|
-| multica 인증 | **5회 연속** 미설정 (CLI v0.3.33 설치는 완료) | PAT 발급 후 `MULTICA_PAT` 환경변수 등록 1회로 해결 |
-| `.claude/skills/` 미생성 | **5회 연속** 미이행 | `mkdir -p .claude/skills/component-checker` 1줄로 즉시 해결 |
-| Claude Code 버전 | v2.1.197 확인 필요 | `claude --version` 실행 후 최신 업데이트 |
-
----
-
-### 🔗 참고 자료
-
-- [Claude Code Changelog](https://code.claude.com/docs/en/changelog)
-- [Claude Code GitHub Releases](https://github.com/anthropics/claude-code/releases)
-- [Claude Code Skills 공식 문서](https://code.claude.com/docs/en/skills)
-- [Multica CLI GitHub](https://github.com/multica-ai/multica)
-- [Multica CLI v0.3.33 릴리즈](https://github.com/multica-ai/multica/releases/tag/v0.3.33)
-- [AgentSkills.io 오픈 스탠더드](https://agentskills.io)
-- [Karpathy Behavioral Skill](https://github.com/anthropics/skills)
+**조사 소스**: [Claude Code Skills Docs](https://code.claude.com/docs/en/skills) · [Commands Reference](https://code.claude.com/docs/en/commands) · [Claude Code Changelog](https://claudefa.st/blog/guide/changelog) · [Skills Marketplaces](https://claudeskills.info/skills/)
