@@ -35,7 +35,7 @@ import {
 } from "../lib/anthropic.js";
 import { callTutorLLM } from "../lib/llm.js";
 import { callOpenAIVision } from "../lib/openai-vision.js";
-import { hasFeature } from "../lib/env.js";
+import { hasFeature, loadEnv } from "../lib/env.js";
 import { parseBody, RobotTutorChatBody } from "../lib/validators.js";
 import { robotPersona } from "../lib/robot-persona.js";
 import { getRobotPresence, getRobotFrame } from "../lib/robot-presence.js";
@@ -282,3 +282,36 @@ robotTutorRouter.get("/robot-frame", (_req, res) => {
     frame_ms_ago: Date.now() - frame.at,
   });
 });
+
+// ── POST /api/robot-tutor/trigger-capture ───────────────────────────
+// Ask the PHYSICAL robot to capture right now. Forwards a "capture" command to
+// the 4090 robot-gateway's command queue (the robot polls it every ~5s, then
+// runs a photo turn: it captures, describes the scene aloud in Korean, and the
+// gateway pushes the fresh frame back to POST /api/robot/frame — so a
+// subsequent /robot-frame pull sees the same scene). Server-side forward keeps
+// the gateway device token out of the browser.
+robotTutorRouter.post(
+  "/trigger-capture",
+  asyncHandler(async (_req, res) => {
+    const { ROBOT_GATEWAY_URL, ROBOT_GATEWAY_TOKEN } = loadEnv();
+    if (!ROBOT_GATEWAY_URL || !ROBOT_GATEWAY_TOKEN) {
+      fail(res, 503, "robot_gateway_unconfigured", {
+        message: "ROBOT_GATEWAY_URL / ROBOT_GATEWAY_TOKEN 이 설정되지 않았습니다",
+      });
+      return;
+    }
+    const r = await fetch(`${ROBOT_GATEWAY_URL.replace(/\/+$/, "")}/api/robot-command`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Device-Token": ROBOT_GATEWAY_TOKEN,
+      },
+      body: JSON.stringify({ command: "capture" }),
+    });
+    if (!r.ok) {
+      fail(res, 502, "gateway_error", { message: `robot-gateway ${r.status}` });
+      return;
+    }
+    ok(res, { queued: true });
+  }),
+);

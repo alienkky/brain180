@@ -49,6 +49,13 @@ const Schema = z.object({
   // (feature disabled), so existing deploys are unaffected until a token is set.
   ROBOT_DEVICE_TOKEN: z.string().optional(),
 
+  // 4090 robot-gateway reachability (ALI-21 remote capture). The browser 로봇
+  // 튜터's "지금 보게 하기" button forwards a capture command server-side so the
+  // gateway's device token never reaches the client. Unset → trigger returns
+  // 503 (feature disabled); everything else is unaffected.
+  ROBOT_GATEWAY_URL: z.string().optional(),
+  ROBOT_GATEWAY_TOKEN: z.string().optional(),
+
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default("Brain180 <no-reply@brain180.app>"),
 
