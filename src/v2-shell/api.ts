@@ -736,6 +736,9 @@ export const api = {
   robotStatus: () => call<RobotStatus>("/api/robot-tutor/robot-status"),
   // 로봇이 게이트웨이로 올려둔 최신 카메라/화면 프레임 (없으면 404).
   robotFrame: () => call<RobotFrame>("/api/robot-tutor/robot-frame"),
+  // 물리 로봇에게 "지금 캡처해" 명령을 큐잉 (로봇이 ~5초 내 폴링해 실행).
+  robotTriggerCapture: () =>
+    call<{ queued: boolean }>("/api/robot-tutor/trigger-capture", { method: "POST" }),
   billingPlans: () => call<PlanDto[]>("/api/billing/plans"),
   billingMeSubscription: () =>
     call<SubscriptionDto | null>("/api/billing/me/subscription"),

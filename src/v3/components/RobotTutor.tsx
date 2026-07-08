@@ -146,6 +146,39 @@ export function RobotTutor({ onClose, context }: Props) {
     }
   };
 
+  // 물리 로봇에게 "지금 캡처해" 명령을 보낸다. 로봇이 ~5초 내 폴링해 사진을 찍고
+  // 그 자리에서 한국어로 설명해 말한다. 게이트웨이가 같은 프레임을 서버로 올리므로
+  // 잠시 뒤 자동으로 그 장면을 튜터 조언으로도 가져온다.
+  const captureViaRobot = async () => {
+    if (loadingRef.current) return;
+    setLoading(true);
+    try {
+      await api.robotTriggerCapture();
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content:
+            "🤖📸 로봇에게 캡처를 요청했습니다. 로봇이 찍고 설명하는 데 10~20초쯤 걸립니다. 끝나면 그 장면을 여기로 가져와 조언합니다...",
+        },
+      ]);
+      setLoading(false);
+      // 로봇의 캡처 턴(폴링 최대 5초 + 촬영/업로드)이 끝날 때쯤 프레임을 당겨온다.
+      setTimeout(() => {
+        void pullRobotScreen();
+      }, 18000);
+    } catch (e) {
+      setLoading(false);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `⚠️ 로봇 캡처 요청에 실패했습니다. (${e instanceof Error ? e.message : "오류"})`,
+        },
+      ]);
+    }
+  };
+
   return (
     <div className="fixed bottom-4 right-4 z-50 flex h-[min(560px,80vh)] w-[min(380px,calc(100vw-2rem))] flex-col rounded-2xl border border-brain-border bg-brain-surface shadow-2xl">
       {/* Header */}
@@ -239,12 +272,24 @@ export function RobotTutor({ onClose, context }: Props) {
             </button>
           )}
           <button
+            onClick={captureViaRobot}
+            disabled={loading || !robot?.online}
+            className="w-full rounded-lg border border-brain-border bg-brain-surface px-3 py-2 text-sm font-medium text-brain-text transition-opacity hover:opacity-90 disabled:opacity-40"
+            title={
+              robot?.online
+                ? "로봇이 지금 사진을 찍고 그 자리에서 설명한 뒤, 같은 장면을 여기로 가져와 조언합니다"
+                : "로봇이 연결되어 있지 않아 캡처를 요청할 수 없습니다"
+            }
+          >
+            🤖📸 로봇에게 지금 보게 하기
+          </button>
+          <button
             onClick={pullRobotScreen}
             disabled={loading || !robot?.online}
             className="w-full rounded-lg border border-brain-border bg-brain-surface px-3 py-2 text-sm font-medium text-brain-text transition-opacity hover:opacity-90 disabled:opacity-40"
             title={
               robot?.online
-                ? "로봇이 지금 보고 있는 화면을 가져와 분석합니다"
+                ? "로봇이 마지막으로 본 화면을 가져와 분석합니다"
                 : "로봇이 연결되어 있지 않아 화면을 가져올 수 없습니다"
             }
           >
