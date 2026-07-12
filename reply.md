@@ -1,80 +1,102 @@
-## 🛸 스킬 발전 사항 일일 보고 — 2026-07-07 KST
+## 🛸 스킬 발전 사항 일일 보고 — 2026-07-08 KST
+
+> **보고 주체**: Alien Agentic subagent-builder  
+> **대상 이슈**: ALI-14 (Multica 이슈 ID: `0b24f8af-4d32-4a73-b5f9-5cd9bfa83ef7`)  
+> **비고**: multica CLI 미설치 (원격 컨테이너 네트워크 제한). 보고서는 `reply.md`에 저장됨. 사용자 직접 제출 필요.
+
+---
 
 ### 📡 최신 동향
 
-**Claude Code 스킬 시스템 주요 업데이트 (2026년 7월 기준)**
+#### Claude Code 릴리즈 현황 (2026-07-01 ~ 2026-07-08)
 
-1. **커맨드와 스킬 통합 완료** — `.claude/commands/*.md`와 `.claude/skills/*/SKILL.md`가 동일한 `/slash-command` 인터페이스로 통합됨. 기존 commands 파일은 그대로 동작하지만, 추가 기능(supporting files, frontmatter 제어)을 위해 skills 디렉토리 사용 권장 (v2.1.x)
+| 버전 | 일자 | 주요 변경사항 |
+|------|------|-------------|
+| **v2.1.205** | 2026-07-08 | 🔴 오늘 — 트랜스크립트 보안 강화, `/doctor` 진단 도구 강화 |
+| **v2.1.204** | 2026-07-08 | SessionStart 훅 스트리밍 수정 (헤드리스 세션) |
+| **v2.1.203** | 2026-07-07 | 로그인 만료 경고, macOS 메모리 감지 오류 수정 |
+| **v2.1.202** | 2026-07-06 | Dynamic workflow size 설정, `/review` 단일 패스 복귀 |
+| **v2.1.201** | 2026-07-03 | Sonnet 5 세션 중간 system role 제거 |
+| **v2.1.200** | 2026-07-03 | 기본 권한 모드 → Manual 변경 |
+| **v2.1.199** | 2026-07-02 | 스킬 최대 5개 동시 로드 지원 |
+| **v2.1.198** | 2026-07-01 | `/dataviz` 신규 스킬, 서브에이전트 백그라운드 기본화 |
 
-2. **스킬 체이닝 지원** — `/skill-a /skill-b do XYZ` 형태로 최대 5개 스킬을 한 번에 로드 가능. 첫 번째만 로드되던 방식에서 개선됨 (v2.1.199+)
+---
 
-3. **신규 번들 스킬 추가**:
-   - `/dataviz` — 차트/그래프/대시보드 디자인 가이드 스킬 (v2.1.198, 2026-06-30)
-   - `/run` — 앱 실행 및 변경사항 검증 스킬 (v2.1.145)
-   - `/verify` — 코드 변경이 실제로 동작하는지 앱을 구동해 검증 (v2.1.145)
-   - `/simplify` — 버그 탐색 없이 코드 정리/단순화만 수행 (v2.1.154, `/code-review`에서 분리)
+#### v2.1.205 (2026-07-08 — 오늘) 상세
 
-4. **`/reload-skills` 커맨드 추가** — 세션 재시작 없이 스킬 디렉토리 재스캔 (v2.1.152). `SessionStart` 훅에서 `reloadSkills: true` 반환 시 동일 세션 내 스킬 즉시 사용 가능
+| 항목 | 내용 |
+|------|------|
+| 🔒 **트랜스크립트 보안** | Auto 모드에서 세션 트랜스크립트 파일 변조 차단 |
+| 🛡️ **rm -rf 가드** | 미확정 변수가 포함된 `rm -rf` 실행 전 사용자 확인 요청 |
+| 🔔 **백그라운드 알림 강화** | 백그라운드 태스크 알림에 "사람 입력 없음" 명시 → 허위 승인 방지 |
+| 🌐 **MCP "Claude Browser" 예약** | "Claude Preview"와 함께 MCP 서버 이름 예약 (Claude Desktop 리브랜딩 대비) |
+| 🩺 **`/doctor` 강화** | 전체 환경 진단 + 자동 수정 도구로 업그레이드; `/checkup` 별칭 추가 |
+| 👁️ **에이전트 뷰 개선** | PR 연결 표시, AI 요약 헤드라인, 차단 상태 상세 표시 |
+| ⚡ **업데이터 메모리 절약** | 바이너리 스트림 다운로드 → 피크 메모리 ~400 MB 절감 |
 
-5. **스킬 frontmatter 신규 필드**:
-   - `disallowed-tools`: 스킬 실행 중 특정 도구 비활성화 (v2.1.152)
-   - `display-name` / `displayName`, `default-enabled` / `defaultEnabled`: kebab-case·snake_case·camelCase 모두 수용 (v2.1.186)
-   - YAML 파싱 실패 시 조용히 무시하지 않고 빈 메타데이터로 로드 → 디버깅 용이 (v2.1.186)
+---
 
-6. **중첩 스킬 디렉토리 지원** (v2.1.178+):
-   - 하위 `.claude/skills/` 디렉토리 작업 시 해당 스킬 자동 로드
-   - 이름 충돌 시 `<dir>:<name>` 형태로 두 버전 모두 사용 가능
+#### v2.1.198 (2026-07-01) — 신규 스킬 추가
 
-7. **플러그인 자동 로드** (v2.1.157):
-   - `.claude/skills/` 디렉토리 플러그인이 마켓플레이스 없이 자동 로드
-   - `claude plugin init <name>` 으로 새 플러그인 스캐폴딩
-   - `/plugin` 설치 탭에 "Skills" 섹션 추가 (v2.1.186)
+| 항목 | 내용 |
+|------|------|
+| 📊 **`/dataviz` 신규 스킬** | 차트/그래프/대시보드 디자인 가이드 스킬. 검증 가능한 색상 팔레트 시스템 내장. 라이브러리 무관(matplotlib, plotly, D3, Recharts) |
+| 🤖 **서브에이전트 백그라운드 기본화** | 부모 세션 즉시 계속 실행, 완료 시 Notification 훅으로 알림 |
+| 🔀 **`/agents` 위저드 제거** | Claude에게 직접 요청 또는 `.claude/agents/` 파일 수동 편집으로 대체 |
+| 📤 **에이전트 자동 Draft PR** | 코드 작업 완료 후 자동 커밋·푸시·Draft PR 생성 |
+| 🔔 **신규 훅**: `agent_needs_input`, `agent_completed` | `claude agents`에서 에이전트 상태 추적 가능 |
+| 🧠 **Explore 에이전트 모델 상향** | Haiku → 메인 세션 모델 상속 (Opus 상한) |
 
-8. **Claude Sonnet 5 기본 모델 전환** — 1M 토큰 컨텍스트 (v2.1.197, 2026-06-30). 프로모션 가격 $2/$10 per Mtok (~ 2026-08-31)
+---
 
-9. **에이전트 시스템 강화**:
-   - 백그라운드 에이전트: 코드 완료 시 자동 커밋·푸시·Draft PR 생성 (v2.1.198)
-   - 서브에이전트 기본 백그라운드 실행 (v2.1.198)
-   - 계층적 에이전트 스폰 최대 3단계 지원
-   - `--attribution` 플래그로 에이전트별 토큰/비용 세부 추적
+#### 주요 변경 요약
 
-10. **`/review` vs `/code-review` 분리** (v2.1.202, 2026-07-06):
-    - `/review <pr>`: 빠른 단일 패스 리뷰로 복귀
-    - `/code-review <level> <pr#>`: 멀티 에이전트 심층 리뷰 (low/medium/high)
+| 영역 | 변경 내용 |
+|------|----------|
+| 신규 스킬 | `/dataviz` 추가 (v2.1.198) |
+| 스킬 스태킹 | 1회 호출로 최대 5개 스킬 동시 로드 (v2.1.199) |
+| 에이전트 시스템 | 서브에이전트 백그라운드 기본, 위저드 삭제, 자동 PR (v2.1.198) |
+| 기본 권한 모드 | Auto → **Manual** (v2.1.200) |
+| 보안 | 트랜스크립트 변조 차단, rm -rf 가드 (v2.1.205) |
+| MCP | "Claude Browser" 서버명 예약 (v2.1.205) |
+| 기본 모델 | Claude Sonnet 5 (1M 컨텍스트, $2/$10/Mtok) — v2.1.197 (6월 30일)부터 |
 
 ---
 
 ### 🔍 현재 설치된 스킬 현황
 
-**brain180 프로젝트 (`.claude/skills/`)**: 없음
+**brain180 프로젝트 (`.claude/`):**
+- `.claude/skills/` 디렉토리 **없음** (6회 연속 미생성)
+- `settings.local.json`: Bash/Read 권한 설정만 존재
+- `launch.json`: Vite 개발 서버 설정만
 
-**개인 글로벌 스킬 (`~/.claude/skills/`)**:
-- `session-start-hook` — SessionStart 훅 설정 스킬 (1개)
+**사용자 전역 레벨 (`~/.claude/skills/`):**
 
-**`.claude/settings.local.json` 등록 스킬**: 없음 (permissions만 설정됨)
-
-**번들 스킬 (Claude Code 기본 제공 — 이번 세션 활성)**:
-| 스킬명 | 용도 |
+| 스킬명 | 설명 |
 |--------|------|
-| `/claude-api` | Claude API 참조 및 코드 마이그레이션 |
-| `/code-review` | 코드 리뷰 (버그 + 정리, effort 레벨 지원) |
-| `/dataviz` | 차트/시각화 디자인 가이드 ⭐ v2.1.198 |
-| `/deep-research` | 멀티소스 심층 조사 보고서 |
-| `/fewer-permission-prompts` | 퍼미션 프롬프트 최소화 |
-| `/loop` | 반복/스케줄 실행 |
-| `/run` | 앱 구동 및 변경 검증 |
-| `/verify` | 코드 변경 동작 end-to-end 검증 |
-| `/simplify` | 코드 정리 전용 리뷰 |
-| `/security-review` | 보안 취약점 분석 |
-| `/review` | GitHub PR 빠른 리뷰 |
-| `/init` | CLAUDE.md 초기화 |
-| `/artifact-design` | 아티팩트 디자인 가이드 |
-| `/update-config` | settings.json 설정 관리 |
-| `/keybindings-help` | 키보드 단축키 커스터마이즈 |
-| `/session-start-hook` | 세션 시작 훅 생성 |
+| `session-start-hook` | 웹 세션의 SessionStart 훅 생성/개발용 |
 
-**[참고] multica 내장 스킬** (`/opt/node22/lib/node_modules/multica/.agents/skills/`):
-- `web-design-guidelines` — Vercel 웹 인터페이스 가이드라인 기반 UI 코드 리뷰
+**번들 스킬 (Claude Code 내장, v2.1.205 기준):**
+
+| 스킬 | 용도 | 신규 여부 |
+|------|------|---------|
+| `/dataviz` | 차트/대시보드 디자인 가이드 (색상 팔레트 검증 내장) | ⭐ v2.1.198 신규 |
+| `/session-start-hook` | SessionStart 훅 설정 | - |
+| `/deep-research` | 멀티소스 팩트체크 리서치 | - |
+| `/update-config` | settings.json 구성 업데이트 | - |
+| `/keybindings-help` | 키바인딩 커스터마이즈 | - |
+| `/verify` | 코드 변경사항 end-to-end 검증 | - |
+| `/code-review` | 코드 리뷰 (effort 레벨 지원) | - |
+| `/simplify` | 코드 단순화 리팩토링 | - |
+| `/fewer-permission-prompts` | 권한 프롬프트 자동 허용 설정 | - |
+| `/loop` | 반복 실행 스케줄링 | - |
+| `/claude-api` | Claude/Anthropic API 레퍼런스 | - |
+| `/run` | 앱 실행 및 확인 | - |
+| `/init` | CLAUDE.md 초기화 | - |
+| `/review` | GitHub PR 빠른 단일 패스 리뷰 | v2.1.202 변경 |
+| `/security-review` | 보안 취약점 분석 | - |
+| `/doctor` / `/checkup` | 환경 진단 및 자동 수정 | ⭐ v2.1.205 강화 |
 
 ---
 
@@ -82,62 +104,64 @@
 
 | 스킬명 | 유형 | 우선순위 | 이유 |
 |--------|------|---------|------|
-| `brain180-analyze` | 프로젝트 커스텀 | 🔴 높음 | 텍스트 → 뇌인지 구조 추출 워크플로 반복 실행용 (Brain180 핵심) |
-| `cognitive-map-gen` | 프로젝트 커스텀 | 🔴 높음 | CognitiveMap JSON 생성 표준화, 스키마 검증 포함 |
-| `web-design-guidelines` | 기존 스킬 이식 | 🟡 중간 | multica 내장 스킬을 brain180 `.claude/skills/`에 복사해 VisualLayer UI 리뷰 활용 |
-| `genius-research` | 프로젝트 커스텀 | 🟡 중간 | `/deep-research` 기반 특정 천재 인지 패턴 조사 자동화 |
-| `data-validate` | 프로젝트 커스텀 | 🟡 중간 | CLAUDE.md 체크리스트(하드코딩 금지, 레이어 분리 등) 자동 실행 |
-| `subagent-daily-report` | 에이전트 자동화 | 🟡 중간 | 이 루틴 자체를 스킬로 공식화 + `/loop` 연동 |
-| `layer-separation-check` | 프로젝트 커스텀 | 🟢 낮음 | TextLayer ↔ VisualLayer 크로스 의존 자동 감지 |
-| `agent-cost-report` | 에이전트 운영 | 🟢 낮음 | `--attribution` 플래그 활용 27인 에이전트 토큰/비용 분석 |
-
-**brain180에 즉시 적용 가능한 스킬 템플릿**:
-
-```yaml
-# .claude/skills/brain180-analyze/SKILL.md
----
-name: brain180-analyze
-description: >
-  Brain180 분석 모드 실행 — 고전 텍스트에서 뇌인지 구조 추출 후
-  CognitiveMap JSON 생성. 텍스트 분석, 새 천재 추가, 인지 패턴
-  시각화 작업 시 자동 활성화.
-disallowed-tools:
-  - AskUserQuestion
----
-```
-
-**Alien Agentic 27인 에이전트 시스템 자동화 추천**:
-
-```yaml
-# ~/.claude/skills/subagent-daily-report/SKILL.md
----
-name: subagent-daily-report
-description: >
-  매일 아침 subagent-builder 역할 수행 — 스킬 마켓플레이스 동향
-  조사, 현황 파악, Multica 이슈 ALI-14 보고 자동화
-disallowed-tools:
-  - AskUserQuestion
----
-```
+| **multica PAT 등록** | 인프라 | 🔴 긴급 (6회 연속) | `mul_...` PAT → Claude Code 환경변수 `MULTICA_PAT` 등록 → `multica login --token` 1회 실행으로 해결 |
+| **`/dataviz` 활용** | 번들 스킬 | 🔴 높음 (오늘 신규) | brain180 뇌인지 구조 시각화 노드/엣지 컬러 팔레트 설계에 즉시 적용 가능 |
+| `component-checker` | 프로젝트 스킬 | 🔴 높음 (6회 연속) | CLAUDE.md grep 체크리스트 4개 자동 실행. `disable-model-invocation: true` |
+| `brain180-visualize` | 프로젝트 스킬 | 🔴 높음 | 텍스트 → CognitiveMap 분석 워크플로 스킬화. Sonnet 5 1M 컨텍스트 활용 |
+| **Manual 모드 검토** | 권한 설정 | 🟡 중간 | v2.1.200부터 기본 권한 모드가 Auto → Manual로 변경됨. 원격 세션에서 동작 방식 확인 필요 |
+| `agent-dispatch` | 글로벌 스킬 | 🟡 중간 | 27명 에이전트 라우팅 스킬화. `user-invocable: false`. 서브에이전트 백그라운드 기본화(v2.1.198) 활용 |
+| `why-how-what` | 글로벌 스킬 | 🟡 중간 | Alien Agentic 핵심 3단계 분석 템플릿 스킬화 |
+| **스킬 스태킹 활용** | 개발 방법론 | 🟡 중간 | `/dataviz /brain180-visualize` 형태로 최대 5개 동시 로드 (v2.1.199) |
+| `multica-report` | 프로젝트 스킬 | 🟢 낮음 | 이 보고서 생성 프로세스 자체를 스킬로 공식화 |
 
 ---
 
 ### 📋 오늘의 액션 아이템
 
-1. **[즉시]** brain180 프로젝트에 `.claude/skills/` 디렉토리 생성 및 프로젝트 전용 스킬 최소 2개 작성
-   - `brain180-analyze` — 텍스트 분석 → CognitiveMap 생성 워크플로
-   - `data-validate` — CLAUDE.md 체크리스트 자동 실행
+1. **[긴급 — 6회 연속]** Multica 인증 설정:
+   ```
+   Multica 웹 → Settings → Personal Access Tokens → 토큰 생성
+   → Claude Code 원격 세션 환경변수에 MULTICA_PAT 추가
+   → multica login --token $MULTICA_PAT
+   ```
 
-2. **[즉시]** `session-start-hook` 업데이트: `reloadSkills: true` 반환 추가 (v2.1.152 신기능)으로 세션 시작 시 스킬 자동 리로드
+2. **[HIGH — 오늘 신규]** `/dataviz` 스킬 활용:
+   - brain180 CognitiveMap 노드 컬러 팔레트 설계 시 `/dataviz` 먼저 호출
+   - VisualLayer D3.js/Cytoscape 차트 코드 작성 전 필수 적용
 
-3. **[이번 주]** multica `web-design-guidelines` 스킬을 brain180 `.claude/skills/`에 복사해 VisualLayer 컴포넌트 개발 시 UI 가이드라인 자동 체크
+3. **[HIGH — 6회 연속]** brain180 프로젝트 스킬 디렉토리 생성:
+   ```bash
+   mkdir -p /home/user/brain180/.claude/skills/component-checker
+   mkdir -p /home/user/brain180/.claude/skills/brain180-visualize
+   ```
 
-4. **[이번 주]** `subagent-daily-report` 스킬 작성 및 `/loop 24h` 연동으로 이 루틴 공식화
+4. **[MEDIUM]** Manual 모드 권한 확인:
+   - v2.1.200부터 기본 권한 모드 Manual로 변경
+   - 원격 자동화 세션에서 `"permissionMode": "auto"` 명시 설정 필요 여부 확인
 
-5. **[참고]** 스킬 체이닝 활용 — `/brain180-analyze /code-review` 형태로 분석 + 리뷰 동시 실행 가능
+5. **[MEDIUM]** `/doctor` (또는 `/checkup`) 실행:
+   - v2.1.205에서 전체 환경 진단 + 자동 수정 도구로 강화됨
+   - brain180 개발 환경 전체 점검에 활용
+
+6. **[MEDIUM]** 에이전트 자동 Draft PR 설정 검토:
+   - v2.1.198부터 코드 완료 후 자동 커밋·푸시·Draft PR
+   - brain180 작업 흐름에 맞게 `.claude/agents/` 구성 정비
 
 ---
 
-> **비고**: multica CLI가 이 환경(리모트 컨테이너)에서 설치 불가 (GitHub Releases API 및 multica.ai 네트워크 프록시 차단됨). 이 보고서는 brain180 리포 `reply.md`에 저장됨. 사용자가 로컬에서 `multica issue comment add 0b24f8af-4d32-4a73-b5f9-5cd9bfa83ef7 --content-file ./reply.md` 명령으로 직접 제출 필요.
+### ⚠️ 지속 리스크
 
-**조사 소스**: [Claude Code Changelog (code.claude.com)](https://code.claude.com/docs/en/changelog) · [GitHub Releases (anthropics/claude-code)](https://github.com/anthropics/claude-code/releases) · [claudefa.st changelog](https://claudefa.st/blog/guide/changelog)
+| 항목 | 현황 | 조치 |
+|------|------|------|
+| multica 인증 | **6회 연속** 미설정 | MULTICA_PAT 환경변수 1회 등록으로 해결 |
+| `.claude/skills/` 미생성 | **6회 연속** 미이행 | `mkdir -p .claude/skills/component-checker` 1줄로 즉시 해결 |
+| 기본 권한 모드 변경 | v2.1.200부터 Manual | 원격 세션 자동화에 영향 가능성 — 확인 필요 |
+
+---
+
+### 🔗 참고 자료
+
+- [Claude Code Changelog](https://code.claude.com/docs/en/changelog)
+- [Claude Code GitHub Releases](https://github.com/anthropics/claude-code/releases)
+- [Claude Code Skills 공식 문서](https://code.claude.com/docs/en/skills)
+- [Claude Code Agents 문서](https://code.claude.com/docs/en/agents)
