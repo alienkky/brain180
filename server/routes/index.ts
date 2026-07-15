@@ -7,6 +7,7 @@ import { tutorRouter } from "./tutor.js";
 import { robotRouter } from "./robot.js";
 import { robotTutorRouter } from "./robot-tutor.js";
 import { adminRouter } from "./admin.js";
+import { gradingRouter } from "./grading.js";
 import { billingRouter } from "./billing.js";
 import { webhookRouter } from "./webhooks.js";
 import { settingsRouter } from "./settings.js";
@@ -22,6 +23,7 @@ export function mountRoutes(): Router {
   r.use("/api/robot-tutor", robotTutorRouter);
   r.use("/api/settings", settingsRouter);
   r.use("/api/admin", adminRouter);
+  r.use("/api/grading", gradingRouter);
   r.use("/api/billing", billingRouter);
   r.use("/webhooks", webhookRouter);
   return r;

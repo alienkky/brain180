@@ -12,6 +12,7 @@ import { useTheme, ACCENT_OPTIONS, HL_OPTIONS } from "../../v2-shell/useTheme";
 import type { Skin } from "../../v2-shell/useTheme";
 import type { AdminScreen, V3User, V3Node, V3Edge } from "../types";
 import { NodeCanvas } from "../components/NodeCanvas";
+import { GradingPanel } from "./GradingPanel";
 
 interface Props {
   user: V3User;
@@ -24,6 +25,7 @@ const NAV_ITEMS: { id: AdminScreen; label: string; icon: string }[] = [
   { id: "users", label: "회원 관리", icon: "👥" },
   { id: "content", label: "콘텐츠 관리", icon: "📚" },
   { id: "ai", label: "AI 코치 제어", icon: "🤖" },
+  { id: "grading", label: "v4 채점 콘솔", icon: "⚖️" },
   { id: "theme", label: "테마 관리", icon: "🎨" },
   { id: "analytics", label: "분석/통계", icon: "📈" },
 ];
@@ -1477,6 +1479,7 @@ export function AdminShell({ user, onLogout, onSwitchToLearning }: Props) {
     users: <AdminUsers />,
     content: <AdminContent />,
     ai: <AdminAI />,
+    grading: <GradingPanel />,
     theme: <AdminTheme />,
     analytics: <AdminAnalytics />,
   };

@@ -12,6 +12,7 @@ export type AdminScreen =
   | "users"
   | "content"
   | "ai"
+  | "grading"
   | "theme"
   | "analytics";
 
