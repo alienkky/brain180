@@ -5,8 +5,17 @@
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Router } from "express";
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
+import { db } from "../db/client.js";
+import {
+  canvasArtifacts,
+  learningSessions,
+  lessons,
+  textExcerpts,
+  users,
+} from "../db/schema.js";
 import { ok, fail } from "../lib/envelope.js";
 import { requireAdmin } from "../middleware/auth.js";
 
@@ -81,6 +90,29 @@ function buildMessages(stage: number, passage: string, question: string, answer:
   ];
 }
 
+function asyncHandler(
+  fn: (req: Request, res: Response) => Promise<unknown>,
+): (req: Request, res: Response, next: NextFunction) => void {
+  return (req, res, next) => {
+    fn(req, res).catch(next);
+  };
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// v3 스냅샷 payload의 부별 설명 추출 (toProtocolSnapshot 형식)
+interface StageSnap {
+  description?: string;
+}
+function snapshotStages(payload: unknown): Record<1 | 2 | 3, string> {
+  const p = (payload ?? {}) as Record<string, StageSnap | undefined>;
+  const pick = (k: string) => {
+    const d = p[k]?.description;
+    return typeof d === "string" ? d.trim() : "";
+  };
+  return { 1: pick("stage1"), 2: pick("stage2"), 3: pick("stage3") };
+}
+
 // ── routes ───────────────────────────────────────────────
 
 gradingRouter.get("/status", async (_req: Request, res: Response) => {
@@ -103,6 +135,118 @@ gradingRouter.get("/status", async (_req: Request, res: Response) => {
 gradingRouter.get("/golden/stats", (_req: Request, res: Response) => {
   return ok(res, goldenStats());
 });
+
+// GET /api/grading/sessions — v3 스냅샷이 있는 최근 학습 세션 목록.
+// 채점 콘솔의 "학습 기록에서 불러오기" 소스. 부별 설명 존재 여부만 내려준다.
+gradingRouter.get(
+  "/sessions",
+  asyncHandler(async (_req, res) => {
+    const rows = await db
+      .select({
+        sessionId: canvasArtifacts.sessionId,
+        payload: canvasArtifacts.payload,
+        savedAt: canvasArtifacts.savedAt,
+        userName: users.name,
+        lessonTitle: lessons.title,
+        startedAt: learningSessions.startedAt,
+        endedAt: learningSessions.endedAt,
+      })
+      .from(canvasArtifacts)
+      .innerJoin(learningSessions, eq(learningSessions.id, canvasArtifacts.sessionId))
+      .innerJoin(users, eq(users.id, learningSessions.userId))
+      .innerJoin(lessons, eq(lessons.id, learningSessions.lessonId))
+      .where(
+        and(
+          isNull(canvasArtifacts.deletedAt),
+          isNull(learningSessions.deletedAt),
+          sql`${canvasArtifacts.payload} ->> 'v3' = 'true'`,
+        ),
+      )
+      .orderBy(desc(canvasArtifacts.savedAt))
+      .limit(100);
+
+    // 세션당 최신 스냅샷 1개만 (savedAt desc 순회라 첫 등장이 최신)
+    const seen = new Set<string>();
+    const sessions = [];
+    for (const r of rows) {
+      if (seen.has(r.sessionId)) continue;
+      seen.add(r.sessionId);
+      const stages = snapshotStages(r.payload);
+      sessions.push({
+        session_id: r.sessionId,
+        user_name: r.userName,
+        lesson_title: r.lessonTitle,
+        saved_at: r.savedAt,
+        started_at: r.startedAt,
+        ended_at: r.endedAt,
+        has_stage: { 1: !!stages[1], 2: !!stages[2], 3: !!stages[3] },
+      });
+      if (sessions.length >= 30) break;
+    }
+    return ok(res, { sessions });
+  }),
+);
+
+// GET /api/grading/sessions/:id — 채점 대상 채우기용 상세.
+// 지문 = 레슨 첫 발췌, 학생 응답 = 부별 설명(description).
+gradingRouter.get(
+  "/sessions/:id",
+  asyncHandler(async (req, res) => {
+    const sessionId = req.params.id;
+    if (typeof sessionId !== "string" || !UUID_RE.test(sessionId)) {
+      return fail(res, 422, "validation_error", { message: "invalid_session_id" });
+    }
+    const sessionRows = await db
+      .select({
+        id: learningSessions.id,
+        lessonId: learningSessions.lessonId,
+        lessonTitle: lessons.title,
+        userName: users.name,
+      })
+      .from(learningSessions)
+      .innerJoin(lessons, eq(lessons.id, learningSessions.lessonId))
+      .innerJoin(users, eq(users.id, learningSessions.userId))
+      .where(and(eq(learningSessions.id, sessionId), isNull(learningSessions.deletedAt)))
+      .limit(1);
+    const s = sessionRows[0];
+    if (!s) return fail(res, 404, "not_found");
+
+    const artifactRows = await db
+      .select({ payload: canvasArtifacts.payload })
+      .from(canvasArtifacts)
+      .where(
+        and(
+          eq(canvasArtifacts.sessionId, sessionId),
+          isNull(canvasArtifacts.deletedAt),
+          sql`${canvasArtifacts.payload} ->> 'v3' = 'true'`,
+        ),
+      )
+      .orderBy(desc(canvasArtifacts.savedAt))
+      .limit(1);
+    const payload = artifactRows[0]?.payload;
+    if (!payload) return fail(res, 404, "no_v3_snapshot");
+
+    const excerptRows = await db
+      .select({ content: textExcerpts.content })
+      .from(textExcerpts)
+      .where(eq(textExcerpts.lessonId, s.lessonId))
+      .orderBy(asc(textExcerpts.order))
+      .limit(1);
+
+    const stages = snapshotStages(payload);
+    return ok(res, {
+      session_id: s.id,
+      user_name: s.userName,
+      lesson_title: s.lessonTitle,
+      excerpt: excerptRows[0]?.content ?? "",
+      stages: {
+        1: { description: stages[1] },
+        2: { description: stages[2] },
+        3: { description: stages[3] },
+      },
+    });
+  }),
+);
 
 const GradeBody = z.object({
   stage: z.number().int().min(1).max(5),

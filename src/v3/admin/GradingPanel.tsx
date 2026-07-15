@@ -23,6 +23,38 @@ interface GoldenStats {
   borderline: number;
   next_id: string;
 }
+interface SessionRow {
+  session_id: string;
+  user_name: string;
+  lesson_title: string;
+  saved_at: string;
+  has_stage: Record<"1" | "2" | "3", boolean>;
+}
+interface SessionDetail {
+  user_name: string;
+  lesson_title: string;
+  excerpt: string;
+  stages: Record<"1" | "2" | "3", { description: string }>;
+}
+
+// v3 학습 3부 ↔ 채점 문항·기본 채점 항목 매핑 (부별 표준 문항은 v3 STAGE_DESCRIPTIONS 기준)
+const PART_INFO: Record<1 | 2 | 3, { question: string; defaultStage: number; label: string }> = {
+  1: {
+    label: "1부 · 글의 내용 이해하기",
+    question: "텍스트에서 핵심 단어를 추출하고, 구조적으로 시각화한 뒤 설명하세요.",
+    defaultStage: 2, // ② 구조 복원
+  },
+  2: {
+    label: "2부 · 저자의 인지구조 이해하기",
+    question: "저자가 어떤 대상을 어떤 렌즈로 바라봤는지 도표화하고 설명하세요.",
+    defaultStage: 3, // ③ 렌즈 발견
+  },
+  3: {
+    label: "3부 · 저자의 렌즈로 자신의 뇌 셋팅",
+    question: "1부와 2부를 종합하여 한 편의 글을 완성하세요.",
+    defaultStage: 5, // ⑤ 렌즈 재배선
+  },
+};
 
 async function getJson<T>(url: string): Promise<T> {
   const r = await fetch(url, { credentials: "include" });
@@ -45,6 +77,10 @@ export function GradingPanel() {
   const [note, setNote] = useState("");
   const [rationale, setRationale] = useState("");
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [sessions, setSessions] = useState<SessionRow[] | null>(null);
+  const [loadingPick, setLoadingPick] = useState<string | null>(null);
+  const [pickedFrom, setPickedFrom] = useState<string | null>(null);
   const outRef = useRef<HTMLPreElement>(null);
 
   const refresh = () => {
@@ -52,6 +88,43 @@ export function GradingPanel() {
     getJson<GoldenStats>("/api/grading/golden/stats").then(setStats).catch(() => setStats(null));
   };
   useEffect(refresh, []);
+
+  const openPicker = () => {
+    setPickerOpen((v) => !v);
+    if (!sessions) {
+      getJson<{ sessions: SessionRow[] }>("/api/grading/sessions")
+        .then((d) => setSessions(d.sessions))
+        .catch(() => setSessions([]));
+    }
+  };
+
+  // 세션의 특정 부(1~3) 설명을 채점 대상으로 채움
+  const pickPart = async (sessionId: string, part: 1 | 2 | 3) => {
+    setLoadingPick(`${sessionId}:${part}`);
+    try {
+      const d = await getJson<SessionDetail>(`/api/grading/sessions/${sessionId}`);
+      const desc = d.stages[String(part) as "1" | "2" | "3"]?.description ?? "";
+      if (!desc) {
+        alert("해당 부의 설명이 비어 있습니다.");
+        return;
+      }
+      const info = PART_INFO[part];
+      setPassage(d.excerpt || "(레슨 발췌 없음 — 직접 입력)");
+      setQuestion(info.question);
+      setAnswer(desc);
+      setStage(info.defaultStage);
+      setPickedFrom(`${d.user_name} · ${d.lesson_title} · ${info.label}`);
+      setAiOut("");
+      setBand(null);
+      setRationale("");
+      setSaveMsg(null);
+      setPickerOpen(false);
+    } catch {
+      alert("세션 불러오기 실패");
+    } finally {
+      setLoadingPick(null);
+    }
+  };
 
   const grade = async () => {
     if (!passage.trim() || !question.trim() || !answer.trim()) {
@@ -149,9 +222,62 @@ export function GradingPanel() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* 좌: 채점 대상 */}
         <div className="bg-brain-surface border border-brain-border rounded-xl p-4 space-y-3">
-          <h3 className="text-xs font-semibold text-brain-text-muted uppercase tracking-wide">
-            1 · 채점 대상
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-semibold text-brain-text-muted uppercase tracking-wide">
+              1 · 채점 대상
+            </h3>
+            <button
+              onClick={openPicker}
+              className="text-xs bg-brain-accent-soft text-brain-accent px-3 py-1.5 rounded-lg font-medium hover:opacity-80 transition-opacity"
+            >
+              📥 학습 기록에서 불러오기
+            </button>
+          </div>
+
+          {pickerOpen && (
+            <div className="border border-brain-border rounded-lg max-h-64 overflow-y-auto divide-y divide-brain-border">
+              {sessions === null && (
+                <div className="p-3 text-xs text-brain-text-muted">불러오는 중…</div>
+              )}
+              {sessions?.length === 0 && (
+                <div className="p-3 text-xs text-brain-text-muted">
+                  v3 학습 기록이 없습니다. 학습자가 세션을 진행하면 여기에 나타납니다.
+                </div>
+              )}
+              {sessions?.map((s) => (
+                <div key={s.session_id} className="p-2.5 flex items-center gap-2 text-xs">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-brain-text truncate">{s.lesson_title}</div>
+                    <div className="text-brain-text-muted truncate">
+                      {s.user_name} · {new Date(s.saved_at).toLocaleDateString("ko-KR")}
+                    </div>
+                  </div>
+                  {([1, 2, 3] as const).map((p) => (
+                    <button
+                      key={p}
+                      disabled={!s.has_stage[String(p) as "1" | "2" | "3"] || loadingPick !== null}
+                      onClick={() => pickPart(s.session_id, p)}
+                      title={PART_INFO[p].label}
+                      className={`shrink-0 px-2 py-1 rounded-md border text-[11px] font-semibold transition-colors ${
+                        s.has_stage[String(p) as "1" | "2" | "3"]
+                          ? "bg-brain-surface-soft text-brain-text border-brain-border hover:bg-brain-accent-soft hover:text-brain-accent"
+                          : "opacity-30 cursor-not-allowed border-brain-border text-brain-text-muted"
+                      }`}
+                    >
+                      {loadingPick === `${s.session_id}:${p}` ? "…" : `${p}부`}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {pickedFrom && (
+            <div className="text-[11px] text-brain-accent bg-brain-accent-soft rounded-md px-2.5 py-1.5">
+              📥 불러옴: {pickedFrom}
+            </div>
+          )}
+
           <select value={stage} onChange={(e) => setStage(Number(e.target.value))} className={inputCls}>
             {STAGES.map((s) => (
               <option key={s.v} value={s.v}>
