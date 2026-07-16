@@ -1485,7 +1485,7 @@ export function AdminShell({ user, onLogout, onSwitchToLearning }: Props) {
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-brain-bg">
+    <div className="flex flex-col md:flex-row h-dvh overflow-hidden bg-brain-bg">
       {/* Sidebar — 데스크톱: 좌측 세로 / 모바일·태블릿 세로: 상단 가로 바 */}
       <div className="md:w-52 border-b md:border-b-0 md:border-r border-brain-border bg-brain-surface flex flex-col shrink-0 overflow-hidden">
         <button
@@ -1514,7 +1514,7 @@ export function AdminShell({ user, onLogout, onSwitchToLearning }: Props) {
             </button>
           </div>
         </div>
-        <nav className="flex flex-row md:flex-col overflow-x-auto md:overflow-x-hidden md:flex-1 py-1 md:py-2 px-1 md:px-0 gap-1 md:gap-0">
+        <nav className="flex flex-row md:flex-col overflow-x-auto md:overflow-x-hidden py-1 md:py-2 px-1 md:px-0 gap-1 md:gap-0">
           {NAV_ITEMS.map((item) => (
             <button
               key={item.id}
@@ -1530,7 +1530,7 @@ export function AdminShell({ user, onLogout, onSwitchToLearning }: Props) {
             </button>
           ))}
         </nav>
-        {/* 데스크톱 하단: 학습자/계정/로그아웃 */}
+        {/* 데스크톱: 메뉴 바로 아래 — 사이드바 최하단 고정 시 패드에서 잘리는 문제 방지 */}
         <div className="hidden md:block border-t border-brain-border p-3 space-y-2">
           {onSwitchToLearning && (
             <button
