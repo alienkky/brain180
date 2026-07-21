@@ -1,40 +1,49 @@
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..500&family=Noto+Serif+KR:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500&display=swap");
 @import "tailwindcss";
 
+/* ============================================================
+   Brain180 Design System (E:\brain180\Brain180 Design System)
+   warm cream + ink + vermilion · Manrope/Noto Sans KR (Agrandir 대체)
+   tokens/colors.css · typography.css · spacing.css 매핑본.
+   ============================================================ */
 @theme {
-  /* ── Surfaces (warm off-white paper) ── */
-  --color-brain-bg: #FAF7F2;
-  --color-brain-surface: #FFFFFF;
-  --color-brain-surface-soft: #F3EEE4;
-  --color-brain-border: #E8E2D6;
-  --color-brain-border-strong: #D6CDBC;
+  /* ── Surfaces (DS: surface-canvas / surface-card / surface-soft / sand) ── */
+  --color-brain-bg: #FAF6EC;
+  --color-brain-surface: #FFFCF4;
+  --color-brain-surface-soft: #F4EEE1;
+  --color-brain-border: #E7DFD2;
+  --color-brain-border-strong: #D9D1C1;
 
-  /* ── Text (warm near-black) ── */
-  --color-brain-text: #2A241D;
-  --color-brain-text-muted: #6E6557;
-  --color-brain-text-soft: #A09684;
+  /* ── Text (DS: ink / warm-gray) ── */
+  --color-brain-text: #17130E;
+  --color-brain-text-muted: #7C7264;
+  --color-brain-text-soft: #A69C8B;
 
-  /* ── Accents (muted, earthy) ── */
-  --color-brain-accent: #B85C3F;        /* terracotta */
-  --color-brain-accent-soft: #E8C8BC;
-  --color-brain-highlight: #C68A3D;     /* warm amber */
-  --color-brain-highlight-soft: #EDD9B6;
-  --color-brain-sage: #6E8F82;
-  --color-brain-success: #6B8B6E;
-  --color-brain-warn: #B58947;
-  --color-brain-danger: #A0533F;
+  /* ── Accents (DS: vermilion / peach-wash / amber) ── */
+  --color-brain-accent: #EE4D1D;        /* vermilion */
+  --color-brain-accent-soft: #FBE3CF;   /* peach-wash */
+  --color-brain-highlight: #F5B840;     /* amber */
+  --color-brain-highlight-soft: #FBEDCB;
+  --color-brain-sage: #43915F;          /* meadow-green */
+  --color-brain-success: #43915F;
+  --color-brain-warn: #B5861B;          /* amber 텍스트 대비 보정 */
+  --color-brain-danger: #DD3C0A;        /* deep vermilion */
 
-  /* ── Node types ── */
-  --color-brain-node-root: #B85C3F;
-  --color-brain-node-anchor: #6E8F82;
-  --color-brain-node-bridge: #8F7FA8;
-  --color-brain-node-branch: #6F8AA8;
+  /* ── Node types (DS: 핵심/기둥/다리/가지) ── */
+  --color-brain-node-root: #EE4D1D;     /* vermilion */
+  --color-brain-node-anchor: #4A90D9;   /* ocean-blue */
+  --color-brain-node-bridge: #43915F;   /* meadow-green */
+  --color-brain-node-branch: #9A6CE0;   /* plum-violet */
 
-  /* ── Typography ── */
-  --font-display: "Fraunces", "Noto Serif KR", Georgia, serif;
-  --font-serif: "Noto Serif KR", "Fraunces", Georgia, serif;
-  --font-sans: "Pretendard", -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+  /* ── Typography (Agrandir 미보유 → Manrope 800 대체, 한글 Noto Sans KR) ── */
+  --font-display: "Manrope", "Noto Sans KR", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Manrope", "Noto Sans KR", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Manrope", "Noto Sans KR", -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* ── Radii (DS 고정 스톱: buttons/nav 12 · cards 16) ── */
+  --radius-lg: 12px;
+  --radius-xl: 16px;
 }
 
 /* ============================================================
@@ -123,7 +132,10 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Subtle paper texture on root background */
+/* DS 권장 텍스트 선택 색 (peach-wash) */
+::selection { background: #FBE3CF; }
+
+/* Subtle paper texture on root background — DS vermilion/meadow 워시 */
 body::before {
   content: "";
   position: fixed;
@@ -131,8 +143,8 @@ body::before {
   pointer-events: none;
   z-index: -1;
   background-image:
-    radial-gradient(at 20% 0%, rgba(184, 92, 63, 0.04) 0px, transparent 50%),
-    radial-gradient(at 80% 100%, rgba(110, 143, 130, 0.04) 0px, transparent 50%);
+    radial-gradient(at 20% 0%, rgba(238, 77, 29, 0.04) 0px, transparent 50%),
+    radial-gradient(at 80% 100%, rgba(67, 145, 95, 0.04) 0px, transparent 50%);
 }
 
 /* Refined scrollbars */
@@ -152,15 +164,15 @@ body::before {
   background: var(--color-brain-text-soft);
 }
 
-/* Soft elevation utilities */
+/* Soft elevation utilities — DS 잉크 틴트 섀도(shadow-xl/md 계열) */
 .shadow-soft-1 {
-  box-shadow: 0 1px 2px rgba(42, 36, 29, 0.04);
+  box-shadow: 0 1px 2px rgba(23, 19, 14, 0.04);
 }
 .shadow-soft-2 {
-  box-shadow: 0 2px 8px rgba(42, 36, 29, 0.05), 0 1px 2px rgba(42, 36, 29, 0.03);
+  box-shadow: 0 2px 8px rgba(23, 19, 14, 0.05), 0 1px 2px rgba(23, 19, 14, 0.03);
 }
 .shadow-soft-3 {
-  box-shadow: 0 12px 32px rgba(42, 36, 29, 0.07), 0 2px 4px rgba(42, 36, 29, 0.03);
+  box-shadow: rgba(23, 19, 14, 0.06) 0px 16px 32px -4px, 0 2px 4px rgba(23, 19, 14, 0.03);
 }
 
 /* Korean: break at word boundaries, never mid-word */
