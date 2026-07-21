@@ -1,73 +1,67 @@
-## 🛸 스킬 발전 사항 일일 보고 — 2026-07-14 KST
+## 🛸 스킬 발전 사항 일일 보고 — 2026년 7월 20일 KST
 
 ### 📡 최신 동향
 
-**Claude Code 2026-07-11 이후 신규 릴리즈 (v2.1.207 ~ v2.1.209)**
+**Claude Code 스킬 시스템 최신 업데이트 (2026년 7월 기준)**
 
-> 지난 보고(2026-07-11) 이후 3일간의 변경사항만 집중 정리
+- **v2.1.205+**: `/doctor`가 내장 커맨드에서 번들 스킬로 전환. `disableBundledSkills` 설정 시에도 타이핑 가능 (완전 숨기려면 `skillOverrides: doctor: off` 사용)
+- **v2.1.203+**: 중첩 `.claude/skills/` 디렉토리 지원 → 모노레포에서 패키지별 스킬 자동 적용 (예: `apps/web:deploy`)
+- **v2.1.202+**: 동일 스킬 재호출 시 중복 콘텐츠 방지 (이미 로드된 경우 짧은 안내 메시지만 표시)
+- **v2.1.199+**: 스킬 스태킹 지원 (`/code-review /fix-issue 123` 처럼 여러 스킬 동시 호출), `skillOverrides: "off"` 가 Remote Control·Agent SDK 목록에서도 숨김
+- **v2.1.196+**: `${CLAUDE_PROJECT_DIR}` 치환 변수 추가, `disable-model-invocation: true` 이 스케줄 태스크에서도 실행 차단
+- **7월 2026**: 안정성·안전성 업데이트 — 권한 체크 강화, `EndConversation` 도구 추가, 장기 작업 대상 프로그레스 하트비트 추가
+- **6월 2026**: 3단계 중첩 서브에이전트, 커뮤니티 도구 마켓플레이스, 에이전트별 비용 귀속, 스코프 권한
+- **3월 2026**: `/loop` 커맨드 추가, 푸시투토크 음성 모드, 100만 토큰 컨텍스트 윈도우, MCP elicitation
 
-#### v2.1.209 (2026-07-14)
-- **백그라운드 에이전트 다이얼로그 수정**: `claude agents` 백그라운드 세션에서 `/model` 및 기타 다이얼로그가 차단되던 버그 수정
+**스킬 생태계 현황**
 
-#### v2.1.208 (2026-07-14)
-- **스크린 리더 모드 추가**: `claude --ax-screen-reader` CLI 플래그, `CLAUDE_AX_SCREEN_READER=1` 환경변수, 또는 settings.json `"axScreenReader": true`로 활성화
-- **vim 이중키 시퀀스 지원**: `vimInsertModeRemaps` 설정 추가 (예: `jj` → Escape 매핑)
-- **기업용 런처 지원**: `CLAUDE_CODE_PROCESS_WRAPPER` 환경변수 추가
-- **풀스크린 멀티셀렉트 마우스 클릭 지원**: 이전에 키보드만 지원하던 메뉴에 클릭 가능
-- **버그 수정**:
-  - fast mode가 모델 전환 후 꺼진 채로 유지되던 문제 해결
-  - 백그라운드 에이전트 응답이 전달 실패 시 소실되던 문제 해결 ⚠️ 27인 에이전트 운영에 직접 영향
-  - MCP stdio 서버 stderr 누적 버퍼 64MB 상한 도입 (무제한 메모리 증가 방지)
-  - LSP 문서가 무기한 열린 채로 유지되던 문제 → LRU 방식으로 50개 문서 상한 적용
-  - 단일 라인이 매우 긴 파일 읽기 시 메모리 폭증 문제 수정
-
-#### v2.1.207 (2026-07-11, 이전 보고 직후)
-- **Auto 모드 범위 확대**: Bedrock, Vertex AI, Foundry에서도 opt-in 없이 Auto 모드 사용 가능 (`disableAutoMode`로 비활성화)
-- **터미널 스트리밍 프리징 해결**: 긴 리스트/테이블/단락/코드블록 스트리밍 시 터미널 멈춤 현상 수정
-- **환경변수 파싱 수정**: `CLAUDE_CODE_MAX_OUTPUT_TOKENS`에서 `1e6` 같은 과학적 표기법 잘못 처리하던 버그 해결
+- Claude Skills Hub: 12,980+ 스킬 등재 (clskills.in)
+- `skill-creator` 플러그인: 스킬 eval 자동화 (A/B 비교, 패스율 측정, 설명 튜닝 등)
+- agentskills.io 오픈 표준 채택 — Cursor, Codex, Gemini CLI 등 8개 이상 도구에서 호환
+- Anthropic 공식 `frontend-design` 스킬: 277,000+ 설치
 
 ---
 
 ### 🔍 현재 설치된 스킬 현황
 
-#### brain180 프로젝트 레벨 (`.claude/skills/`)
-- **없음** — 프로젝트에 스킬 디렉토리 미구성 (2026-07-07부터 반복 지적 중)
+**brain180 프로젝트 (`.claude/` 분석)**
 
-#### 전역 스킬 (`/root/.claude/skills/` 또는 `~/.claude/skills/`)
-- `session-start-hook` — 세션 시작 훅 설정 스킬 (1개)
+| 항목 | 상태 |
+|------|------|
+| `.claude/skills/` 디렉토리 | ❌ 없음 |
+| `.claude/settings.json` | ❌ 없음 (settings.local.json만 존재) |
+| `.claude/settings.local.json` | ✅ 존재 (일부 Bash 권한만 설정됨) |
+| `.claude/launch.json` | ✅ 존재 (Vite 개발 서버 설정) |
 
-#### 설정 파일 현황
-- `.claude/settings.local.json`: 퍼미션 허용 목록만 존재, 스킬 설정 없음
-- `.claude/launch.json`: vite 개발 서버 설정 (포트 5173)
+**현재 세션에 로드된 번들/계정 스킬 (Alien Agentic 계정 레벨)**
 
-#### Claude Code 번들 스킬 (이번 세션 활성 — 26개)
-| 스킬명 | 용도 |
-|--------|------|
-| `session-start-hook` | 웹 세션 startup hook |
-| `deep-research` | 멀티소스 팩트체크 리서치 |
-| `dataviz` | 차트/그래프 시각화 |
-| `artifact-design` | Artifact 디자인 가이드 |
-| `update-config` | settings.json 설정 |
-| `keybindings-help` | 키보드 단축키 커스터마이징 |
-| `verify` | end-to-end 코드 검증 |
-| `code-review` | 버그 + 정리 코드 리뷰 |
-| `simplify` | 코드 간소화 리뷰 |
-| `fewer-permission-prompts` | 허용 목록 자동 생성 |
-| `loop` | 반복 작업 예약 실행 |
-| `claude-api` | Claude API/Anthropic SDK 참조 |
-| `run` | 프로젝트 앱 실행 검증 |
-| `learn` | 개념 학습/교육 가이드 |
-| `doc-coauthoring` | 문서 공동 작성 워크플로 |
-| `web-artifacts-builder` | 복잡한 HTML 아티팩트 빌더 |
-| `skill-creator` | 새 스킬 생성 |
-| `theme-factory` | 테마 팩토리 |
-| `mcp-builder` | MCP 서버 빌더 |
-| `internal-comms` | 내부 커뮤니케이션 |
-| `canvas-design` | 캔버스 디자인 |
-| `brand-guidelines` | 브랜드 가이드라인 |
-| `init` | CLAUDE.md 초기화 |
-| `review` | GitHub PR 리뷰 |
-| `security-review` | 보안 리뷰 |
+| 스킬 | 카테고리 |
+|------|---------|
+| `session-start-hook` | 인프라 |
+| `deep-research` | 조사·분석 |
+| `dataviz` | 시각화 |
+| `artifact-design` / `artifact-capabilities` | UI·아티팩트 |
+| `update-config` | 설정 관리 |
+| `keybindings-help` | 단축키 |
+| `simplify` / `review` / `security-review` | 코드 품질 |
+| `fewer-permission-prompts` | 권한 최적화 |
+| `loop` | 자동화 |
+| `claude-api` | API 참조 |
+| `run` | 앱 실행 |
+| `morning` | 브리핑 |
+| `learn` | 학습 |
+| `doc-coauthoring` | 문서화 |
+| `web-artifacts-builder` | 프론트엔드 |
+| `skill-creator` | 스킬 개발 |
+| `theme-factory` / `brand-guidelines` / `canvas-design` / `internal-comms` / `algorithmic-art` | 디자인·창작 |
+| `mcp-builder` | MCP 통합 |
+| `slack-gif-creator` | 커뮤니케이션 |
+| `xlsx` / `pptx` / `pdf` / `docx` | 오피스 |
+| `init` | 프로젝트 초기화 |
+
+**번들 스킬 (Claude Code 내장)**
+
+`/doctor`, `/code-review`, `/batch`, `/debug`, `/loop`, `/claude-api`, `/run`, `/verify`, `/run-skill-generator`
 
 ---
 
@@ -75,45 +69,30 @@
 
 | 스킬명 | 유형 | 우선순위 | 이유 |
 |-------|------|---------|-----|
-| `brain180-analyze` | 커스텀 프로젝트 | 🔴 높음 | 3주 연속 지적 — `.claude/skills/` 디렉토리 자체가 없음. Brain180 핵심 분석 워크플로 표준화 시급 |
-| `cognitive-map-extractor` | 커스텀 도메인 | 🔴 높음 | 텍스트 → CognitiveMap JSON 변환 패턴. seeds/ 디렉토리 7개 텍스트 분석에 즉시 활용 가능 |
-| `agent-background-monitor` | 에이전트 운영 | 🔴 높음 | v2.1.208에서 백그라운드 에이전트 응답 소실 버그 수정됨 → 27인 에이전트 시스템이 이 버그 영향 받았을 가능성 확인 필요 [가설] |
-| `doc-coauthoring` | 번들 스킬 활용 | 🟡 중간 | `methodology.md` 작성 시 이 번들 스킬 사용 권장 — docs/ 폴더에 빈 파일만 있음 |
-| `multica-submit` | 커스텀 자동화 | 🟡 중간 | 매일 보고 파일을 multica로 제출하는 로컬 훅 스크립트 필요 (PAT 토큰 주입 방식) |
-| `doctor-check` | 번들 기능 활용 | 🟡 중간 | v2.1.206에서 추가된 `/doctor`가 CLAUDE.md 크기 비대화 경고 — 현재 CLAUDE.md 점검 권장 |
-| `vimInsertModeRemaps` | 설정 최적화 | 🟢 낮음 | v2.1.208 신기능 — vim 사용자라면 settings.json에 `jj → Escape` 등 추가 |
+| `cognitive-map-extractor` | 신규 프로젝트 스킬 | 🔴 긴급 | Brain180 핵심 기능 — 고전 텍스트에서 인지 구조 추출 워크플로 정형화 필요 |
+| `why-how-what-analysis` | 신규 계정 스킬 | 🔴 긴급 | Alien Agentic 컨설팅 핵심 프레임워크를 스킬로 표준화 |
+| `run-skill-generator` 실행 | 번들 스킬 활성화 | 🟠 높음 | brain180 Vite 앱 실행 레시피를 `/run`·`/verify`에 등록 |
+| `agent-status-reporter` | 신규 계정 스킬 | 🟠 높음 | 27개 에이전트 시스템의 상태·진행·블로커를 multica 이슈에 자동 보고 |
+| `multica-reporter` | 신규 계정 스킬 | 🟠 높음 | multica issue comment add 자동 실행 스킬 (스케줄 작업 연동) |
+| `text-visualization-layer` | 신규 프로젝트 스킬 | 🟡 중간 | Brain180 텍스트↔시각화 연동 코드 패턴 및 아키텍처 가이드 캡슐화 |
+| `genius-profile` | 신규 프로젝트 스킬 | 🟡 중간 | 분야별 천재의 인지 패턴 데이터를 스킬 참조 파일로 제공 |
+| `subagent-orchestrator` | 신규 계정 스킬 | 🟡 중간 | 27명 에이전트 팀에서 context:fork + 중첩 서브에이전트(3단계) 패턴 표준화 |
+
+**[가설]** `skill-creator` 플러그인의 eval 자동화를 활용하면 `cognitive-map-extractor` 스킬 품질을 A/B 테스트로 빠르게 검증 가능할 것으로 추정.
 
 ---
 
 ### 📋 오늘의 액션 아이템
 
-1. **[즉시] `.claude/skills/` 디렉토리 생성** — 3주 연속 지적된 항목. `brain180-analyze` 스킬 최소 1개 작성:
-   ```
-   /home/user/brain180/.claude/skills/brain180-analyze/SKILL.md
-   ```
-
-2. **[즉시] `/doctor` 실행** — v2.1.206에서 추가. CLAUDE.md 최적화 및 미사용 설정 정리 제안 받기
-
-3. **[오늘] 백그라운드 에이전트 응답 소실 버그 영향 확인** — 이번 보고 루틴도 백그라운드에서 실행되므로, 이전 보고 결과가 실제로 전달됐는지 확인 필요 [가설]
-
-4. **[이번 주] multica PAT 토큰 발급 및 환경변수 설정** — `https://app.multica.ai/settings`에서 발급 후 `MULTICA_TOKEN` 환경변수로 주입하면 이 보고 루틴이 완전 자동화됨
-
-5. **[이번 주] seeds/ 텍스트 7개로 `cognitive-map-extractor` 스킬 프로토타입** — `seeds/tao-te-ching-01.md`, `seeds/analects-01.md` 등을 이용해 Brain180 핵심 기능 PoC
+1. **`/run-skill-generator` 실행** — brain180 Vite 개발 서버 레시피를 `.claude/skills/run-brain180/`에 등록
+2. **`why-how-what-analysis` 스킬 초안 작성** — Alien Agentic WHY-HOW-WHAT 프레임워크를 SKILL.md로 문서화
+3. **`cognitive-map-extractor` 스킬 설계** — 텍스트 → CognitiveMap 스키마 추출 절차를 스킬로 정형화 (Brain180 CLAUDE.md 데이터 모델 기반)
+4. **`multica-reporter` 스킬 생성** — 스케줄 보고 루틴에서 multica CLI 자동 호출하도록 스킬화
+5. **`.claude/skills/` 디렉토리 생성** — brain180 프로젝트 레벨 스킬 기반 마련 및 리포에 커밋
 
 ---
 
-### ⚠️ 보고 제출 제약 사항 (변동 없음)
+### ⚠️ 운영 이슈
 
-multica CLI 이 환경(리모트 컨테이너)에서 설치 불가:
-- `@multica/cli` npm 패키지 미존재
-- GitHub Releases API / multica.ai 네트워크 프록시 차단 (403)
-- PAT 토큰 없음 (`MULTICA_TOKEN` 환경변수 미설정)
-
-**사용자 로컬에서 직접 제출:**
-```bash
-multica issue comment add 0b24f8af-4d32-4a73-b5f9-5cd9bfa83ef7 --content-file ./reply.md
-```
-
----
-
-_조사 소스: [Claude Code Changelog](https://code.claude.com/docs/en/changelog) · 버전 v2.1.207~v2.1.209 (2026-07-11 ~ 07-14)_
+- **multica CLI 미설치**: 현재 실행 환경(원격 컨테이너)에서 `@multica/cli` npm 패키지 없음 (404), GitHub Releases 직접 다운로드도 네트워크 제한으로 차단(403). 본 보고서는 `/home/user/brain180/reply.md` 에 저장됨. 자동 multica 이슈 코멘트 제출은 실패.
+- **권고**: `multica-reporter` 스킬 내에 설치 로직 포함하거나, 환경 설정(session-start-hook)에서 multica CLI를 사전 설치 설정 권장.
