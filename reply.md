@@ -1,68 +1,79 @@
-## 🛸 스킬 발전 사항 일일 보고 — 2026-07-31 KST
+## 🛸 스킬 발전 사항 일일 보고 — 2026-08-01 KST
+
+> 자동 스케줄 실행 | brain180 리포 기준 | Claude Code Sonnet 4.6
+
+---
 
 ### 📡 최신 동향
 
-**Claude Code 주요 업데이트 (2026년 7월)**
+#### Claude Code 스킬 아키텍처 (2026년 중반 기준)
 
-- **Claude Opus 5 기본 모델 채택**: Opus 계열 기본 모델이 Opus 5로 업그레이드됨
-- **동적 워크플로 확장**: 중첩 서브에이전트(nested subagents) 및 동적 워크플로 기능 대폭 확장
-- **`/verify` 및 `/code-review` 스킬 동작 변경**: 이제 직접 호출될 때만 실행됨 (Claude가 자동으로 실행하지 않음) — 이 변경은 기존 자동화 흐름에 영향 줄 수 있음
-- **이모지 단축코드 자동완성**: 프롬프트 입력창에서 `:heart:` 등 입력 시 자동완성
-- **메모리 누수 수정**:
-  - MCP stdio 서버 stderr 버퍼가 서버당 최대 64MB까지 쌓이던 문제 수정
-  - LSP 문서가 무제한 열려 있던 문제 → LRU 50개 문서 상한으로 수정
-- **서브에이전트·예산·백그라운드 세션 제어 강화**
-- **Skills 2.0** [가설]: Q1 2026에 공식 출시된 것으로 보고됨 — 실행 스크립트 포함 전체 워크플로 패키지 형태
-- **SKILL.md 포맷**: 2025년 12월 오픈소스화, OpenAI Codex도 동일 스펙 채택 [가설]
+**스킬-슬래시커맨드 통합 (확정)**
+- `.claude/skills/<이름>/SKILL.md` 가 표준 경로로 확정
+- 모든 스킬이 자동으로 `/slash-command` 인터페이스를 가짐
+- 기존 `.claude/commands/` 는 하위호환 유지, 신규는 `.claude/skills/` 권장
 
-**Multica 플랫폼 업데이트**
-- Multica CLI v0.4.15 (2026-07-30 릴리즈) — 최신 버전
-- Claude Code, Codex, Cursor, OpenCode 등 14개 코딩 도구 공식 지원
-- 에이전트를 실제 팀원처럼 관리: 태스크 큐, 팀 조율, 스킬 재사용, 런타임 모니터링
+**Anthropic 공식 스킬 저장소 (`anthropics/skills`)**
+- GitHub 스타 166k, 포크 19.7k, PR 746개 — 대형 오픈 생태계로 성장
+- 4대 카테고리: Creative & Design / Development & Technical / Enterprise & Communication / Document Skills
+- Document Skills (docx/pdf/pptx/xlsx) 는 현재 이 세션에도 이미 설치되어 운용 중
+
+**Dynamic Workflows + 병렬 서브에이전트 (2026년 6월 확대)**
+- 리드 에이전트가 수십~수백 개의 병렬 서브에이전트를 단일 세션에서 팬아웃
+- `context: fork` 속성의 스킬은 기본적으로 백그라운드 실행
+- Skill Creator 개선: 테스트-측정-개선 루프 추가 (스킬을 버전 관리 에셋으로 취급)
+
+**모델 업데이트**
+- Claude Opus 5 → Claude Code 기본 Opus 모델
+- Claude Fable 5 (2026-06-09), Claude Opus 4.7/4.8 순차 출시
+- 서브에이전트 텍스트 스트리밍 추가, 백그라운드 에이전트 신뢰성 개선
+
+**커뮤니티 스킬 생태계**
+- 2026년 7월 기준 330+ 스킬, 30+ 에이전트, 70+ 커스텀 커맨드
+- `agentskills.io` 규격을 따르는 스킬은 Claude Code / Cursor / Gemini CLI 등 멀티 플랫폼 호환
+- Anthropic MCP → 에이전트가 JIRA, Postgres, Sentry 등을 직접 오퍼레이션
+
+**multica 최신 버전**: v0.4.16 (2026-07-31) — agent-generated Chat quick actions 추가
 
 ---
 
 ### 🔍 현재 설치된 스킬 현황
 
-**프로젝트 레벨 (brain180 리포 `.claude/` 디렉토리)**
-- 프로젝트 전용 스킬 없음 (`.claude/skills/` 디렉토리 미존재)
-- `.claude/settings.local.json`: 기본 퍼미션 설정만 있음
-- `.claude/launch.json`: Vite 개발 서버 설정만 있음
+#### brain180 리포 `.claude/` 디렉토리
+```
+.claude/
+├── launch.json          ← Vite dev server 설정만
+└── settings.local.json  ← 권한 화이트리스트 (일부 Windows 경로 잔류)
+```
+- **커스텀 스킬 없음** — `.claude/skills/` 디렉토리 미존재
+- **settings.json 없음** — 공유 프로젝트 권한 미설정
 
-**세션/계정 레벨 현재 설치 스킬 (30개)**
-
-| 스킬명 | 설명 |
-|-------|------|
-| `session-start-hook` | 세션 시작 훅 설정 |
-| `dataviz` | 데이터 시각화 (차트/그래프) |
-| `artifact-design` | 아티팩트 디자인 가이드 |
-| `artifact-capabilities` | 아티팩트 런타임 기능 |
-| `update-config` | settings.json 설정 관리 |
-| `keybindings-help` | 키보드 단축키 커스터마이징 |
-| `simplify` | 코드 단순화·리팩토링 리뷰 |
-| `fewer-permission-prompts` | 퍼미션 프롬프트 최소화 |
-| `loop` | 반복 스케줄 작업 설정 |
-| `claude-api` | Claude API/Anthropic SDK 레퍼런스 |
+#### 현재 세션에서 사용 가능한 스킬 (플랫폼 제공)
+| 스킬 | 용도 |
+|------|------|
+| `dataviz` | 차트/그래프/데이터 시각화 |
+| `artifact-design` | Artifact 디자인 가이드 |
+| `artifact-capabilities` | Artifact 런타임 기능 |
+| `update-config` | settings.json 훅/권한 설정 |
+| `claude-api` | Claude API / Anthropic SDK 레퍼런스 |
 | `run` | 앱 실행 및 테스트 |
 | `morning` | 아침 브리핑 |
-| `learn` | 학습·개념 이해 지원 |
-| `doc-coauthoring` | 문서 공동 작성 워크플로 |
-| `web-artifacts-builder` | 복잡한 HTML 아티팩트 생성 |
-| `skill-creator` | 스킬 생성·수정·최적화 |
-| `theme-factory` | 아티팩트 테마 스타일링 |
-| `mcp-builder` | MCP 서버 스캐폴딩 |
-| `internal-comms` | 내부 커뮤니케이션 |
-| `canvas-design` | 캔버스 디자인 |
-| `brand-guidelines` | 브랜드 가이드라인 |
-| `slack-gif-creator` | Slack GIF 생성 |
-| `algorithmic-art` | 알고리즘 아트 생성 |
-| `xlsx` | Excel 파일 처리 |
-| `pptx` | PowerPoint 파일 처리 |
-| `pdf` | PDF 파일 처리 |
-| `docx` | Word 파일 처리 |
-| `init` | CLAUDE.md 초기화 |
+| `learn` | 개념 학습 지원 |
+| `doc-coauthoring` | 문서 공동 작성 |
+| `web-artifacts-builder` | React/Tailwind 복합 Artifact |
+| `skill-creator` | 스킬 생성/개선/측정 |
+| `theme-factory` | Artifact 테마 스타일링 |
+| `mcp-builder` | MCP 서버 생성 |
+| `simplify` | 코드 리팩터링 검토 |
+| `fewer-permission-prompts` | 권한 프롬프트 최소화 |
+| `loop` | 반복 스케줄 작업 |
 | `review` | GitHub PR 리뷰 |
-| `security-review` | 보안 리뷰 |
+| `security-review` | 보안 검토 |
+| `init` | CLAUDE.md 초기화 |
+| `session-start-hook` | 세션 시작 훅 설정 |
+| `pdf` / `docx` / `pptx` / `xlsx` | 문서 생성 |
+| `canvas-design` / `brand-guidelines` | 디자인/브랜드 |
+| `internal-comms` / `algorithmic-art` / `slack-gif-creator` | 기타 |
 
 ---
 
@@ -70,34 +81,34 @@
 
 | 스킬명 | 유형 | 우선순위 | 이유 |
 |-------|------|---------|-----|
-| `multica` | 신규 설치 | ⚡ 최고 | 27명 에이전트 시스템 운영 핵심 — 이슈 트리아지, 코멘트, 메타데이터 관리 자동화 |
-| `brain180-cognitive-viz` | 신규 생성 | ⚡ 최고 | Brain180 프로젝트 전용 스킬 — 뇌인지 구조 추출/시각화 패턴 정의 |
-| `why-how-what-consulting` | 신규 생성 | 🔥 높음 | WHY-HOW-WHAT 컨설팅 워크플로를 스킬로 패키징하여 에이전트 간 일관성 확보 |
-| `frontend-design` | 신규 설치 | 🔥 높음 | 공식 Anthropic 스킬 (277,000+ 설치) — Brain180 UI 개발에 필수 |
-| `webapp-testing` | 신규 설치 | 🔥 높음 | Brain180 Playwright 기반 UI 테스트 자동화 |
-| `vercel-react-best-practices` | 신규 설치 | 🟡 중간 | React/Vite 기반 Brain180 프론트엔드 품질 향상 |
-| `d3-visualization` | 신규 생성 | 🟡 중간 | D3.js 기반 CognitiveMap 시각화 전용 패턴 |
-| `agent-squad-coordinator` | 신규 생성 | 🟡 중간 | 27명 에이전트 팀 간 태스크 분배·조율 스킬 |
-| `superpowers` | 신규 설치 | 🟢 낮음 | TDD 엄격 강제 및 7단계 개발 방법론 — 코드 품질 향상 |
-| `static-analysis` | 신규 설치 | 🟢 낮음 | 정적 분석 자동화 — Brain180 TypeScript 코드 품질 게이트 |
+| `cognitive-map-builder` | 신규 커스텀 스킬 | 🔴 P0 | Brain180의 핵심 — 텍스트→뇌인지 구조(CognitiveMap) 추출 프롬프트 패턴화. AI 보조 패턴 제안 반복 가능 |
+| `visualization-reviewer` | 신규 커스텀 스킬 | 🔴 P0 | 사용자 시각화에 AI 피드백 제공. 역해석 모드의 품질 일관성 보장 |
+| `genius-text-analyst` | 신규 커스텀 스킬 | 🟠 P1 | 분야별 천재 텍스트 분석 가이드라인 (뉴턴/칸트/도스토옙스키 등 분야별 인지 패턴) |
+| `agent-27` | 팀 에이전트 스킬 | 🟠 P1 | 27명 에이전트 역할 정의 `.claude/agents/` — Dynamic Workflows 팬아웃 준비 |
+| `settings.json` 생성 | 설정 파일 | 🟠 P1 | `update-config` 스킬로 공유 권한 설정 (.claude/settings.json 누락 상태) |
+| `session-start-hook` 적용 | 훅 설정 | 🟡 P2 | 웹 세션에서 린터/테스트 자동 실행 환경 구성 |
+| `fewer-permission-prompts` 실행 | 최적화 | 🟡 P2 | settings.local.json의 잔류 Windows 경로 정리 + 공통 허용 규칙 추가 |
+| `loop` + `morning` 연동 | 자동화 | 🟡 P2 | 현재 이 보고 루틴처럼 아침 브리핑도 정기화 가능 |
 
 ---
 
 ### 📋 오늘의 액션 아이템
 
-1. **multica 스킬 설치** — multica-ai/multica-cli 리포에서 multica 스킬 설치 후 `multica login --token <PAT>`으로 인증 설정 (현재 이 세션에서는 PAT 없이 인증 불가 — 사용자 직접 처리 필요)
-2. **brain180 전용 스킬 생성** — `skill-creator` 스킬로 `brain180-cognitive-viz` 스킬 생성 시작, SKILL.md에 CognitiveMap 추출 패턴 정의
-3. **`frontend-design` 스킬 설치** — Brain180 UI 개발 전 설치 권장 (공식 Anthropic 스킬)
-4. **`/verify`·`/code-review` 동작 변경 확인** — 자동화 스크립트에서 이 스킬들을 직접 호출하는 부분 점검 필요
-5. **Brain180 `.claude/` 구조 정비** — `skills/` 디렉토리 생성 및 프로젝트 전용 스킬 체계 구축
+1. **[P0] `cognitive-map-builder` 스킬 신규 작성** — `skill-creator` 활용, Brain180의 WHY(천재 인지 구조) 추출 프롬프트를 SKILL.md로 패키징
+2. **[P0] `.claude/settings.json` 생성** — `update-config` 스킬 실행하여 프로젝트 공유 권한 및 허용 명령 설정
+3. **[P1] 에이전트 역할 스펙 정리** — 27명 에이전트 시스템의 역할 분리를 `.claude/agents/` 구조로 정의 (Dynamic Workflows 준비)
+4. **[P1] `genius-text-analyst` 스킬 초안** — 6개 분야(과학/철학/문학/예술/경제/동양) 텍스트 분석 패턴 문서화
+5. **[P2] settings.local.json 정리** — Windows 경로 잔류 항목(`//e/e/**`) 검토 및 제거
+6. **[향후] MCP 서버 통합 검토** — 텍스트 데이터(JSON) 로드 자동화를 위한 `mcp-builder` 활용 가능성 검토
 
 ---
 
-### ⚠️ 주의 사항
+### ⚠️ 자동화 실행 이슈
 
-- **multica 인증 불가**: 이 자동 실행 세션에는 Multica PAT 토큰이 없어 `multica issue comment add` 명령 실행 불가. 이 보고서는 파일로 저장됨. 다음 수동 세션에서 `multica login --token <PAT>` 후 `multica issue comment add 0b24f8af-4d32-4a73-b5f9-5cd9bfa83ef7 --content-file ./reply.md` 실행 필요.
-- [가설] Skills 2.0 세부 사항은 공식 Anthropic 문서보다 커뮤니티 소스에 더 많이 나타남 — 공식 확인 필요
+- **multica 인증 미설정**: 이 자동 스케줄 세션에 Multica PAT(Personal Access Token)이 구성되지 않아 multica CLI로 직접 코멘트 제출 불가
+- **권장 조치**: Multica PAT(`mul_...`)를 Claude Code 세션 환경변수 `MULTICA_TOKEN` 또는 `.env.local`에 설정 필요
+- **이 보고서 파일**: `/tmp/claude-0/.../scratchpad/reply.md` 에 저장됨 (세션 종료 시 소멸)
 
 ---
 
-_보고 생성: 2026-07-31 | 자동 스케줄 실행 | Claude Code (claude-sonnet-4-6)_
+_Claude Code Sonnet 4.6 자동 생성 | alienkky/brain180 | 2026-08-01_
